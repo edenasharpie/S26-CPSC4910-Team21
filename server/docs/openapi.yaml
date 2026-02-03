@@ -1,0 +1,14 @@
+openapi: 3.0.0
+info:
+  title: FleetScore API
+  version: 1.0.0
+
+tags:
+  - name: accounts
+    description: User account management
+  - name: permissions
+    description: Permission management
+  - name: notifications
+    description: Notification management
+  - name: purchases
+    description: Purchase management
