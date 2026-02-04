@@ -12,7 +12,11 @@ SponsorCompany:
       format: uri
       description: "The system-generated URL where the logo is hosted."
       readOnly: true
-    headerImage: { type: string, format: uri }
+    headerImageUrl:
+      type: string
+      format: uri
+      description: "The URL of the background branding image."
+      readOnly: true
     pointHistorySetting:
       type: string
       enum:
@@ -53,3 +57,19 @@ SponsorLogoUpload:
       type: string
       description: "Accessibility text for the logo image."
       example: "FastRides Inc. Corporate Logo"
+    
+SponsorBackgroundUpload:
+  type: object
+  properties:
+    backgroundImage:
+      type: string
+      format: binary
+      description: "The image file used for company-wide background branding (e.g., banners)."
+    headerStyle:
+      type: string
+      enum: [cover, contain, tile]
+      default: "cover"
+    altText:
+      type: string
+      description: "Accessibility text for the background image."
+      example: "FastRides Inc. Corporate Background Image"
