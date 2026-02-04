@@ -181,4 +181,24 @@ AdminAccount:
           #description: Admin-specific permissions
           #properties:
            # - $ref: './permissions.yaml#/AdminPermissions'
+
+PasswordChangeRequest:
+  type: object
+  required:
+    - currentPassword
+    - newPassword
+  properties:
+    currentPassword:
+      type: string
+      format: password
+    newPassword:
+      type: string
+      format: password
+      minLength: 8
+      maxLength: 32
+      example: NewStr0ngP@ss!
+    confirmNewPassword:
+      type: string
+      format: password
+      description: Must match the newPassword field
           
