@@ -1,0 +1,39 @@
+SponsorCompany:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      readOnly: true
+    companyTitle: { type: string }
+    companyDescription: { type: string }
+    logoImage: { type: string, format: uri }
+    headerImage: { type: string, format: uri }
+    pointHistorySetting:
+      type: string
+      enum:
+        - wipe_history_on_leave
+        - keep_history_create_new
+        - keep_history_reconnect
+    catalogue:
+      $ref: './catalogue.yaml#/Catalogue'
+
+SponsorCompanyUpdate:
+  type: object
+  description: "Request body for updating sponsor company details."
+  properties:
+    companyTitle:
+      type: string
+      minLength: 2
+      maxLength: 100
+      example: "FastRides Inc."
+    companyDescription:
+      type: string
+      maxLength: 1000
+      example: "A leading logistics firm focused on driver excellence."
+    logoImage:
+      type: string
+      format: uri
+    headerImage:
+      type: string
+      format: uri

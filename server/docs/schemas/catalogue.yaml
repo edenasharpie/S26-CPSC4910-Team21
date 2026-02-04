@@ -1,0 +1,64 @@
+Catalogue:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      readOnly: true
+    items:
+      type: array
+      items:
+        $ref: '#/CatalogueItem'
+
+CatalogueItem:
+  type: object
+  required:
+    - name
+    - pointCost
+  properties:
+    id:
+      type: string
+      format: uuid
+      readOnly: true
+    name:
+      type: string
+      example: "Premium Truck Seat Cover"
+    description:
+      type: string
+      example: "Ergonomic leather seat cover for long-haul comfort."
+    pointCost:
+      type: integer
+      minimum: 1
+      example: 500
+    imageUrl:
+      type: string
+      format: uri
+    reviews:
+      type: array
+      items:
+        $ref: '#/Review'
+
+Review:
+  type: object
+  required:
+    - rating
+    - reviewBody
+    - userId
+  properties:
+    userId:
+      type: string
+      format: uuid
+      description: "The ID of the user who wrote the review."
+    rating:
+      type: integer
+      minimum: 1
+      maximum: 5
+      example: 5
+    reviewBody:
+      type: string
+      maxLength: 1000
+      example: "Excellent quality, fits perfectly!"
+    timestamp:
+      type: string
+      format: date-time
+      readOnly: true
