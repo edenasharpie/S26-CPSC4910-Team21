@@ -199,6 +199,52 @@ PasswordChangeRequest:
       example: NewStr0ngP@ss!
     confirmNewPassword:
       type: string
-      format: password
-      description: Must match the newPassword field
+      
+ProfileUpdateRequest:
+  type: object
+  properties:
+    username:
+      type: string
+      description: Unique username for the account
+      minLength: 3
+      maxLength: 20
+      example: johndoe123
+    email:
+      type: string
+      description: Email address associated with the account
+      format: email
+      example: johndoe@example.com
+    phone:
+      type: string
+      description: Phone number associated with the account
+      pattern: '^\+?[1-9]\d{1,14}$'
+      example: +1234567890
+    firstName:
+      type: string
+      description: First name of the user
+      minLength: 1
+      maxLength: 50
+      example: John
+    middleName:
+      type: string
+      description: Middle name of the user (optional)
+      minLength: 1
+      maxLength: 50
+      example: Michael
+    lastName:
+      type: string
+      description: Last name of the user
+      minLength: 1
+      maxLength: 50
+      example: Doe
+      profilePicture:
+      type: string
+      description: URL to the user's profile picture
+      format: uri
+      example: https://example.com/images/johndoe.jpg
+    bio:
+      type: string
+      description: Short biography of the user
+      maxLength: 500
+      example: Driver with 5 years of experience
           
