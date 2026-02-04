@@ -7,7 +7,11 @@ SponsorCompany:
       readOnly: true
     companyTitle: { type: string }
     companyDescription: { type: string }
-    logoImage: { type: string, format: uri }
+    logoUrl:
+      type: string
+      format: uri
+      description: "The system-generated URL where the logo is hosted."
+      readOnly: true
     headerImage: { type: string, format: uri }
     pointHistorySetting:
       type: string
@@ -37,3 +41,15 @@ SponsorCompanyUpdate:
     headerImage:
       type: string
       format: uri
+
+SponsorLogoUpload:
+  type: object
+  properties:
+    logoFile:
+      type: string
+      format: binary
+      description: "The image file to be used as the company logo (PNG, JPG, or SVG)."
+    altText:
+      type: string
+      description: "Accessibility text for the logo image."
+      example: "FastRides Inc. Corporate Logo"
