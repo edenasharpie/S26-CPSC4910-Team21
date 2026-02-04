@@ -98,6 +98,12 @@ Account:
       readOnly: true
       default: null
       example: 2024-01-10T09:20:15Z
+    permissions:
+      type: object
+      description: Permissions assigned to the account based on account type
+      properties:
+        - $ref: './permissions.yaml#/Permissions'
+      readOnly: true
 
 DriverAccount:
   allOf:
@@ -136,6 +142,12 @@ DriverAccount:
           maxLength: 100
           readOnly: true
           example: FastRides Inc.
+        permissions:
+          type: object
+          description: Driver-specific permissions
+          properties:
+            - $ref: './permissions.yaml#/DriverPermissions'
+          readOnly: true
 
 SponsorAccount:
   allOf:
@@ -149,14 +161,21 @@ SponsorAccount:
           maxLength: 100
           readOnly: true
           example: FastRides Inc.
+        permissions:
+          type: object
+          description: Sponsor-specific permissions
+          properties:
+            - $ref: './permissions.yaml#/SponsorPermissions'
+          readOnly: true
 
 AdminAccount:
   allOf:
     - $ref: '#/Account'
     - type: object
       properties:
-        adminLevel:
-          type: string
-          enum: [super, standard]
-          default: standard
+        permissions:
+          type: object
+          description: Admin-specific permissions
+          properties:
+            - $ref: './permissions.yaml#/AdminPermissions'
           readOnly: true
