@@ -172,10 +172,13 @@ AdminAccount:
   allOf:
     - $ref: '#/Account'
     - type: object
+      description: Admin account with veiwing permissions
       properties:
         permissions:
-          type: object
-          description: Admin-specific permissions
-          properties:
-            - $ref: './permissions.yaml#/AdminPermissions'
           readOnly: true
+          $ref: './permissions.yaml#/AdminPermissions'
+          #type: object
+          #description: Admin-specific permissions
+          #properties:
+           # - $ref: './permissions.yaml#/AdminPermissions'
+          
