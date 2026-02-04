@@ -247,4 +247,17 @@ ProfileUpdateRequest:
       description: Short biography of the user
       maxLength: 500
       example: Driver with 5 years of experience
-          
+  
+AccountStatusRequest:
+  type: object
+  required:
+    - activeStatus
+  properties:
+    activeStatus:
+      type: boolean
+      description: "Set to true to reactivate the account or false to deactivate it."
+      example: true
+    reason:
+      type: string
+      description: "Note on why the status is being changed."
+      maxLength: 255
