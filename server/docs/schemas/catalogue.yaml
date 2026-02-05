@@ -41,10 +41,15 @@ CatalogueItem:
 Review:
   type: object
   required:
+    - id
     - rating
     - reviewBody
     - userId
   properties:
+    id:
+      type: string
+      format: uuid
+      readOnly: true
     userId:
       type: string
       format: uuid
@@ -53,12 +58,26 @@ Review:
       type: integer
       minimum: 1
       maximum: 5
-      example: 5
     reviewBody:
       type: string
       maxLength: 1000
       example: "Excellent quality, fits perfectly!"
+    isVisible:
+      type: boolean
+      default: true
+      description: "Admin-controlled flag to hide reviews without deleting data."
     timestamp:
       type: string
       format: date-time
       readOnly: true
+
+ReviewStatusRequest:
+  type: object
+  required:
+    - isVisible
+  properties:
+    isVisible:
+      type: boolean
+    adminReason:
+      type: string
+      description: "Reason for hiding the review (e.g., profanity, spam)."

@@ -111,3 +111,17 @@ AccountUpdate:
           description: "True if the Admin updated their own account."
         success:
           type: boolean
+
+ReviewModerationEvent:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      properties:
+        reviewId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum: [hidden, restored, deleted]
+        reason:
+          type: string
