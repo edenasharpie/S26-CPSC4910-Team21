@@ -169,6 +169,7 @@ button {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-wrap: break-word;
 }
 
 .truncate-3-lines {
@@ -176,6 +177,7 @@ button {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-wrap: break-word;
 }
 
 /* gradient backgrounds */
@@ -195,7 +197,7 @@ button {
   @apply bg-gradient-to-r from-red-600 to-rose-700;
 }
 
-/* skeleton loader animation */
+/* skeleton stuff */
 @keyframes shimmer {
   0% {
     background-position: -1000px 0;
