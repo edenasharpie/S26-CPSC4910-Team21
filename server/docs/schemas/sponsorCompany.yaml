@@ -1,0 +1,75 @@
+SponsorCompany:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      readOnly: true
+    companyTitle: { type: string }
+    companyDescription: { type: string }
+    logoUrl:
+      type: string
+      format: uri
+      description: "The system-generated URL where the logo is hosted."
+      readOnly: true
+    headerImageUrl:
+      type: string
+      format: uri
+      description: "The URL of the background branding image."
+      readOnly: true
+    pointHistorySetting:
+      type: string
+      enum:
+        - wipe_history_on_leave
+        - keep_history_create_new
+        - keep_history_reconnect
+    catalogue:
+      $ref: './catalogue.yaml#/Catalogue'
+
+SponsorCompanyUpdate:
+  type: object
+  description: "Request body for updating sponsor company details."
+  properties:
+    companyTitle:
+      type: string
+      minLength: 2
+      maxLength: 100
+      example: "FastRides Inc."
+    companyDescription:
+      type: string
+      maxLength: 1000
+      example: "A leading logistics firm focused on driver excellence."
+    logoImage:
+      type: string
+      format: uri
+    headerImage:
+      type: string
+      format: uri
+
+SponsorLogoUpload:
+  type: object
+  properties:
+    logoFile:
+      type: string
+      format: binary
+      description: "The image file to be used as the company logo (PNG, JPG, or SVG)."
+    altText:
+      type: string
+      description: "Accessibility text for the logo image."
+      example: "FastRides Inc. Corporate Logo"
+    
+SponsorBackgroundUpload:
+  type: object
+  properties:
+    backgroundImage:
+      type: string
+      format: binary
+      description: "The image file used for company-wide background branding (e.g., banners)."
+    headerStyle:
+      type: string
+      enum: [cover, contain, tile]
+      default: "cover"
+    altText:
+      type: string
+      description: "Accessibility text for the background image."
+      example: "FastRides Inc. Corporate Background Image"

@@ -1,0 +1,47 @@
+DriverApplication:
+  type: object
+  required:
+    - driverId
+    - sponsorCompanyId
+    - status
+  properties:
+    id:
+      type: string
+      format: uuid
+      readOnly: true
+    driverId:
+      type: string
+      format: uuid
+      description: "The ID of the driver applying."
+    sponsorCompanyId:
+      type: string
+      format: uuid
+      description: "The ID of the company they want to join."
+    submissionDate:
+      type: string
+      format: date-time
+      readOnly: true
+    status:
+      type: string
+      enum: [pending, accepted, rejected, cancelled]
+      default: pending
+    applicationNotes:
+      type: string
+      description: "Optional message from the driver to the sponsor."
+      maxLength: 1000
+    adminReviewNotes:
+      type: string
+      description: "Notes left by an admin or sponsor during review."
+      maxLength: 1000
+
+ApplicationStatusUpdate:
+  type: object
+  required:
+    - status
+  properties:
+    status:
+      type: string
+      enum: [accepted, rejected]
+    reviewNotes:
+      type: string
+      maxLength: 1000

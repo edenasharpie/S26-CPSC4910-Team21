@@ -80,3 +80,48 @@ PasswordChange:
           enum: [user_initiated, admin_initiated, password_reset]
           description: The method by which the password was changed.
           readOnly: true
+      
+AccountStatusChange:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      properties:
+        newStatus:
+          type: boolean
+          description: "The state the account was changed to."
+        targetUserId:
+          type: string
+          format: uuid
+          description: "The ID of the admin user being reactivated."
+        adminNotes:
+          type: string
+          description: "Explanation for the reactivation."
+
+AccountUpdate:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      properties:
+        updatedFields:
+          type: array
+          items:
+            type: string
+        isSelfUpdate:
+          type: boolean
+          description: "True if the Admin updated their own account."
+        success:
+          type: boolean
+
+ReviewModerationEvent:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      properties:
+        reviewId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum: [hidden, restored, deleted]
+        reason:
+          type: string
