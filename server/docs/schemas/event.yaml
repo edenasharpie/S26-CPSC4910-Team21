@@ -96,3 +96,18 @@ AccountStatusChange:
         adminNotes:
           type: string
           description: "Explanation for the reactivation."
+
+AccountUpdate:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      properties:
+        updatedFields:
+          type: array
+          items:
+            type: string
+        isSelfUpdate:
+          type: boolean
+          description: "True if the Admin updated their own account."
+        success:
+          type: boolean
