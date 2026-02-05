@@ -1,0 +1,360 @@
+/*
+# Task 7266: Figure out what queries we want to use to generate reports for different types of users
+
+# Sponsor Report: Driver Point Tracking (LINES 5 - 37)
+SELECT
+    u_driver.FirstName || ' ' || u_driver.LastName AS DriverName,
+    d.TotalPoints AS CurrentPointBalance,
+    pr.PointChange AS AmountChanged,
+    pr.TimeChanged AS DateOfChange,
+    u_changer.FirstName || ' ' || u_changer.LastName AS ChangedByUserName,
+    pr.ReasonForChange AS Reason
+FROM
+    POINT_REGISTER pr
+JOIN
+    DRIVERS d
+ON
+    pr.DriverID = d.DriverID
+JOIN
+    USERS u_driver
+ON
+    d.UserID = u_driver.UserID
+JOIN
+    USERS u_changer
+ON
+    pr.UserChanged = u_changer.UserID
+JOIN
+    SPONSORS s
+ON
+    d.SponsorID = s.SponsorID
+WHERE
+    d.SponsorID = :targetSponsorID
+AND
+    (:allDrivers = TRUE OR d.DriverID = :specificDriverID)
+AND
+    pr.TimeChanged BETWEEN :startDate AND :endDate
+ORDER BY
+    pr.TimeChanged DESC;
+
+
+
+# Sponsor Report: Audit Log Report (LINES 42 - 115)
+# Point Changes
+SELECT
+    'Point Change' AS Category,
+    pr.TimeChanged AS EventDate,
+    u.FirstName || ' ' || u.LastName AS DriverName,
+    'Points: ' || pr.PointChange || ' | Reason: ' || pr.ReasonForChange AS Details
+FROM
+    POINT_REGISTER pr
+JOIN
+    DRIVERS d
+ON
+    pr.DriverID = d.DriverID
+JOIN
+    USERS u
+ON
+    d.UserID = u.UserID
+WHERE
+    d.SponsorID = :targetSponsorID
+
+UNION ALL
+
+# Driver Applications
+SELECT
+    'Driver Application' AS Category,
+    da.TimeSubmitted AS EventDate,
+    u.FirstName || ' ' || u.LastName AS DriverName,
+    'Status: ' || da.ApplicationStatus || ' | Note: ' || COALESCE(da.DecisionExplanation, 'N/A') AS Details
+FROM
+    DRIVER_APPLICATIONS da
+JOIN
+    DRIVERS d
+ON
+    da.DriverID = d.DriverID
+JOIN
+    USERS u
+ON
+    d.UserID = u.UserID
+WHERE
+    da.SponsorID = :targetSponsorID
+
+UNION ALL
+
+# Security Logs: Password Changes / Logins
+SELECT
+    CASE
+        WHEN
+            l.LogType = 'PasswordChangeAttempt' THEN 'Security: Password Change'
+        WHEN
+            l.LogType = 'LoginAttempt' THEN 'Security: Login'
+        ELSE
+            'Security: Other'
+        END AS
+        Category,
+    l.AttemptTime AS EventDate,
+    u.FirstName || ' ' || u.LastName AS DriverName,
+    'Success: ' || CASE WHEN l.SuccessfulAttempt THEN 'Yes' ELSE 'No' END AS Details
+FROM
+    LOGS l
+JOIN
+    DRIVERS d
+ON
+    l.UserID = d.UserID
+JOIN
+    USERS u
+ON
+    d.UserID = u.UserID
+WHERE
+    d.SponsorID = :targetSponsorID
+
+AND
+    EventDate BETWEEN :startDate AND :endDate
+AND
+    (:category = 'All' OR Category = :category)
+ORDER BY
+    EventDate DESC;
+
+
+
+# Admin Reports: Sales by Sponsor (Detailed View) (LINES 120 - 148)
+SELECT
+    s.CompanyName AS SponsorName,
+    o.OrderID,
+    o.OrderDate,
+    u.FirstName || ' ' || u.LastName AS DriverName,
+    o.OrderPointsSpent,
+    o.OrderDollarsSpent,
+    (o.OrderDollarsSpent * 0.01) AS PlatformFee, -- Your 1% commission
+    o.OrderStatus
+FROM
+    ORDERS o
+JOIN
+    SPONSORS s
+ON
+    o.SponsorID = s.SponsorID
+JOIN
+    DRIVERS d
+ON
+    o.DriverID = d.DriverID
+JOIN
+    USERS u
+ON
+    d.UserID = u.UserID
+WHERE
+    (:allSponsors = TRUE OR s.SponsorID = :specificSponsorID)
+AND
+    o.OrderDate BETWEEN :startDate AND :endDate
+ORDER BY
+    s.CompanyName ASC, o.OrderDate DESC;
+
+
+
+# Admin Reports: Sales by Sponsor (Summary View) (LINES 153 - 168)
+SELECT
+    s.CompanyName,
+    SUM(o.OrderDollarsSpent) AS TotalSalesUSD,
+    SUM(o.OrderDollarsSpent * 0.01) AS TotalFeeDue
+FROM
+    ORDERS o
+JOIN
+    SPONSORS s
+ON
+    o.SponsorID = s.SponsorID
+WHERE
+    (:allSponsors = TRUE OR s.SponsorID = :specificSponsorID)
+AND
+    o.OrderDate BETWEEN :startDate AND :endDate
+GROUP BY
+    s.CompanyName;
+
+
+
+# Admin Reports: Sales by Driver (Detailed View) (LINES 173 - 202)
+SELECT
+    s.CompanyName AS SponsorName,
+    u.FirstName || ' ' || u.LastName AS DriverName,
+    o.OrderID,
+    o.OrderDate,
+    o.OrderPointsSpent,
+    o.OrderDollarsSpent,
+    o.OrderStatus
+FROM
+    ORDERS o
+JOIN
+    DRIVERS d
+ON
+    o.DriverID = d.DriverID
+JOIN
+    USERS u
+ON
+    d.UserID = u.UserID
+JOIN
+    SPONSORS s
+ON
+    o.SponsorID = s.SponsorID
+WHERE
+    (:allSponsors = TRUE OR s.SponsorID = :targetSponsorID)
+AND
+    (:allDrivers = TRUE OR d.DriverID = :targetDriverID)
+AND
+    o.OrderDate BETWEEN :startDate AND :endDate
+ORDER BY
+    o.OrderDate DESC;
+
+
+
+# Admin Reports: Sales by Driver (Summary View) (LINES 207 - 237)
+SELECT
+    s.CompanyName AS SponsorName,
+    u.FirstName || ' ' || u.LastName AS DriverName,
+    COUNT(o.OrderID) AS TotalOrders,
+    SUM(o.OrderPointsSpent) AS TotalPointsRedeemed,
+    SUM(o.OrderDollarsSpent) AS TotalSalesUSD,
+    SUM(o.OrderDollarsSpent * 0.01) AS TotalPlatformFee
+FROM
+ORDERS o
+JOIN
+    DRIVERS d
+ON
+    o.DriverID = d.DriverID
+JOIN
+    USERS u
+ON
+    d.UserID = u.UserID
+JOIN
+    SPONSORS s
+ON
+    o.SponsorID = s.SponsorID
+WHERE
+    (:allSponsors = TRUE OR s.SponsorID = :targetSponsorID)
+AND
+    (:allDrivers = TRUE OR d.DriverID = :targetDriverID)
+AND
+    o.OrderDate BETWEEN :startDate AND :endDate
+GROUP BY
+    s.CompanyName, u.FirstName, u.LastName, d.DriverID
+ORDER BY
+    TotalSalesUSD DESC;
+
+
+
+# Admin Reports: Invoice, one per sponsor (LINES 242 - 271)
+SELECT
+    s.CompanyName AS SponsorName,
+    u.FirstName || ' ' || u.LastName AS DriverName,
+    COUNT(o.OrderID) AS NumberOfPurchases,
+    SUM(o.OrderDollarsSpent) AS TotalDriverSpending,
+    SUM(o.OrderDollarsSpent * 0.01) AS FeeGeneratedByDriver
+FROM
+    ORDERS o
+JOIN
+    DRIVERS d
+ON
+    o.DriverID = d.DriverID
+JOIN
+    USERS u
+ON
+    d.UserID = u.UserID
+JOIN
+    SPONSORS s
+ON
+    o.SponsorID = s.SponsorID
+WHERE
+    (:allSponsors = TRUE OR s.SponsorID = :targetSponsorID)
+AND
+    o.OrderDate BETWEEN :startDate AND :endDate
+AND
+    o.OrderStatus != 'Cancelled'
+GROUP BY
+    s.SponsorID, s.CompanyName, d.DriverID, u.FirstName, u.LastName
+ORDER BY
+    s.CompanyName ASC, DriverName ASC;
+
+
+
+# Admin Reports: Audit Log Reports (LINES 275 - 358)
+# Point Changes
+SELECT
+    'Point Change' AS Category,
+    pr.TimeChanged AS EventDate,
+    s.CompanyName AS SponsorName,
+    u.FirstName || ' ' || u.LastName AS AffectedUser,
+    'Points: ' || pr.PointChange || ' | Reason: ' || pr.ReasonForChange AS Details
+FROM
+    POINT_REGISTER pr
+JOIN
+    DRIVERS d
+ON
+    pr.DriverID = d.DriverID
+JOIN
+    USERS u
+ON
+    d.UserID = u.UserID
+JOIN
+    SPONSORS s
+ON
+d.SponsorID = s.SponsorID
+
+UNION ALL
+
+# Driver Applications
+SELECT
+    'Driver Application' AS Category,
+    da.TimeSubmitted AS EventDate,
+    s.CompanyName AS SponsorName,
+    u.FirstName || ' ' || u.LastName AS AffectedUser,
+    'Status: ' || da.ApplicationStatus || ' | Reason: ' || COALESCE(da.DecisionExplanation, 'N/A') AS Details
+FROM
+    DRIVER_APPLICATIONS da
+JOIN
+    DRIVERS d
+ON
+    da.DriverID = d.DriverID
+JOIN
+    USERS u
+ON
+    d.UserID = u.UserID
+JOIN
+    SPONSORS s
+ON
+    da.SponsorID = s.SponsorID
+
+UNION ALL
+
+# Security Logs: Password Changes / Logins
+SELECT
+    CASE
+        WHEN
+            l.LogType = 'PasswordChangeAttempt' THEN 'Security: Password'
+        ELSE
+            'Security: Login'
+        END AS
+        Category,
+    l.AttemptTime AS EventDate,
+    COALESCE(s.CompanyName, 'SYSTEM/ADMIN') AS SponsorName,
+    u.FirstName || ' ' || u.LastName AS AffectedUser,
+    'Success: ' || CASE WHEN l.SuccessfulAttempt THEN 'Yes' ELSE 'No' END AS Details
+FROM
+    LOGS l
+JOIN
+    USERS u
+ON
+    l.UserID = u.UserID
+LEFT JOIN
+    DRIVERS d
+ON
+    u.UserID = d.UserID
+LEFT JOIN
+    SPONSORS s
+ON
+    d.SponsorID = s.SponsorID
+WHERE
+    EventDate BETWEEN :startDate AND :endDate
+AND
+    (:allSponsors = TRUE OR SponsorName = :targetSponsorName)
+AND
+    (:category = 'All' OR Category = :category)
+ORDER BY
+    EventDate DESC;
+*/
