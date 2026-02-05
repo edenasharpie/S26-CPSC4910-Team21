@@ -34,6 +34,7 @@ DriverApplication:
       description: "Notes left by an admin or sponsor during review."
       maxLength: 1000
 
+# TODO This could go in event.yaml instead if you want to group it with events
 ApplicationStatusUpdate:
   type: object
   required:
