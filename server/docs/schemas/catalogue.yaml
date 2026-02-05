@@ -20,6 +20,10 @@ CatalogueItem:
       type: string
       format: uuid
       readOnly: true
+    originalSource:
+      type: string
+      format: uri
+      description: store link accessible by api
     name:
       type: string
       example: "Premium Truck Seat Cover"
@@ -27,7 +31,7 @@ CatalogueItem:
       type: string
       example: "Ergonomic leather seat cover for long-haul comfort."
     pointCost:
-      type: integer
+      type: float
       minimum: 1
       example: 500
     imageUrl:

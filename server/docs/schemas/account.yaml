@@ -22,7 +22,7 @@ Account:
       type: string
       description: Unique username for the account
       minLength: 3
-      maxLength: 20
+      maxLength: 25
       example: johndoe123
     password:
       type: string
@@ -60,6 +60,12 @@ Account:
       minLength: 1
       maxLength: 50
       example: Doe
+    pronouns:
+      type: string
+      description: Pronouns of the user
+      minLength: 2
+      maxLength: 16
+      example: she/her
     accountType:
       type: string
       description: Type of the account
@@ -114,7 +120,7 @@ DriverAccount:
       properties:
         licenseNumber:
           type: string
-          description: Driver's license number
+          description: Driver's license ID number
           minLength: 5
           maxLength: 20
           example: D1234567
@@ -185,20 +191,19 @@ AdminAccount:
 PasswordChangeRequest:
   type: object
   required:
-    - currentPassword
-    - newPassword
+    - currentPasswordHash
+    - newPasswordHash
   properties:
-    currentPassword:
+    currentPasswordHash:
       type: string
-      format: password
-    newPassword:
+      format: hash
+    newPasswordHash:
       type: string
-      format: password
-      minLength: 8
-      maxLength: 32
-      example: NewStr0ngP@ss!
-    confirmNewPassword:
+      format: hash
+      # min length 8, max 32, enforced by code sent to client
+    confirmNewPasswordHash:
       type: string
+      format: hash
       
 ProfileUpdateRequest:
   type: object
@@ -207,7 +212,7 @@ ProfileUpdateRequest:
       type: string
       description: Unique username for the account
       minLength: 3
-      maxLength: 20
+      maxLength: 25
       example: johndoe123
     email:
       type: string
@@ -237,7 +242,13 @@ ProfileUpdateRequest:
       minLength: 1
       maxLength: 50
       example: Doe
-      profilePicture:
+    pronouns:
+      type: string
+      description: Pronouns of the user
+      minLength: 2
+      maxLength: 16
+      example: she/her
+    profilePicture:
       type: string
       description: URL to the user's profile picture
       format: uri
@@ -260,7 +271,7 @@ AccountStatusRequest:
     reason:
       type: string
       description: "Note on why the status is being changed."
-      maxLength: 255
+      maxLength: 250
 
 UserSummary:
   type: object
