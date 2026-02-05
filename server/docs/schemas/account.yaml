@@ -261,3 +261,32 @@ AccountStatusRequest:
       type: string
       description: "Note on why the status is being changed."
       maxLength: 255
+
+UserSummary:
+  type: object
+  properties:
+    id:  
+      type: string
+      format: uuid
+    username: { type: string }
+    email: { type: string }
+    firstName: { type: string }
+    lastName: { type: string }
+    accountType: 
+      type: string
+      enum: [driver, sponsor, admin]
+    activeStatus: { type: boolean }
+    lastLogin: { type: string, format: date-time }
+    associatedEntity:
+      type: string
+      description: "Company Name for Drivers/Sponsors, or 'System' for Admins."
+
+UserManagementList:
+  type: object
+  properties:
+    users:
+      type: array
+      items:
+        $ref: '#/UserSummary'
+    totalCount: { type: integer }
+    page: { type: integer }
