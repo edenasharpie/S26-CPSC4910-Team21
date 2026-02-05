@@ -1,15 +1,287 @@
 @import "tailwindcss";
 
 @theme {
+  /* fonts */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  
+  /* colors */
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+  
+  /* specific colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+  
+  /* spacing */
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 0.75rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* border radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  
+  /* shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
 }
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  @apply bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100;
+  @apply antialiased;
+  
+  /* prefer dark mode over light but allow toggle */
+  color-scheme: light dark;
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
+/* smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* font sizes */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-semibold text-gray-900 dark:text-gray-100;
+}
+
+h1 {
+  @apply text-4xl lg:text-5xl;
+}
+
+h2 {
+  @apply text-3xl lg:text-4xl;
+}
+
+h3 {
+  @apply text-2xl lg:text-3xl;
+}
+
+h4 {
+  @apply text-xl lg:text-2xl;
+}
+
+h5 {
+  @apply text-lg lg:text-xl;
+}
+
+h6 {
+  @apply text-base lg:text-lg;
+}
+
+p {
+  @apply text-gray-700 dark:text-gray-300;
+}
+
+a {
+  @apply text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors;
+}
+
+/* forms */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+input[type="date"],
+input[type="time"],
+textarea,
+select {
+  @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600;
+  @apply bg-white dark:bg-gray-800;
+  @apply text-gray-900 dark:text-gray-100;
+  @apply rounded-lg;
+  @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply transition-colors;
+}
+
+select {
+  @apply cursor-pointer;
+}
+
+/* checkbox and radio */
+input[type="checkbox"],
+input[type="radio"] {
+  @apply w-4 h-4 text-primary-600 border-gray-300 dark:border-gray-600;
+  @apply focus:ring-2 focus:ring-primary-500;
+  @apply cursor-pointer;
+}
+
+input[type="checkbox"] {
+  @apply rounded;
+}
+
+input[type="radio"] {
+  @apply rounded-full;
+}
+
+/* buttons */
+button {
+  @apply font-medium rounded-lg transition-colors;
+  @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+
+/* container */
+.container-padding {
+  @apply px-4 sm:px-6 lg:px-8;
+}
+
+/* page section spacing */
+.section-spacing {
+  @apply py-8 sm:py-12 lg:py-16;
+}
+
+/* card base style */
+.card {
+  @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg;
+}
+
+/* focus visible for web accessibility */
+.focus-outline {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2;
+}
+
+/* text truncation */
+.truncate-2-lines {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.truncate-3-lines {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* gradient backgrounds */
+.gradient-primary {
+  @apply bg-gradient-to-r from-primary-600 to-primary-700;
+}
+
+.gradient-success {
+  @apply bg-gradient-to-r from-green-600 to-emerald-700;
+}
+
+.gradient-warning {
+  @apply bg-gradient-to-r from-yellow-600 to-orange-700;
+}
+
+.gradient-danger {
+  @apply bg-gradient-to-r from-red-600 to-rose-700;
+}
+
+/* skeleton loader animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton {
+  @apply bg-gray-200 dark:bg-gray-700 rounded;
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(
+    to right,
+    rgb(229 231 235 / 1) 4%,
+    rgb(209 213 219 / 1) 25%,
+    rgb(229 231 235 / 1) 36%
+  );
+  background-size: 1000px 100%;
+}
+
+.dark .skeleton {
+  background: linear-gradient(
+    to right,
+    rgb(55 65 81 / 1) 4%,
+    rgb(75 85 99 / 1) 25%,
+    rgb(55 65 81 / 1) 36%
+  );
+  background-size: 1000px 100%;
+}
+
+/* smooth transitions for theme switching */
+* {
+  @apply transition-colors duration-200;
+}
+
+/* remove transition from images and videos */
+img, video {
+  transition: none;
+}
+
+/* scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 dark:bg-gray-900;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-600;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(209 213 219) rgb(243 244 246);
+}
+
+.dark * {
+  scrollbar-color: rgb(55 65 81) rgb(17 24 39);
+}
+
+/* accessibility */
+.skip-to-main {
+  @apply sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4;
+  @apply bg-primary-600 text-white px-4 py-2 rounded-lg z-50;
+}
+
+/* keyboard navigation */
+*:focus-visible {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+}
+
+/* print */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+  
+  .no-print {
+    display: none !important;
   }
 }

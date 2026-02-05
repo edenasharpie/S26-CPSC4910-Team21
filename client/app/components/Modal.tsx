@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 
+// declare some attributes for the modal component
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -20,6 +21,7 @@ export function Modal({
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
+  // define sizes we declared before
   const sizeStyles = {
     sm: "max-w-md",
     md: "max-w-lg",
@@ -27,6 +29,7 @@ export function Modal({
     xl: "max-w-4xl",
   };
 
+  // handle escape key to close modal
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
@@ -34,11 +37,13 @@ export function Modal({
       }
     };
 
+    // add/remove event listener based on isOpen state
     if (isOpen) {
       document.addEventListener("keydown", handleEscape);
       document.body.style.overflow = "hidden";
     }
 
+    // cleanup function to remove event listener and reset body overflow
     return () => {
       document.removeEventListener("keydown", handleEscape);
       document.body.style.overflow = "unset";
@@ -49,21 +54,21 @@ export function Modal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+      {/* backdrop */}
       <div
         className="absolute inset-0 bg-black/50 dark:bg-black/70"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Modal */}
+      {/* modal */}
       <div
         ref={modalRef}
-        className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full ${sizeStyles[size]} max-h-[90vh] flex flex-col`}
+        className={`relative card shadow-xl w-full ${sizeStyles[size]} max-h-[90vh] flex flex-col`}
         role="dialog"
         aria-modal="true"
       >
-        {/* Header */}
+        {/* header */}
         {title && (
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
@@ -71,7 +76,7 @@ export function Modal({
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
               aria-label="Close modal"
             >
               <svg
@@ -89,12 +94,12 @@ export function Modal({
           </div>
         )}
 
-        {/* Content */}
+        {/* content */}
         <div className="px-6 py-4 overflow-y-auto flex-1">
           {children}
         </div>
 
-        {/* Footer */}
+        {/* footer */}
         {footer && (
           <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             {footer}

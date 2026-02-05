@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
+// declare some attributes for the card component
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   title?: string;
   subtitle?: string;
@@ -16,10 +17,11 @@ export function Card({
   children,
   ...props
 }: CardProps) {
+  // define variants we declared before
   const variantStyles = {
-    default: "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700",
-    bordered: "bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600",
-    elevated: "bg-white dark:bg-gray-800 shadow-lg border border-gray-100 dark:border-gray-700",
+    default: "card",
+    bordered: "card border-2 !border-gray-300 dark:!border-gray-600",
+    elevated: "card shadow-lg",
   };
 
   return (

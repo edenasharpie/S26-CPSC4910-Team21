@@ -1,6 +1,7 @@
 import type { InputHTMLAttributes } from "react";
 import { forwardRef } from "react";
 
+// declare some attributes for the input component
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
@@ -9,6 +10,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, helperText, className = "", id, ...props }, ref) => {
+    // generate a unique id if none is provided
     const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
 
     return (
@@ -24,16 +26,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           id={inputId}
-          className={`
-            w-full px-3 py-2 border rounded-lg
-            bg-white dark:bg-gray-800
-            text-gray-900 dark:text-gray-100
-            border-gray-300 dark:border-gray-600
-            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-            disabled:opacity-50 disabled:cursor-not-allowed
-            ${error ? "border-red-500 focus:ring-red-500" : ""}
-            ${className}
-          `}
+          className={`${error ? "!border-error !focus:ring-error" : ""} ${className}`}
           {...props}
         />
         {error && (

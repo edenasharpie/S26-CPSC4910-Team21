@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+// declare some attributes for the column component of the table
 interface Column<T> {
   key: string;
   header: string;
@@ -7,6 +8,7 @@ interface Column<T> {
   className?: string;
 }
 
+// declare some attributes for the table component itself
 interface TableProps<T> {
   data: T[];
   columns: Column<T>[];
@@ -22,22 +24,23 @@ export function Table<T extends Record<string, any>>({
   emptyMessage = "No data available",
   isLoading = false,
 }: TableProps<T>) {
+  // show loading state if isLoading is true; just show a card
   if (isLoading) {
     return (
-      <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <div className="p-8 text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400" />
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            Loading...
-          </p>
+      <div className="card">
+        <div className="p-8 space-y-3">
+          <div className="skeleton h-8 w-full"></div>
+          <div className="skeleton h-8 w-full"></div>
+          <div className="skeleton h-8 w-full"></div>
         </div>
       </div>
     );
   }
 
+  // show empty state if there's no data
   if (data.length === 0) {
     return (
-      <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <div className="card">
         <div className="p-8 text-center text-gray-500 dark:text-gray-400">
           {emptyMessage}
         </div>
@@ -46,7 +49,7 @@ export function Table<T extends Record<string, any>>({
   }
 
   return (
-    <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div className="card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -68,11 +71,11 @@ export function Table<T extends Record<string, any>>({
               <tr
                 key={index}
                 onClick={() => onRowClick?.(item)}
-                className={`${
+                className={
                   onRowClick
-                    ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
                     : ""
-                }`}
+                }
               >
                 {columns.map((column) => (
                   <td
@@ -81,9 +84,7 @@ export function Table<T extends Record<string, any>>({
                       column.className || ""
                     }`}
                   >
-                    {column.render
-                      ? column.render(item)
-                      : item[column.key]}
+                    {column.render ? column.render(item) : item[column.key]}
                   </td>
                 ))}
               </tr>
