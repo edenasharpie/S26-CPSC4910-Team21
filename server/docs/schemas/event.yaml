@@ -125,3 +125,17 @@ ReviewModerationEvent:
           enum: [hidden, restored, deleted]
         reason:
           type: string
+
+ApplicationStatusUpdate:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [accepted, rejected]
+        reviewNotes:
+          type: string
+          maxLength: 1000

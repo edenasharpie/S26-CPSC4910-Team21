@@ -1,0 +1,191 @@
+# common query parameters that can be used for all endpoints
+Parameters:
+  Limit:
+    name: limit
+    in: query
+    description: The maximum number of items to return (pagination)
+    required: false
+    schema:
+      type: integer
+      default: 100
+      minimum: 1
+
+  Offset:
+    name: offset
+    in: query
+    description: The number of items to skip before starting to collect the result set (pagination)
+    required: false
+    schema:
+      type: integer
+      default: 0
+      minimum: 0
+
+# common error response schema that can be used for all endpoints
+ErrorResponse:
+  type: object
+  description: Base error response format for all endpoints
+  required:
+    - statusCode
+    - message
+  properties:
+    statusCode:
+      type: integer
+      description: HTTP status code
+      example: 400
+    message:
+      type: string
+      description: Human-readable error message
+      example: Bad Request
+    error:
+      type: string
+      description: Error type/category
+      example: ValidationError
+    details:
+      type: array
+      description: Additional error details (e.g., validation errors)
+      items:
+        type: object
+        properties:
+          field:
+            type: string
+            description: Field that caused the error
+            example: email
+          message:
+            type: string
+            description: Specific error message for this field
+            example: Email format is invalid
+    timestamp:
+      type: string
+      format: date-time
+      description: Timestamp when the error occurred
+      example: 2024-01-15T13:45:30Z
+
+# specific error response definitions
+Responses:
+  400Error:
+    description: Bad Request - The request was malformed or missing required parameters
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '#/ErrorResponse'
+            - type: object
+              properties:
+                statusCode:
+                  example: 400
+                message:
+                  example: Bad Request
+                error:
+                  example: ValidationError
+
+  401Error:
+    description: Unauthorized - Authentication is required or has failed
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '#/ErrorResponse'
+            - type: object
+              properties:
+                statusCode:
+                  example: 401
+                message:
+                  example: Unauthorized
+                error:
+                  example: AuthenticationError
+
+  403Error:
+    description: Forbidden - The authenticated user does not have permission to access this resource
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '#/ErrorResponse'
+            - type: object
+              properties:
+                statusCode:
+                  example: 403
+                message:
+                  example: Forbidden
+                error:
+                  example: PermissionError
+
+  404Error:
+    description: Not Found - The requested resource was not found
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '#/ErrorResponse'
+            - type: object
+              properties:
+                statusCode:
+                  example: 404
+                message:
+                  example: Not Found
+                error:
+                  example: ResourceNotFoundError
+
+  409Error:
+    description: Conflict - The request conflicts with the current state (e.g., duplicate resource)
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '#/ErrorResponse'
+            - type: object
+              properties:
+                statusCode:
+                  example: 409
+                message:
+                  example: Conflict
+                error:
+                  example: DuplicateResourceError
+
+  422Error:
+    description: Unprocessable Entity - The request was well-formed but contains semantic errors
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '#/ErrorResponse'
+            - type: object
+              properties:
+                statusCode:
+                  example: 422
+                message:
+                  example: Unprocessable Entity
+                error:
+                  example: ValidationError
+
+  500Error:
+    description: Internal Server Error - An unexpected error occurred on the server
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '#/ErrorResponse'
+            - type: object
+              properties:
+                statusCode:
+                  example: 500
+                message:
+                  example: Internal Server Error
+                error:
+                  example: ServerError
+
+  503Error:
+    description: Service Unavailable - The server is temporarily unavailable
+    content:
+      application/json:
+        schema:
+          allOf:
+            - $ref: '#/ErrorResponse'
+            - type: object
+              properties:
+                statusCode:
+                  example: 503
+                message:
+                  example: Service Unavailable
+                error:
+                  example: ServiceUnavailableError

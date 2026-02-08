@@ -5,17 +5,19 @@ SponsorCompany:
       type: string
       format: uuid
       readOnly: true
-    companyTitle: { type: string }
-    companyDescription: { type: string }
+    companyTitle:
+      type: string
+    companyDescription:
+      type: string
     logoUrl:
       type: string
       format: uri
-      description: "The system-generated URL where the logo is hosted."
+      description: The system-generated URL where the logo is hosted
       readOnly: true
     headerImageUrl:
       type: string
       format: uri
-      description: "The URL of the background branding image."
+      description: The URL of the background branding image
       readOnly: true
     #pointHistories: # TODO
     #  type: array
@@ -34,17 +36,17 @@ SponsorCompany:
 
 SponsorCompanyUpdate:
   type: object
-  description: "Request body for updating sponsor company details."
+  description: Request body for updating sponsor company details
   properties:
     companyTitle:
       type: string
       minLength: 2
       maxLength: 100
-      example: "FastRides Inc."
+      example: FastRides Inc.
     companyDescription:
       type: string
       maxLength: 1000
-      example: "A leading logistics firm focused on driver excellence."
+      example: A leading logistics firm focused on driver excellence
     logoImage:
       type: string
       format: uri
@@ -58,11 +60,11 @@ SponsorLogoUpload:
     logoFile:
       type: string
       format: binary
-      description: "The image file to be used as the company logo (PNG, JPG, or SVG)."
+      description: The image file to be used as the company logo (PNG, JPG, or SVG).
     altText:
       type: string
-      description: "Accessibility text for the logo image."
-      example: "FastRides Inc. Corporate Logo"
+      description: Accessibility text for the logo image
+      example: FastRides Inc. Corporate Logo
     
 SponsorBackgroundUpload:
   type: object
@@ -70,12 +72,12 @@ SponsorBackgroundUpload:
     backgroundImage:
       type: string
       format: binary
-      description: "The image file used for company-wide background branding (e.g., banners)."
+      description: The image file used for company-wide background branding (e.g., banners)
     headerStyle:
       type: string
       enum: [cover, contain, tile]
-      default: "cover"
+      default: cover
     altText:
       type: string
-      description: "Accessibility text for the background image."
-      example: "FastRides Inc. Corporate Background Image"
+      description: Accessibility text for the background image
+      example: FastRides Inc. Corporate Background Image

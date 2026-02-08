@@ -5,6 +5,7 @@
 # base account schema with common properties for all user account types
 Account:
   type: object
+  description: Base schema for user accounts, containing common properties for all account types (drivers, sponsors, admins)
   required:
     # user must enter these fields when creating an account
     - username
@@ -105,13 +106,13 @@ Account:
       default: null
       example: 2024-01-10T09:20:15Z
     permissions:
-      type: object
-      description: Permissions assigned to the account based on account type
-      properties:
-        - $ref: './permissions.yaml#/Permissions'
       readOnly: true
+      allOf:
+        - $ref: './permissions.yaml#/Permissions'
 
 DriverAccount:
+  type: object
+  description: Driver account with specific properties
   allOf:
     - $ref: '#/Account'
     - type: object
@@ -149,13 +150,13 @@ DriverAccount:
           readOnly: true
           example: FastRides Inc.
         permissions:
-          type: object
-          description: Driver-specific permissions
-          properties:
-            - $ref: './permissions.yaml#/DriverPermissions'
           readOnly: true
+          allOf:
+            - $ref: './permissions.yaml#/DriverPermissions'
 
 SponsorAccount:
+  type: object
+  description: Sponsor account with specific properties
   allOf:
     - $ref: '#/Account'
     - type: object
@@ -168,28 +169,25 @@ SponsorAccount:
           readOnly: true
           example: FastRides Inc.
         permissions:
-          type: object
-          description: Sponsor-specific permissions
-          properties:
-            - $ref: './permissions.yaml#/SponsorPermissions'
           readOnly: true
+          allOf:
+            - $ref: './permissions.yaml#/SponsorPermissions'
 
 AdminAccount:
+  type: object
+  description: Admin account with specific properties
   allOf:
     - $ref: '#/Account'
     - type: object
-      description: Admin account with veiwing permissions
       properties:
         permissions:
           readOnly: true
-          $ref: './permissions.yaml#/AdminPermissions'
-          #type: object
-          #description: Admin-specific permissions
-          #properties:
-           # - $ref: './permissions.yaml#/AdminPermissions'
+          allOf:
+            - $ref: './permissions.yaml#/AdminPermissions'
 
 PasswordChangeRequest:
   type: object
+  description: Request schema for changing a user's password, requiring the current password hash and the new password hash (with confirmation)
   required:
     - currentPasswordHash
     - newPasswordHash
@@ -199,14 +197,18 @@ PasswordChangeRequest:
       format: hash
     newPasswordHash:
       type: string
+      minLength: 8
+      maxLength: 32
       format: hash
-      # min length 8, max 32, enforced by code sent to client
     confirmNewPasswordHash:
       type: string
+      minLength: 8
+      maxLength: 32
       format: hash
-      
+
 ProfileUpdateRequest:
   type: object
+  description: Request schema for updating a user's profile information, allowing changes to personal details and contact information
   properties:
     username:
       type: string
@@ -258,42 +260,53 @@ ProfileUpdateRequest:
       description: Short biography of the user
       maxLength: 500
       example: Driver with 5 years of experience
-  
+
 AccountStatusRequest:
   type: object
+  description: Request schema for changing a user's account status (active/inactive), with a reason for the change
   required:
     - activeStatus
   properties:
     activeStatus:
       type: boolean
-      description: "Set to true to reactivate the account or false to deactivate it."
+      description: Status to set for the account (true for active, false for deactivated)
       example: true
     reason:
       type: string
-      description: "Note on why the status is being changed."
+      description: Note on why the status is being changed
       maxLength: 250
 
 UserSummary:
   type: object
+  description: Summary information for a user account, for lists and overviews
   properties:
     id:  
       type: string
       format: uuid
-    username: { type: string }
-    email: { type: string }
-    firstName: { type: string }
-    lastName: { type: string }
+    username:
+      type: string
+    email:
+      type: string
+      format: email
+    firstName:
+      type: string
+    lastName:
+      type: string
     accountType: 
       type: string
       enum: [driver, sponsor, admin]
-    activeStatus: { type: boolean }
-    lastLogin: { type: string, format: date-time }
+    activeStatus:
+      type: boolean
+    lastLogin:
+      type: string
+      format: date-time
     associatedEntity:
       type: string
-      description: "Company Name for Drivers/Sponsors, or 'System' for Admins."
+      description: Company name for drivers/sponsors, or 'system' for admins
 
 UserManagementList:
   type: object
+  description: List of user summaries with pagination information
   properties:
     users:
       type: array
