@@ -27,6 +27,12 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
 
+      - name: Fetch all branches
+        run: |
+          git fetch origin '+refs/heads/*:refs/heads/*' --update-head-ok
+          git fetch origin '+refs/tags/*:refs/tags/*' --update-head-ok
+        if: github.event_name != 'delete'
+
       - name: Mirror to Azure DevOps
         env:
           AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
