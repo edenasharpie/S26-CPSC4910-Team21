@@ -3,12 +3,529 @@ info:
   title: FleetScore API
   version: 1.0.0
 
+# list of available tags for API endpoints
 tags:
+  - name: points
+    description: Points management
   - name: accounts
     description: User account management
-  - name: permissions
-    description: Permission management
+  - name: catalog
+    description: Product catalog management
+  - name: orders
+    description: Order processing and history
   - name: notifications
     description: Notification management
-  - name: purchases
-    description: Purchase management
+  - name: applications
+    description: Driver application management
+  - name: reports
+    description: Report generation and retrieval
+  - name: views
+    description: View pages as other user roles
+  - name: audit logs
+    description: Audit log retrieval and management
+  - name: security
+    description: Security-related endpoints
+  - name: sponsor companies
+    description: Sponsor company management
+
+paths:
+
+  /catalogs:
+    
+    get:
+      tags:
+        - catalog
+      description: Retrieve a list of summaries for all product catalogs in the system. Admin access required.
+      parameters:
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      responses:
+        '200':
+          description: A list of product catalog summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: './schemas/catalog.yaml#/CatalogSummary'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+    
+    post:
+      tags:
+        - catalog
+      description: Create a new product catalog. Admin or sponsor access required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/catalog.yaml#/Catalog'
+      responses:
+        '201':
+          description: Catalog created successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/Catalog'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+  /catalogs/{catalogId}:
+    parameters:
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+          type: integer
+
+    patch:
+      tags:
+        - catalog
+      description: Update an existing product catalog by its ID. Admin or sponsor access required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/catalog.yaml#/Catalog'
+      responses:
+        '200':
+          description: Catalog updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/Catalog'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+    delete:
+      tags:
+        - catalog
+      description: Delete a product catalog by its ID. Admin or sponsor access required
+      responses:
+        '204':
+          description: Catalog deleted successfully
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+  /catalogs/{catalogId}/items:
+    parameters:
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - catalog
+      description: Retrieve a list of all items within a specific catalog by its ID
+      parameters:
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      responses:
+        '200':
+          description: A list of items within the specified catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: './schemas/catalog.yaml#/CatalogItem'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+    post:
+      tags:
+        - catalog
+      description: Add a new item to a specific catalog by its ID. Admin or sponsor access required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/catalog.yaml#/CatalogItem'
+      responses:
+        '201':
+          description: Catalog item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/CatalogItem'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+    
+  /catalogs/{catalogId}/items/{itemId}:
+    parameters:
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+            type: integer
+      - name: itemId
+        in: path
+        description: The unique identifier of the catalog item
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - catalog
+      description: Retrieve details for a specific item within a specific catalog by their IDs
+      responses:
+        '200':
+          description: Details of the specified catalog item
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/CatalogItem'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+    
+    patch:
+      tags:
+        - catalog
+      description: Update an existing item within a specific catalog by its ID. Admin or sponsor access required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/catalog.yaml#/CatalogItem'
+      responses:
+        '200':
+          description: Catalog item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/CatalogItem'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+    delete:
+      tags:
+        - catalog
+      description: Delete an item from a specific catalog by its ID. Admin or sponsor access required
+      responses:
+        '204':
+          description: Catalog item deleted successfully
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+  /catalogs/{catalogId}/items/{itemId}/reviews:
+    parameters:
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+          type: integer
+      - name: itemId
+        in: path
+        description: The unique identifier of the catalog item
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - catalog
+      description: Retrieve a list of all reviews for a specific item within a specific catalog by their IDs
+      parameters:
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      responses:
+        '200':
+          description: A list of reviews for the specified catalog item
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: './schemas/catalog.yaml#/Review'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+    post:
+      tags:
+        - catalog
+      description: Submit a review for a specific item within a specific catalog by their IDs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/catalog.yaml#/Review'
+      responses:
+        '201':
+          description: Catalog item review submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/Review'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+  /catalogs/{catalogId}/items/{itemId}/reviews/{reviewId}:
+    parameters:
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+          type: integer
+      - name: itemId
+        in: path
+        description: The unique identifier of the catalog item
+        required: true
+        schema:
+          type: integer
+      - name: reviewId
+        in: path
+        description: The unique identifier of the review
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - catalog
+      description: Retrieve details for a specific review, of a specific item, within a specific catalog by their IDs
+      responses:
+        '200':
+          description: Details of the specified review for the specified catalog item
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/Review'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+  
+    patch:
+      tags:
+        - catalog
+      description: Update an existing review for a specific item within a specific catalog by its ID. Only the user who submitted the review can update it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/catalog.yaml#/Review'
+      responses:
+        '200':
+          description: Catalog item review updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/Review'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+    delete:
+      tags:
+        - catalog
+      description: Delete a review for a specific item within a specific catalog by its ID. Only the user who submitted the review can delete it.
+      responses:
+        '204':
+          description: Catalog item review deleted successfully
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
