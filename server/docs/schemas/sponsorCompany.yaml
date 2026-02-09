@@ -2,8 +2,7 @@ SponsorCompany:
   type: object
   properties:
     id:
-      type: string
-      format: uuid
+      type: integer
       readOnly: true
     companyTitle:
       type: string

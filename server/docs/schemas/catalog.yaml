@@ -2,13 +2,25 @@ Catalog:
   type: object
   properties:
     id:
-      type: string
-      format: uuid
+      type: integer
       readOnly: true
+    itemCount:
+      type: integer
+      example: 10
     items:
       type: array
       items:
         $ref: '#/CatalogItem'
+
+CatalogSummary:
+  type: object
+  properties:
+    id:
+      type: integer
+      readOnly: true
+    itemCount:
+      type: integer
+      example: 10
 
 CatalogItem:
   type: object
@@ -17,8 +29,7 @@ CatalogItem:
     - pointCost
   properties:
     id:
-      type: string
-      format: uuid
+      type: integer
       readOnly: true
     originalSource:
       type: string
@@ -51,8 +62,7 @@ Review:
     - userId
   properties:
     id:
-      type: string
-      format: uuid
+      type: integer
       readOnly: true
     userId:
       type: string
