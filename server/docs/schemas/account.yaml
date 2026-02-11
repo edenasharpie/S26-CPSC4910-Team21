@@ -160,6 +160,10 @@ SponsorAccount:
   allOf:
     - $ref: '#/Account'
     - type: object
+      required:
+        - username 
+        - password
+        - companyName
       properties:
         companyName:
           type: string
