@@ -12,11 +12,11 @@ DriverApplication:
     driverId:
       type: string
       format: uuid
-      description: "The ID of the driver applying."
+      description: The ID of the driver applying
     sponsorCompanyId:
       type: string
       format: uuid
-      description: "The ID of the company they want to join."
+      description: The ID of the company they want to join
     submissionDate:
       type: string
       format: date-time
@@ -27,22 +27,9 @@ DriverApplication:
       default: pending
     applicationNotes:
       type: string
-      description: "Optional message from the driver to the sponsor."
+      description: Optional message from the driver to the sponsor
       maxLength: 1000
     adminReviewNotes:
       type: string
-      description: "Notes left by an admin or sponsor during review."
-      maxLength: 1000
-
-# TODO This could go in event.yaml instead if you want to group it with events
-ApplicationStatusUpdate:
-  type: object
-  required:
-    - status
-  properties:
-    status:
-      type: string
-      enum: [accepted, rejected]
-    reviewNotes:
-      type: string
+      description: Notes left by an admin or sponsor during review
       maxLength: 1000
