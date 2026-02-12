@@ -1,6 +1,6 @@
 import type { Route } from "./+types/admin";
 import { useState } from "react";
-import { Table, Input, Button, Badge } from "~/components";
+import { Table, Input, Button, Badge, Modal} from "~/components";
 
 // mock user data
 // TODO: replace with real data
@@ -146,6 +146,71 @@ export default function AdminPortal() {
     },
   ];
 
+  // state for user creation
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [form, setForm] = useState({
+    username: "",
+    firstName: "",
+    lastName: "",
+    accountType: "Driver" as "Admin" | "Driver" | "Sponsor",
+  });
+
+  type CreateUserPayload = {
+    username: string;
+    firstName: string;
+    lastName: string;
+    accountType: "Admin" | "Driver" | "Sponsor";
+  };
+  // backend call for creating a new user, and dialogue completetion trigger
+  async function createUser(payload: CreateUserPayload) {
+    const response = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message ?? "Failed to create user");
+    }
+
+    return response.json();
+  }
+
+  async function handleCreateUser() {
+    if (!form.username || !form.firstName || !form.lastName) {
+      alert("All fields are required");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      await createUser({
+        username: form.username,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        accountType: form.accountType,
+      });
+
+      setIsAddUserOpen(false);
+      setForm({
+        username: "",
+        firstName: "",
+        lastName: "",
+        accountType: "Driver",
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create user");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container-padding section-spacing">
@@ -167,7 +232,9 @@ export default function AdminPortal() {
             />
           </div>
           <div className="flex gap-2">
-            <Button variant="primary">Add User</Button>
+            <Button variant="primary" onClick={() => setIsAddUserOpen(true)}>
+              Add User
+            </Button>
             <Button variant="secondary">Export</Button>
           </div>
         </div>
@@ -208,6 +275,82 @@ export default function AdminPortal() {
             console.log("Row clicked:", user);
           }}
         />
+
+        {/* create-new-user dialogue */}
+        <Modal
+          isOpen={isAddUserOpen}
+          onClose={() => setIsAddUserOpen(false)}
+          title="Add User"
+          size="md"
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setIsAddUserOpen(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleCreateUser}
+                isLoading={isSubmitting}
+              >
+                Create User
+              </Button>
+            </div>
+          }
+        >
+          <div>
+            <Input
+              label="Username"
+              value={form.username}
+              onChange={(e) =>
+                setForm({ ...form, username: e.target.value })
+              }
+            />
+            <div className="w-full">
+              <Input
+                label="First Name"
+                value={form.firstName}
+                onChange={(e) =>
+                  setForm({ ...form, firstName: e.target.value })
+                }
+              />
+            </div>
+            <div className="w-full">
+            <Input
+              label="Last Name"
+              value={form.lastName}
+              onChange={(e) =>
+                setForm({ ...form, lastName: e.target.value })
+              }
+            />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Account Type
+              </label>
+              <select
+                className="mt-1 w-full rounded-md border bg-transparent p-2"
+                value={form.accountType}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    accountType: e.target.value as
+                      | "Admin"
+                      | "Driver"
+                      | "Sponsor",
+                  })
+                }
+              >
+                <option value="Driver">Driver</option>
+                <option value="Sponsor">Sponsor</option>
+                <option value="Admin">Admin</option>
+              </select>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );
