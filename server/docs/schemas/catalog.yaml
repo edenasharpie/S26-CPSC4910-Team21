@@ -1,37 +1,48 @@
-Catalogue:
+Catalog:
   type: object
   properties:
     id:
-      type: string
-      format: uuid
+      type: integer
       readOnly: true
+    itemCount:
+      type: integer
+      example: 10
     items:
       type: array
       items:
-        $ref: '#/CatalogueItem'
+        $ref: '#/CatalogItem'
 
-CatalogueItem:
+CatalogSummary:
+  type: object
+  properties:
+    id:
+      type: integer
+      readOnly: true
+    itemCount:
+      type: integer
+      example: 10
+
+CatalogItem:
   type: object
   required:
     - name
     - pointCost
   properties:
     id:
-      type: string
-      format: uuid
+      type: integer
       readOnly: true
     originalSource:
       type: string
       format: uri
-      description: store link accessible by api
+      description: Store link accessible by API for reference, not displayed to users
     name:
       type: string
-      example: "Premium Truck Seat Cover"
+      example: Premium Truck Seat Cover
     description:
       type: string
-      example: "Ergonomic leather seat cover for long-haul comfort."
+      example: Ergonomic leather seat cover for long-haul comfort
     pointCost:
-      type: float
+      type: number
       minimum: 1
       example: 500
     imageUrl:
@@ -51,13 +62,12 @@ Review:
     - userId
   properties:
     id:
-      type: string
-      format: uuid
+      type: integer
       readOnly: true
     userId:
       type: string
       format: uuid
-      description: "The ID of the user who wrote the review."
+      description: The ID of the user who wrote the review
     rating:
       type: integer
       minimum: 1
@@ -65,11 +75,11 @@ Review:
     reviewBody:
       type: string
       maxLength: 1000
-      example: "Excellent quality, fits perfectly!"
+      example: Excellent quality, fits perfectly!
     isVisible:
       type: boolean
       default: true
-      description: "Admin-controlled flag to hide reviews without deleting data."
+      description: Admin-controlled flag to hide reviews without deleting data
     timestamp:
       type: string
       format: date-time
@@ -84,4 +94,4 @@ ReviewStatusRequest:
       type: boolean
     adminReason:
       type: string
-      description: "Reason for hiding the review (e.g., profanity, spam)."
+      description: Reason for hiding the review (e.g., profanity, spam)

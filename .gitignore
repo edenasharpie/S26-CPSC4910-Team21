@@ -1,4 +1,6 @@
 build/
+copilot-instructions.md
+.DS_Store
 
 # Logs
 logs

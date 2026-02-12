@@ -166,9 +166,9 @@ Permissions:
       readOnly: true
 
 DriverPermissions:
+  description: Permissions specific to driver accounts
   allOf:
     - $ref: '#/Permissions'
-  description: Permissions specific to driver accounts.
   properties:
     canMakePurchases:
       default: true
@@ -184,9 +184,9 @@ DriverPermissions:
       default: true
 
 SponsorPermissions:
+  description: Permissions specific to sponsor accounts
   allOf:
     - $ref: '#/Permissions'
-  description: Permissions specific to sponsor accounts.
   properties:
     canEditDriverAccounts:
       default: true
@@ -208,9 +208,9 @@ SponsorPermissions:
       default: true
 
 AdminPermissions:
+  description: Permissions specific to admin accounts
   allOf:
     - $ref: '#/Permissions'
-  description: Permissions specific to admin accounts.
   properties:
     canEditDriverAccounts:
       default: true

@@ -1,0 +1,50 @@
+name: Sync with Azure DevOps
+
+on:
+  workflow_dispatch:
+  
+  push:
+    branches:
+      - '**'
+  delete:
+    branches:
+      - '**'
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+        if: github.event_name != 'delete'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+      - name: Fetch all branches
+        run: |
+          git fetch origin '+refs/heads/*:refs/heads/*' --update-head-ok
+          git fetch origin '+refs/tags/*:refs/tags/*' --update-head-ok
+        if: github.event_name != 'delete'
+
+      - name: Mirror to Azure DevOps
+        env:
+          AZURE_DEVOPS_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+          AZURE_DEVOPS_ORG: ${{ secrets.AZURE_DEVOPS_ORG }}
+          AZURE_DEVOPS_PROJECT: ${{ secrets.AZURE_DEVOPS_PROJECT }}
+          AZURE_DEVOPS_REPO: ${{ secrets.AZURE_DEVOPS_REPO }}
+        run: |
+          if [ "${{ github.event_name }}" == "delete" ]; then
+            git clone --bare https://${AZURE_DEVOPS_PAT}@dev.azure.com/${AZURE_DEVOPS_ORG}/${AZURE_DEVOPS_PROJECT}/_git/${AZURE_DEVOPS_REPO} azure-repo
+            cd azure-repo
+            git push origin --delete ${{ github.event.ref }}
+          else
+            git remote add azure https://${AZURE_DEVOPS_PAT}@dev.azure.com/${AZURE_DEVOPS_ORG}/${AZURE_DEVOPS_PROJECT}/_git/${AZURE_DEVOPS_REPO}
+            git push azure --mirror --force
+          fi
