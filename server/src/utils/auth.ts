@@ -16,6 +16,7 @@ export async function hashPassword(plain: string): Promise<string> {
     return await bcrypt.hash(plain, SALT_ROUNDS);
 }
 
+// Function to hash new private data
 export function encryptPrivateData(text: string): string {
     const iv = crypto.randomBytes(IV_LENGTH);
     const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
@@ -26,6 +27,7 @@ export function encryptPrivateData(text: string): string {
     return iv.toString('hex') + ':' + encrypted.toString('hex');
 }
 
+// Function to decrypt private data
 export function decryptPrivateData(encryptedText: string): string {
     const [ivHex, dataHex] = encryptedText.split(':');
     if (!ivHex || !dataHex) throw new Error("Invalid encrypted format");
@@ -38,4 +40,18 @@ export function decryptPrivateData(encryptedText: string): string {
     decrypted = Buffer.concat([decrypted, decipher.final()]);
 
     return decrypted.toString();
+}
+
+// Function to check against database if newly made password is a match to a user's historic passwords
+export async function isOldPassword(
+    newPassword: string,
+    oldHashes: string[]
+): Promise<boolean> {
+    for (const hash of oldHashes) {
+        const isMatch = await verifyPassword(newPassword, hash);
+        if (isMatch) {
+            return true;
+        }
+    }
+    return false;
 }
