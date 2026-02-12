@@ -13,19 +13,16 @@
     "axios": "^1.13.5",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
-<<<<<<< Updated upstream
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "mysql2": "^3.17.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0"
-=======
     "dotenv": "^17.2.3",
     "express": "^5.2.1"
   },
   "devDependencies": {
     "tsx": "^4.21.0"
->>>>>>> Stashed changes
   }
 }
