@@ -160,6 +160,10 @@ SponsorAccount:
   allOf:
     - $ref: '#/Account'
     - type: object
+      required:
+        - username 
+        - password
+        - companyName
       properties:
         companyName:
           type: string
@@ -168,6 +172,15 @@ SponsorAccount:
           maxLength: 100
           readOnly: true
           example: FastRides Inc.
+        pointValueRatio:
+          type: number
+          format: float
+          description: "Conversion rate for points (ex: 1 USD = 100 points)"
+          default: 100.0
+        profileDescription:
+          type: string
+          description: "Bio or description of Sponsor's organization"
+          maxLength: 500
         permissions:
           readOnly: true
           allOf:

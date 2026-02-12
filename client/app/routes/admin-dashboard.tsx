@@ -85,6 +85,29 @@ export default function AdminPortal() {
       ),
     },
     {
+      key: "name",
+      header: "User",
+      render: (user: any) => (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900 dark:text-white">
+              {user.firstName} {user.lastName}
+            </span>
+            {user.accountType === "sponsor" && (
+              <Badge
+                variant="info"
+                size="sm"
+                className="px-2 py-0.5 font-bold uppercase tracking-widest text-[10px]"
+              >
+                Sponsor
+              </Badge>
+            )}
+          </div>
+          <span className="text-xs text-gray-500">{user.email}</span>
+        </div>
+      ),
+    },
+    {
       key: "username",
       header: "Username",
       render: (user: typeof mockUsers[0]) => (
