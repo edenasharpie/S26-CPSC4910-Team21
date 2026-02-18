@@ -1,6 +1,8 @@
 // server/database/db.ts
 // Database connection and helper functions
 
+// TODO: implement connecting to RDS database with these queries; not trying to look for a local db.
+
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -15,22 +17,6 @@ const db = new Database(join(__dirname, 'fleetscore.db'));
 
 // Enable foreign keys (important for data integrity)
 db.pragma('foreign_keys = ON');
-
-/**
- * Initialize the database with schema
- */
-export function initializeDatabase() {
-  console.log('📊 Initializing database...');
-  
-  // Read and execute the schema file
-  const schemaPath = join(__dirname, 'schema.sql');
-  const schema = readFileSync(schemaPath, 'utf-8');
-  
-  db.exec(schema);
-  
-  console.log('✅ Database initialized successfully!');
-  console.log('📝 Tables created: users, password_history');
-}
 
 /**
  * Get user by username
