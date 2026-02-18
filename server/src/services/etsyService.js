@@ -5,7 +5,8 @@ const ETSY_BASE_URL = 'https://openapi.etsy.com/v3';
 
 class EtsyService {
   constructor() {
-    this.apiKey = process.env.ETSY_API_KEY;
+    this.apiKey = process.env.ETSY_API_KEYSTRING;
+    this.sharedSecret = process.env.ETSY_API_SHARED_SECRET;
   }
 
   async searchListings(query, limit = 20, offset = 0) {
