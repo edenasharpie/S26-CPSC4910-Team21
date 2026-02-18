@@ -1,5 +1,7 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -11,10 +13,16 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-module.exports = {
-  query: async (sql, params) => {
-    const [rows] = await pool.execute(sql, params);
-    return { rows };
-  },
-  pool
+// Use named exports for ESM compatibility
+export const query = async (sql, params) => {
+  const [rows] = await pool.execute(sql, params);
+  return { rows };
+};
+
+export { pool };
+
+// Example of the function your loader needs
+export const getUserById = async (id) => {
+  const [rows] = await pool.execute('SELECT * FROM users WHERE id = ?', [id]);
+  return rows[0];
 };
