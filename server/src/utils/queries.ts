@@ -6,11 +6,15 @@
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { pool } from '../db';
+import { RowDataPacket } from 'mysql2';
 import { readFileSync } from 'fs';
 
 // Get the directory of this file
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const mysql = require('mysql2/promise');
+const bcrypt = require('bcrypt');
 
 // Create/connect to database
 const db = new Database(join(__dirname, 'fleetscore.db'));
@@ -96,6 +100,62 @@ export function changePassword(
   } catch (err: any) {
     console.error('Database error in changePassword:', err);
     return { success: false, error: 'Database error occurred' };
+  }
+}
+
+async function changePasswordWithHistory(userId, newPassword) {
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query<RowDataPacket[]>(
+      `SELECT PassHash FROM (
+        SELECT PassHash, TimeChanged FROM POINT_TRANSACTIONS WHERE UserID = ?
+        UNION 
+        SELECT PassHash, NULL as TimeChanged FROM USERS WHERE UserID = ?
+      ) as combined_history 
+      ORDER BY TimeChanged DESC LIMIT 5`,
+      [userId, userId]
+    );
+
+  for (const record of rows) {
+    const isMatch = await bcrypt.compare(newPassword, record.PassHash);
+    if (isMatch) {
+      throw new Error("REUSE_ERROR");
+    }
+  }
+
+    // Hash the new password
+    const saltRounds = 12;
+    const newHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update the USERS table
+    await connection.query(
+      'UPDATE USERS SET PassHash = ?, LastPasswordChange = NOW() WHERE UserID = ?',
+      [newHash, userId]
+    );
+
+    // Log this change in password_history 
+    await connection.query(
+      'INSERT INTO EVENTS (EventID, UserID, Timestamp, EventType, Properties) VALUES (UUID(), ?, NOW(), "PasswordChange", ?)',
+      [userId, JSON.stringify({ method: 'user_initiated' })]
+    );
+
+    await connection.commit();
+    return { success: true };
+
+  } catch (error) {
+    await connection.rollback();
+    
+    if (error.message === "REUSE_ERROR") {
+      return { success: false, error: "Cannot reuse one of your last 5 passwords." };
+    }
+    
+    console.error("Database Error:", error);
+    throw error;
+  } finally {
+    connection.release();
   }
 }
 
