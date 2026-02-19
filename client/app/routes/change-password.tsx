@@ -33,7 +33,7 @@ export async function action({ request }: { request: Request }) {
   const currentPassword = formData.get("currentPassword");
   const newPassword = formData.get("newPassword");
 
-  // ✅ REPLACE the old function calls with a FETCH request
+
   const response = await fetch('/api/user/change-password', {
     method: 'POST',
     headers: {
@@ -46,7 +46,7 @@ export async function action({ request }: { request: Request }) {
     }),
   });
 
-  // Handle the "Password History" error from Story 4 & 5
+ 
   if (response.status === 400) {
     const data = await response.json();
     return { error: data.message || "Cannot reuse a recent password." };
