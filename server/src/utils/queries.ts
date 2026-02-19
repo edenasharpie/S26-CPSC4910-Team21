@@ -142,4 +142,22 @@ export function cleanupOldPasswords() {
   return result.changes;
 }
 
+export async function getAllUsersWithApps() {
+  const query = `
+    SELECT 
+      u.UserID, 
+      u.FirstName, 
+      u.LastName, 
+      u.Username, 
+      u.UserType, 
+      u.ProfilePicture,
+      da.TimeSubmitted
+    FROM USERS u
+    LEFT JOIN DRIVER_APPLICATIONS da ON u.UserID = da.DriverID
+    ORDER BY u.LastName ASC
+  `;
+  const stmt = db.prepare(query);
+  return stmt.all(); 
+}
+
 export default db;
