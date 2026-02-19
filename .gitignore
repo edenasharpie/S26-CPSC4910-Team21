@@ -2,6 +2,7 @@ build/
 copilot-instructions.md
 .DS_Store
 .fs-env
+setup-dev-server.sh
 
 # Logs
 logs

@@ -6,11 +6,15 @@
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { pool } from '../db';
+import { RowDataPacket } from 'mysql2';
 import { readFileSync } from 'fs';
 
 // Get the directory of this file
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const mysql = require('mysql2/promise');
+const bcrypt = require('bcrypt');
 
 // Create/connect to database
 const db = new Database(join(__dirname, 'fleetscore.db'));
@@ -99,6 +103,62 @@ export function changePassword(
   }
 }
 
+async function changePasswordWithHistory(userId, newPassword) {
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query<RowDataPacket[]>(
+      `SELECT PassHash FROM (
+        SELECT PassHash, TimeChanged FROM POINT_TRANSACTIONS WHERE UserID = ?
+        UNION 
+        SELECT PassHash, NULL as TimeChanged FROM USERS WHERE UserID = ?
+      ) as combined_history 
+      ORDER BY TimeChanged DESC LIMIT 5`,
+      [userId, userId]
+    );
+
+  for (const record of rows) {
+    const isMatch = await bcrypt.compare(newPassword, record.PassHash);
+    if (isMatch) {
+      throw new Error("REUSE_ERROR");
+    }
+  }
+
+    // Hash the new password
+    const saltRounds = 12;
+    const newHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update the USERS table
+    await connection.query(
+      'UPDATE USERS SET PassHash = ?, LastPasswordChange = NOW() WHERE UserID = ?',
+      [newHash, userId]
+    );
+
+    // Log this change in password_history 
+    await connection.query(
+      'INSERT INTO EVENTS (EventID, UserID, Timestamp, EventType, Properties) VALUES (UUID(), ?, NOW(), "PasswordChange", ?)',
+      [userId, JSON.stringify({ method: 'user_initiated' })]
+    );
+
+    await connection.commit();
+    return { success: true };
+
+  } catch (error) {
+    await connection.rollback();
+    
+    if (error.message === "REUSE_ERROR") {
+      return { success: false, error: "Cannot reuse one of your last 5 passwords." };
+    }
+    
+    console.error("Database Error:", error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 /**
  * Get password history for a user
  * Returns array of password hashes
@@ -140,6 +200,43 @@ export function cleanupOldPasswords() {
   const result = stmt.run();
   console.log(`🧹 Cleaned up ${result.changes} old password records`);
   return result.changes;
+}
+
+export async function getAllUsersWithApps() {
+  const query = `
+    SELECT 
+      u.UserID, 
+      u.FirstName, 
+      u.LastName, 
+      u.Username, 
+      u.UserType, 
+      u.ProfilePicture,
+      da.TimeSubmitted
+    FROM USERS u
+    LEFT JOIN DRIVER_APPLICATIONS da ON u.UserID = da.DriverID
+    ORDER BY u.LastName ASC
+  `;
+  const stmt = db.prepare(query);
+  return stmt.all(); 
+}
+
+// Based off performanceStatus enum
+export async function getSponsorDriverReview(companyId: string) {
+  const query = `
+    SELECT 
+      u.FirstName, 
+      u.LastName, 
+      d.PerformanceStatus,
+      d.PointBalance
+    FROM USERS u
+    JOIN DRIVERS d ON u.UserID = d.UserID
+    WHERE d.SponsorCompanyID = ?
+    ORDER BY d.PerformanceStatus ASC; 
+  `;
+
+  // For your better-sqlite3 or mysql2 setup:
+  const stmt = db.prepare(query);
+  return stmt.all(companyId); 
 }
 
 export default db;

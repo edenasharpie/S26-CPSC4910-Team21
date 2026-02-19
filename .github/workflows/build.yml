@@ -1,0 +1,140 @@
+name: Build and Deploy to Dev Server
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout dev branch
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Switch to build branch and bring dev changes
+        run: |
+          # Fetch build branch or create it if it doesn't exist
+          git fetch origin build:build 2>/dev/null || git branch build
+          
+          # Switch to build branch
+          git checkout build
+          
+          # Merge/copy changes from dev
+          git merge dev --no-edit -m "Merge dev into build - $(date +'%Y-%m-%d %H:%M:%S')" || git reset --hard dev
+      
+      - name: Install client dependencies
+        working-directory: ./client
+        run: npm ci || npm install
+      
+      - name: Install server dependencies
+        working-directory: ./server
+        run: npm ci || npm install
+      
+      - name: Type check client
+        working-directory: ./client
+        run: npm run typecheck
+        continue-on-error: true
+      
+      - name: Build client
+        working-directory: ./client
+        run: npm run build
+      
+      - name: Commit and push to build branch
+        run: |
+          # Add all changes including build artifacts
+          git add -A
+          
+          # Commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Build from dev - $(date +'%Y-%m-%d %H:%M:%S')" || true
+          fi
+          
+          # Push to build branch
+          git push origin build
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+      
+      - name: Set up SSH and environment variables
+        if: success()
+        env:
+          STAGING_HOST: ${{ secrets.DEV_EC2_HOST }}
+          STAGING_USER: ${{ secrets.DEV_EC2_USER }}
+          STAGING_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$STAGING_KEY" > ~/.ssh/staging_key
+          chmod 600 ~/.ssh/staging_key
+          ssh-keyscan -H $STAGING_HOST >> ~/.ssh/known_hosts
+          
+          # Create environment file content
+          cat > .fs-env.staging << EOF
+          PORT=5000
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_NAME=${{ secrets.DEV_DB_NAME }}
+          ETSY_API_KEYSTRING=${{ secrets.ETSY_API_KEYSTRING }}
+          ETSY_API_SHARED_SECRET=${{ secrets.ETSY_API_SHARED_SECRET }}
+          EOF
+        
+      - name: Transfer files to server
+        run: |
+          # Clone repo if it doesn't exist, otherwise pull latest
+          ssh -i ~/.ssh/staging_key -o StrictHostKeyChecking=no \
+            ${{ secrets.DEV_EC2_USER }}@${{ secrets.DEV_EC2_HOST }} << ENDSSH
+          if [ ! -d /home/${{ secrets.DEV_EC2_USER }}/FleetScore/S26-CPSC4910-Team21 ]; then
+            cd /home/${{ secrets.DEV_EC2_USER }}/FleetScore
+            git clone https://github.com/edenasharpie/S26-CPSC4910-Team21
+          fi
+          cd /home/${{ secrets.DEV_EC2_USER }}/FleetScore/S26-CPSC4910-Team21
+          git fetch origin build
+          git checkout build
+          git reset --hard origin/build
+          ENDSSH
+          
+          # Transfer environment file
+          scp -i ~/.ssh/staging_key -o StrictHostKeyChecking=no \
+            .fs-env.staging ${{ secrets.DEV_EC2_USER }}@${{ secrets.DEV_EC2_HOST }}:/home/${{ secrets.DEV_EC2_USER }}/FleetScore/.fs-env
+      
+      - name: Run deployment script
+        env:
+          STAGING_HOST: ${{ secrets.DEV_EC2_HOST }}
+          STAGING_USER: ${{ secrets.DEV_EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/staging_key -o StrictHostKeyChecking=no \
+            $STAGING_USER@$STAGING_HOST \
+            "cd /home/$STAGING_USER/FleetScore/S26-CPSC4910-Team21 && \
+             chmod +x ./scripts/deploy-to-dev-server.sh && \
+             ./scripts/deploy-to-dev-server.sh"
+      
+      - name: Health check
+        env:
+          STAGING_HOST: ${{ secrets.DEV_EC2_HOST }}
+        run: |
+          sleep 10
+          curl -f http://$STAGING_HOST/health || curl -f http://$STAGING_HOST/api/about || exit 1
+      
+      - name: Success
+        run: echo "Build and deploy steps completed successfully"
