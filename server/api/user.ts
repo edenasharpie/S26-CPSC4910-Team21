@@ -211,4 +211,37 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
+/*
+GET /api/drivers/profile/:userId
+*/
+export const getDriverProfile = async (pool, userId) => {
+    const query = `
+        SELECT 
+            u.FirstName, 
+            u.LastName, 
+            u.Email,
+            d.PerformanceStatus,
+            d.TotalPoints
+        FROM USERS u
+        JOIN DRIVERS d ON u.UserID = d.UserID
+        WHERE u.UserID = ?`;
+    
+    const [rows] = await pool.execute(query, [userId]);
+    
+    if (rows.length > 0) {
+        const user = rows[0];
+        return {
+            success: true,
+            data: {
+                firstName: user.FirstName,
+                lastName: user.LastName,
+                displayName: `${user.FirstName} ${user.LastName}`, 
+                performanceStatus: user.PerformanceStatus,        
+                email: user.Email,
+                points: user.TotalPoints
+            }
+        };
+    }
+    return { success: false, message: "Driver not found" };
+};
 

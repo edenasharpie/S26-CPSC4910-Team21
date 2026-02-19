@@ -17,14 +17,14 @@ const catalogRoutes = require('./src/routes/catalogs');
 const userRoute = require('./src/routes/users');
 const sponsorRoute = require('./src/routes/sponsors');
 //const adminRoute = require('./src/routes/admisn');
-//const driverRoute = require('./src/routes/drivers');
+const driverRoute = require('./src/routes/drivers');
 
 app.use('/api/about', aboutRoutes);
 app.use('/api/catalogs', catalogRoutes);
 app.use('/api/user', userRoute); 
 app.use('/api/sponsors', sponsorRoute); 
 //app.use('/api/admins', adminRoute);     
-//app.use('/api/drivers', driverRoute);
+app.use('/api/drivers', driverRoute);
 
 //Start the server
 const PORT = process.env.PORT || 5000;
