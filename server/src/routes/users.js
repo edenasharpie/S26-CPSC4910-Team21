@@ -1,34 +1,37 @@
 const express = require('express');
 const router = express.Router();
 
-const { changePasswordWithHistory } = require('../utils/queries');
-import { getProfile, getUserById } from '../api/user';
+const { getProfile, changePasswordWithHistory } = require('../../api/user.ts');
 
-// This is where you pass the 'pool' into the logic functions
+/**
+ * GET /api/user/profile/:id
+ */
 router.get('/profile/:id', async (req, res) => {
   try {
-    // 'pool' is defined globally in your index.js or passed via middleware
-    const user = await getUserById(req.app.get('pool'), req.params.id);
+    const pool = req.app.get('pool'); 
     
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const result = await getProfile(pool, req.params.id);
     
-    res.json(user);
+    res.status(result.status).json(result.data || { error: result.error });
   } catch (error) {
+    console.error("Profile Route Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
-
+/**
+ * POST /api/user/change-password
+ */
 router.post('/change-password', async (req, res) => {
   const { userId, newPassword } = req.body;
+  const pool = req.app.get('pool'); 
 
   try {
-    const result = await changePasswordWithHistory(userId, newPassword);
+    const result = await changePasswordWithHistory(pool, userId, newPassword);
 
     if (result.success) {
       return res.status(200).json({ message: "Password updated successfully!" });
     } else {
-
       return res.status(400).json({ message: result.error });
     }
     

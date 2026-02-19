@@ -1,3 +1,6 @@
+const express = require('express'); 
+const router = express.Router();
+
 // Get drivers based off performance
 router.get('/my-drivers/:companyId', async (req, res) => {
   try {
@@ -8,3 +11,5 @@ router.get('/my-drivers/:companyId', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch drivers for review' });
   }
 }); 
+
+module.exports = router;
