@@ -31,23 +31,6 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     const { userId, currentPassword, newPassword } = await request.json();
 
-
-  const response = await fetch('/api/user/change-password', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      userId,
-      currentPassword,
-      newPassword,
-    }),
-  });
-
- 
-  if (response.status === 400) {
-    const data = await response.json();
-    return { error: data.message || "Cannot reuse a recent password." };
     // Get user from database
     const user = getUserById(userId) as User | undefined;
     if (!user) {

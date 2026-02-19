@@ -12,10 +12,6 @@ app.use(express.json());
 
 app.use('/api/about', aboutRoutes);
 app.use('/api/catalogs', catalogRoutes);
-app.use('/api/user', userRoute); 
-app.use('/api/sponsors', sponsorRoute); 
-//app.use('/api/admins', adminRoute);     
-app.use('/api/drivers', driverRoute);
 
 app.listen(process.env.PORT || 5000, () => {
   console.log(`Backend running on port ${process.env.PORT || 5000}`);
