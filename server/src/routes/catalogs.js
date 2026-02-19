@@ -1,14 +1,14 @@
-const express = require('express');
-const router = express.Router();
-const db = require('../db');
+import express from 'express';
+import { pool } from '../db.js';
+import store from '../services/fakeStoreService.js';
 
-const store = require('../services/fakeStoreService');
+const router = express.Router();
 
 // GET /catalogs
 router.get('/', async (request, response) => {
   let connection;
   try {
-    connection = await db.pool.getConnection();
+    connection = await pool.getConnection();
 
     const limit = parseInt(request.query.limit) || 10;
     const offset = parseInt(request.query.offset) || 0;
@@ -26,7 +26,7 @@ router.get('/', async (request, response) => {
     
     const result = await connection.query(query, [limit, offset]);
 
-    response.json(result[0]); // Changed from result.rows
+    response.json(result[0]);
   } catch (error) {
     console.error('Error fetching catalogs:', error);
     response.status(500).json({ error: 'Internal Server Error' });
@@ -41,7 +41,7 @@ router.get('/', async (request, response) => {
 router.post('/', async (request, response) => {
   let connection;
   try {
-    connection = await db.pool.getConnection();
+    connection = await pool.getConnection();
     await connection.beginTransaction();
 
     // create catalog
@@ -50,7 +50,7 @@ router.post('/', async (request, response) => {
       [request.body.sponsorCompanyId]
     );
     
-    const catalogId = catalogResult[0].insertId; // Changed
+    const catalogId = catalogResult[0].insertId;
 
     // if items with store ids are provided, find and add them
     if (request.body.externalProductIds && request.body.externalProductIds.length > 0) {
@@ -93,7 +93,7 @@ router.post('/', async (request, response) => {
       [catalogId]
     );
 
-    response.status(201).json(fullCatalog[0][0]); // Changed
+    response.status(201).json(fullCatalog[0][0]);
   } catch (error) {
     if (connection) {
       await connection.rollback();
@@ -111,7 +111,7 @@ router.post('/', async (request, response) => {
 router.patch('/:catalogId', async (request, response) => {
   let connection;
   try {
-    connection = await db.pool.getConnection();
+    connection = await pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId } = request.params;
@@ -137,12 +137,12 @@ router.patch('/:catalogId', async (request, response) => {
       [catalogId]
     );
 
-    if (result[0].length === 0) { // Changed
+    if (result[0].length === 0) {
       return response.status(404).json({ error: 'Catalog not found' });
     }
 
     await connection.commit();
-    response.json(result[0][0]); // Changed
+    response.json(result[0][0]);
   } catch (error) {
     if (connection) {
       await connection.rollback();
@@ -160,7 +160,7 @@ router.patch('/:catalogId', async (request, response) => {
 router.delete('/:catalogId', async (request, response) => {
   let connection;
   try {
-    connection = await db.pool.getConnection();
+    connection = await pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId } = request.params;
@@ -177,7 +177,7 @@ router.delete('/:catalogId', async (request, response) => {
       [catalogId]
     );
     
-    if (result[0].affectedRows === 0) { // Changed
+    if (result[0].affectedRows === 0) {
       await connection.rollback();
       return response.status(404).json({ error: 'Catalog not found' });
     }
@@ -201,7 +201,7 @@ router.delete('/:catalogId', async (request, response) => {
 router.get('/:catalogId/items', async (request, response) => {
   let connection;
   try {
-    connection = await db.pool.getConnection();
+    connection = await pool.getConnection();
 
     const { catalogId } = request.params;
     const limit = parseInt(request.query.limit) || 10;
@@ -222,7 +222,7 @@ router.get('/:catalogId/items', async (request, response) => {
       [catalogId, limit, offset]
     );
 
-    response.json(result[0]); // Changed
+    response.json(result[0]);
   } catch (error) {
     console.error('Error fetching catalog items:', error);
     response.status(500).json({ error: 'Internal Server Error' });
@@ -237,7 +237,7 @@ router.get('/:catalogId/items', async (request, response) => {
 router.post('/:catalogId/items', async (request, response) => {
   let connection;
   try {
-    connection = await db.pool.getConnection();
+    connection = await pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId } = request.params;
@@ -280,11 +280,11 @@ router.post('/:catalogId/items', async (request, response) => {
         ImageUrl as imageUrl
        FROM CATALOG_ITEMS
        WHERE ItemID = ?`,
-      [result[0].insertId] // Changed
+      [result[0].insertId]
     );
 
     await connection.commit();
-    response.status(201).json(newItem[0][0]); // Changed
+    response.status(201).json(newItem[0][0]);
   } catch (error) {
     if (connection) {
       await connection.rollback();
@@ -302,7 +302,7 @@ router.post('/:catalogId/items', async (request, response) => {
 router.get('/:catalogId/items/:itemId', async (request, response) => {
   let connection;
   try {
-    connection = await db.pool.getConnection();
+    connection = await pool.getConnection();
 
     const { catalogId, itemId } = request.params;
 
@@ -320,11 +320,11 @@ router.get('/:catalogId/items/:itemId', async (request, response) => {
       [catalogId, itemId]
     );
 
-    if (result[0].length === 0) { // Changed
+    if (result[0].length === 0) {
       return response.status(404).json({ error: 'Item not found' });
     }
 
-    response.json(result[0][0]); // Changed
+    response.json(result[0][0]);
   } catch (error) {
     console.error('Error fetching catalog item:', error);
     response.status(500).json({ error: 'Internal Server Error' });
@@ -339,7 +339,7 @@ router.get('/:catalogId/items/:itemId', async (request, response) => {
 router.patch('/:catalogId/items/:itemId', async (request, response) => {
   let connection;
   try {
-    connection = await db.pool.getConnection();
+    connection = await pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId, itemId } = request.params;
@@ -390,13 +390,13 @@ router.patch('/:catalogId/items/:itemId', async (request, response) => {
       [catalogId, itemId]
     );
 
-    if (result[0].length === 0) { // Changed
+    if (result[0].length === 0) {
       await connection.rollback();
       return response.status(404).json({ error: 'Item not found' });
     }
 
     await connection.commit();
-    response.json(result[0][0]); // Changed
+    response.json(result[0][0]);
   } catch (error) {
     if (connection) {
       await connection.rollback();
@@ -414,7 +414,7 @@ router.patch('/:catalogId/items/:itemId', async (request, response) => {
 router.delete('/:catalogId/items/:itemId', async (request, response) => {
   let connection;
   try {
-    connection = await db.pool.getConnection();
+    connection = await pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId, itemId } = request.params;
@@ -424,7 +424,7 @@ router.delete('/:catalogId/items/:itemId', async (request, response) => {
       [catalogId, itemId]
     );
 
-    if (result[0].affectedRows === 0) { // Changed
+    if (result[0].affectedRows === 0) {
       await connection.rollback();
       return response.status(404).json({ error: 'Item not found' });
     }
@@ -444,4 +444,4 @@ router.delete('/:catalogId/items/:itemId', async (request, response) => {
   }
 });
 
-module.exports = router;
+export default router;

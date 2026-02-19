@@ -14,7 +14,7 @@ import { readFileSync } from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const mysql = require('mysql2/promise');
-const bcrypt = require('bcrypt');
+import { verifyPassword, hashPassword } from './auth';
 
 // Create/connect to database
 const db = new Database(join(__dirname, 'fleetscore.db'));
@@ -120,15 +120,14 @@ async function changePasswordWithHistory(userId, newPassword) {
     );
 
   for (const record of rows) {
-    const isMatch = await bcrypt.compare(newPassword, record.PassHash);
+    const isMatch = await verifyPassword(newPassword, record.PassHash);
     if (isMatch) {
       throw new Error("REUSE_ERROR");
     }
   }
 
-    // Hash the new password
-    const saltRounds = 12;
-    const newHash = await bcrypt.hash(newPassword, saltRounds);
+    // Hash the new password using salted SHA-256
+    const newHash = await hashPassword(newPassword);
 
     // Update the USERS table
     await connection.query(
@@ -237,6 +236,49 @@ export async function getSponsorDriverReview(companyId: string) {
   // For your better-sqlite3 or mysql2 setup:
   const stmt = db.prepare(query);
   return stmt.all(companyId); 
+}
+
+/**
+ * Update sponsor company description
+ * @param companyId - The ID of the sponsor company
+ * @param companyDescription - The new company description (max 1000 characters)
+ * @returns Promise with success/error status
+ */
+export async function updateSponsorCompanyDescription(
+  companyId: number | string,
+  companyDescription: string
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  try {
+    const connection = await pool.getConnection();
+    
+    try {
+      // Update the description
+      const [result] = await connection.execute(
+        'UPDATE SPONSOR_COMPANIES SET companyDescription = ?, updatedAt = NOW() WHERE id = ?',
+        [companyDescription, companyId]
+      );
+
+      if ((result as any).affectedRows === 0) {
+        return { success: false, error: 'Sponsor company not found' };
+      }
+
+      // Fetch and return updated record
+      const [rows] = await connection.execute(
+        'SELECT id, companyDescription FROM SPONSOR_COMPANIES WHERE id = ?',
+        [companyId]
+      );
+
+      return {
+        success: true,
+        data: (rows as any[])[0]
+      };
+    } finally {
+      connection.release();
+    }
+  } catch (error: any) {
+    console.error('Error updating sponsor company description:', error);
+    return { success: false, error: 'Database error occurred' };
+  }
 }
 
 export default db;
