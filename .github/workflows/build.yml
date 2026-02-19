@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout dev branch
@@ -15,6 +17,7 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
+          token: ${{ secrets.ACCESS_TOKEN }}
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -66,6 +69,8 @@ jobs:
           else
             git commit -m "Build from dev - $(date +'%Y-%m-%d %H:%M:%S')" || true
           fi
+
+          git remote set-url origin https://x-access-token:${{ secrets.ACCESS_TOKEN }}@github.com/edenasharpie/S26-CPSC4910-Team21.git
           
           # Push to build branch
           git push origin build
