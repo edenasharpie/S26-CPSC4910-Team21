@@ -29,11 +29,17 @@ export const getUserById = async (id) => {
   return rows[0];
 };
 
-export const updateUser = async (id, data) => {
-  const { displayName, email } = data;
+// In your server/src/db.js
+export async function getAllUsers() {
+  const [rows] = await pool.execute('SELECT * FROM users');
+  return rows;
+};
+
+export async function updateUser(id, updates) {
+  const { username, displayName, email, accountType } = updates;
   const [result] = await pool.execute(
-    'UPDATE users SET displayName = ?, email = ? WHERE id = ?',
-    [displayName, email, id]
+    'UPDATE users SET username = ?, displayName = ?, email = ?, accountType = ? WHERE id = ?',
+    [username, displayName, email, accountType, id]
   );
   return result;
 };
