@@ -31,6 +31,9 @@ CatalogItem:
     id:
       type: integer
       readOnly: true
+    externalProductId:
+      type: string
+      description: ID from external store for reference, not displayed to users
     originalSource:
       type: string
       format: uri
