@@ -160,4 +160,23 @@ export async function getAllUsersWithApps() {
   return stmt.all(); 
 }
 
+// Based off performanceStatus enum
+export async function getSponsorDriverReview(companyId: string) {
+  const query = `
+    SELECT 
+      u.FirstName, 
+      u.LastName, 
+      d.PerformanceStatus,
+      d.PointBalance
+    FROM USERS u
+    JOIN DRIVERS d ON u.UserID = d.UserID
+    WHERE d.SponsorCompanyID = ?
+    ORDER BY d.PerformanceStatus ASC; 
+  `;
+
+  // For your better-sqlite3 or mysql2 setup:
+  const stmt = db.prepare(query);
+  return stmt.all(companyId); 
+}
+
 export default db;
