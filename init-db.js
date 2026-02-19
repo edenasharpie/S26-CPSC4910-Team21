@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // Point this exactly to your fs-env file location
-const envPath = 'C:/4910/fs-env';
+const envPath = 'C:/4910/fs-env'; // TODO This needs to be ".fs-env", as well as having a relative address that machine-agnostic.
 dotenv.config({ path: envPath });
 
 console.log("🔍 Checking Environment Variables...");

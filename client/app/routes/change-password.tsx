@@ -1,4 +1,3 @@
-import bcrypt from "bcrypt";
 import { data } from "react-router";
 import type { Route } from "./+types/change-password";
 //import { getUserById, getPasswordHistory, changePassword } from "../../../server/database/db";

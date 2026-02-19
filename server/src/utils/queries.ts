@@ -14,7 +14,7 @@ import { readFileSync } from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const mysql = require('mysql2/promise');
-const bcrypt = require('bcrypt');
+import { verifyPassword, hashPassword } from './auth';
 
 // Create/connect to database
 const db = new Database(join(__dirname, 'fleetscore.db'));
@@ -120,15 +120,14 @@ async function changePasswordWithHistory(userId, newPassword) {
     );
 
   for (const record of rows) {
-    const isMatch = await bcrypt.compare(newPassword, record.PassHash);
+    const isMatch = await verifyPassword(newPassword, record.PassHash);
     if (isMatch) {
       throw new Error("REUSE_ERROR");
     }
   }
 
-    // Hash the new password
-    const saltRounds = 12;
-    const newHash = await bcrypt.hash(newPassword, saltRounds);
+    // Hash the new password using salted SHA-256
+    const newHash = await hashPassword(newPassword);
 
     // Update the USERS table
     await connection.query(

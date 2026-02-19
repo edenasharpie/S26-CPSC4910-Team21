@@ -1,5 +1,5 @@
 // server/api/user.ts
-import bcrypt from 'bcrypt';
+import { verifyPassword, hashPassword } from '../src/utils/auth';
 import { Pool, RowDataPacket } from 'mysql2/promise';
 
 /** * 1. TYPE DEFINITIONS
@@ -105,7 +105,7 @@ export async function changeUserPassword(
       return { error: 'User not found', status: 404 };
     }
     
-    const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
+    const isValidPassword = await verifyPassword(currentPassword, user.password_hash);
     if (!isValidPassword) {
       return { error: 'Current password is incorrect', status: 401 };
     }
@@ -114,7 +114,7 @@ export async function changeUserPassword(
       return { error: 'Password must be at least 8 characters long', status: 400 };
     }
     
-    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+    const newPasswordHash = await hashPassword(newPassword);
     
     // Fix: Await the change logic and pass pool
     const result = await changePasswordFn(
