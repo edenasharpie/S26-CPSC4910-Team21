@@ -4,11 +4,6 @@
   "description": "",
   "main": "index.js",
   "type": "module",
-  "pm2": {
-    "config": {
-      "type": "commonjs"
-    }
-  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js"
