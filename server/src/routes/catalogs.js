@@ -1,183 +1,127 @@
-import express from 'express';
-import { pool } from '../db.js';
-import store from '../services/fakeStoreService.js';
-
+const express = require('express');
 const router = express.Router();
+const db = require('../db');
+
+const etsyService = require('../services/etsyService');
 
 // GET /catalogs
 router.get('/', async (request, response) => {
-  let connection;
   try {
-    connection = await pool.getConnection();
+    const connection = await db.pool.getConnection();
 
     const limit = parseInt(request.query.limit) || 10;
     const offset = parseInt(request.query.offset) || 0;
 
+    // TODO: add query
     const query = `
-      SELECT 
-        c.CatalogID as id,
-        c.SponsorCompanyID as sponsorCompanyId,
-        COUNT(ci.ItemID) as itemCount
-      FROM CATALOGS c
-      LEFT JOIN CATALOG_ITEMS ci ON c.CatalogID = ci.CatalogID
-      GROUP BY c.CatalogID
-      LIMIT ? OFFSET ?
     `;
     
     const result = await connection.query(query, [limit, offset]);
 
-    response.json(result[0]);
+    response.json(result.rows);
   } catch (error) {
     console.error('Error fetching catalogs:', error);
     response.status(500).json({ error: 'Internal Server Error' });
-  } finally {
-    if (connection) {
-      connection.release();
-    }
   }
 });
 
 // POST /catalogs
 router.post('/', async (request, response) => {
-  let connection;
   try {
-    connection = await pool.getConnection();
+    const connection = await db.pool.getConnection();
     await connection.beginTransaction();
 
     // create catalog
+    // TODO: add query
     const catalogResult = await connection.query(
-      'INSERT INTO CATALOGS (SponsorCompanyID) VALUES (?)',
+      '',
       [request.body.sponsorCompanyId]
     );
     
-    const catalogId = catalogResult[0].insertId;
+    const catalogId = catalogResult.rows[0].id;
 
-    // if items with store ids are provided, find and add them
-    if (request.body.externalProductIds && request.body.externalProductIds.length > 0) {
-      for (const itemId of request.body.externalProductIds) {
-        const product = await store.getProductById(itemId);
-        const catalogItem = store.transformToCatalogItem(
-          product,
-          request.body.pointCost
+    // if items with etsy ids are provided, find and add them
+    if (request.body.etsyListingIds && request.body.etsyListingIds.length > 0) {
+      for (const item of request.body.etsyListingIds) {
+        const etsyListing = await etsyService.getListingById(item.listingId);
+        const catalogItem = etsyService.transformToCatalogItem(
+          etsyListing, 
+          item.pointCost
         );
 
-        await connection.query(
-          `INSERT INTO CATALOG_ITEMS 
-           (CatalogID, APIID, ItemName, OriginalSource, Description, PointCost, ImageUrl) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            catalogId,
-            catalogItem.externalProductId,
-            catalogItem.name,
-            catalogItem.originalSource,
-            catalogItem.description,
-            catalogItem.pointCost,
-            catalogItem.imageUrl
-          ]
-        );
+        // TODO: add query
+        await connection.query();
       }
     }
 
     await connection.commit();
 
     // return complete catalog
+    // TODO: add query
     const fullCatalog = await connection.query(
-      `SELECT 
-        c.CatalogID as id,
-        c.SponsorCompanyID as sponsorCompanyId,
-        COUNT(ci.ItemID) as itemCount
-       FROM CATALOGS c
-       LEFT JOIN CATALOG_ITEMS ci ON c.CatalogID = ci.CatalogID
-       WHERE c.CatalogID = ?
-       GROUP BY c.CatalogID`,
+      ``,
       [catalogId]
     );
 
-    response.status(201).json(fullCatalog[0][0]);
+    response.status(201).json(fullCatalog.rows[0]);
   } catch (error) {
-    if (connection) {
-      await connection.rollback();
-    }
+    await connection.rollback();
     console.error('Error creating catalog:', error);
     response.status(500).json({ error: 'Internal Server Error' });
   } finally {
-    if (connection) {
-      connection.release();
-    }
+    connection.release();
   }
 });
 
 // PATCH /catalogs/:catalogId
 router.patch('/:catalogId', async (request, response) => {
-  let connection;
   try {
-    connection = await pool.getConnection();
+    const connection = await db.pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId } = request.params;
     
     // update catalog details if it is provided
     if (request.body.sponsorCompanyId) {
-        await connection.query(
-          'UPDATE CATALOGS SET SponsorCompanyID = ? WHERE CatalogID = ?',
-          [request.body.sponsorCompanyId, catalogId]
-        );
+        // TODO: add query
+        await connection.query();
     }
 
     // fetch updated catalog
-    const result = await connection.query(
-      `SELECT 
-        c.CatalogID as id,
-        c.SponsorCompanyID as sponsorCompanyId,
-        COUNT(ci.ItemID) as itemCount
-       FROM CATALOGS c
-       LEFT JOIN CATALOG_ITEMS ci ON c.CatalogID = ci.CatalogID
-       WHERE c.CatalogID = ?
-       GROUP BY c.CatalogID`,
-      [catalogId]
-    );
+    // TODO: add query
+    const result = await connection.query();
 
-    if (result[0].length === 0) {
+    if (result.rows.length === 0) {
       return response.status(404).json({ error: 'Catalog not found' });
     }
 
-    await connection.commit();
-    response.json(result[0][0]);
+    response.json(result.rows[0]);
   } catch (error) {
-    if (connection) {
-      await connection.rollback();
-    }
+    await connection.rollback();
     console.error('Error updating catalog:', error);
     response.status(500).json({ error: 'Internal Server Error' });
   } finally {
-    if (connection) {
-      connection.release();
-    }
+    connection.release();
   }
 });
 
 // DELETE /catalogs/:catalogId
 router.delete('/:catalogId', async (request, response) => {
-  let connection;
   try {
-    connection = await pool.getConnection();
+    const connection = await db.pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId } = request.params;
     
     // delete catalog items first
-    await connection.query(
-      'DELETE FROM CATALOG_ITEMS WHERE CatalogID = ?',
-      [catalogId]
-    );
+    // TODO: add query
+    await connection.query();
     
     // delete catalog itself
-    const result = await connection.query(
-      'DELETE FROM CATALOGS WHERE CatalogID = ?',
-      [catalogId]
-    );
+    // TODO: add query
+    const result = await connection.query();
     
-    if (result[0].affectedRows === 0) {
+    if (result.rows.length === 0) {
       await connection.rollback();
       return response.status(404).json({ error: 'Catalog not found' });
     }
@@ -185,263 +129,136 @@ router.delete('/:catalogId', async (request, response) => {
     await connection.commit();
     response.status(204).send();
   } catch (error) {
-    if (connection) {
-      await connection.rollback();
-    }
+    await connection.rollback();
     console.error('Error deleting catalog:', error);
     response.status(500).json({ error: 'Internal Server Error' });
   } finally {
-    if (connection) {
-      connection.release();
-    }
+    connection.release();
   }
 });
 
 // GET /catalogs/:catalogId/items
 router.get('/:catalogId/items', async (request, response) => {
-  let connection;
   try {
-    connection = await pool.getConnection();
+    const connection = await db.pool.getConnection();
 
     const { catalogId } = request.params;
     const limit = parseInt(request.query.limit) || 10;
     const offset = parseInt(request.query.offset) || 0;
 
-    const result = await connection.query(
-      `SELECT 
-        ItemID as id,
-        APIID as externalProductId,
-        ItemName as name,
-        OriginalSource as originalSource,
-        Description as description,
-        PointCost as pointCost,
-        ImageUrl as imageUrl
-       FROM CATALOG_ITEMS
-       WHERE CatalogID = ?
-       LIMIT ? OFFSET ?`,
-      [catalogId, limit, offset]
-    );
+    // TODO: add query
+    const result = await connection.query();
 
-    response.json(result[0]);
+    response.json(result.rows);
   } catch (error) {
     console.error('Error fetching catalog items:', error);
     response.status(500).json({ error: 'Internal Server Error' });
-  } finally {
-    if (connection) {
-      connection.release();
-    }
   }
 });
 
 // POST /catalogs/:catalogId/items
 router.post('/:catalogId/items', async (request, response) => {
-  let connection;
   try {
-    connection = await pool.getConnection();
+    const connection = await db.pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId } = request.params;
-    const { externalProductId, pointCost, name, description, imageUrl, originalSource } = request.body;
+    const { etsyListingId, pointCost, name, description, imageUrl, originalSource } = request.body;
 
     let itemData;
 
-    // if the product id is given, get details from the store, otherwise use manual entry
-    if (externalProductId) {
-      const product = await store.getProductById(externalProductId);
-      itemData = store.transformToCatalogItem(product, pointCost);
+    // if the listing id is given, get details from etsy, otherwise use manual entry
+    if (etsyListingId) {
+      const etsyListing = await etsyService.getListingById(etsyListingId);
+      itemData = etsyService.transformToCatalogItem(etsyListing, pointCost);
     } else {
       // manual item entry
       itemData = { name, description, pointCost, imageUrl, originalSource };
     }
 
-    const result = await connection.query(
-      `INSERT INTO CATALOG_ITEMS 
-       (CatalogID, APIID, ItemName, OriginalSource, Description, PointCost, ImageUrl) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        catalogId,
-        itemData.externalProductId || '',
-        itemData.name,
-        itemData.originalSource || '',
-        itemData.description,
-        itemData.pointCost,
-        itemData.imageUrl || ''
-      ]
-    );
+    // TODO: add query
+    const result = await connection.query();
 
-    const newItem = await connection.query(
-      `SELECT 
-        ItemID as id,
-        APIID as externalProductId,
-        ItemName as name,
-        OriginalSource as originalSource,
-        Description as description,
-        PointCost as pointCost,
-        ImageUrl as imageUrl
-       FROM CATALOG_ITEMS
-       WHERE ItemID = ?`,
-      [result[0].insertId]
-    );
-
-    await connection.commit();
-    response.status(201).json(newItem[0][0]);
+    response.status(201).json(result.rows[0]);
   } catch (error) {
-    if (connection) {
-      await connection.rollback();
-    }
+    await connection.rollback();
     console.error('Error creating catalog item:', error);
     response.status(500).json({ error: 'Internal Server Error' });
   } finally {
-    if (connection) {
-      connection.release();
-    }
+    connection.release();
   }
 });
 
 // GET /catalogs/:catalogId/items/:itemId
 router.get('/:catalogId/items/:itemId', async (request, response) => {
-  let connection;
   try {
-    connection = await pool.getConnection();
+    const connection = await db.pool.getConnection();
 
     const { catalogId, itemId } = request.params;
 
-    const result = await connection.query(
-      `SELECT 
-        ItemID as id,
-        APIID as externalProductId,
-        ItemName as name,
-        OriginalSource as originalSource,
-        Description as description,
-        PointCost as pointCost,
-        ImageUrl as imageUrl
-       FROM CATALOG_ITEMS
-       WHERE CatalogID = ? AND ItemID = ?`,
-      [catalogId, itemId]
-    );
+    // TODO: add query
+    const result = await connection.query();
 
-    if (result[0].length === 0) {
+    if (result.rows.length === 0) {
       return response.status(404).json({ error: 'Item not found' });
     }
 
-    response.json(result[0][0]);
+    response.json(result.rows[0]);
   } catch (error) {
     console.error('Error fetching catalog item:', error);
     response.status(500).json({ error: 'Internal Server Error' });
-  } finally {
-    if (connection) {
-      connection.release();
-    }
   }
 });
 
 // PATCH /catalogs/:catalogId/items/:itemId
 router.patch('/:catalogId/items/:itemId', async (request, response) => {
-  let connection;
   try {
-    connection = await pool.getConnection();
+    const connection = await db.pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId, itemId } = request.params;
     const { name, description, pointCost, imageUrl } = request.body;
 
-    const updates = [];
-    const values = [];
+    // TODO: add query
+    const result = await connection.query();
 
-    if (name) {
-      updates.push('ItemName = ?');
-      values.push(name);
-    }
-    if (description) {
-      updates.push('Description = ?');
-      values.push(description);
-    }
-    if (pointCost) {
-      updates.push('PointCost = ?');
-      values.push(pointCost);
-    }
-    if (imageUrl) {
-      updates.push('ImageUrl = ?');
-      values.push(imageUrl);
-    }
-
-    if (updates.length === 0) {
-      return response.status(400).json({ error: 'No valid fields to update' });
-    }
-
-    values.push(catalogId, itemId);
-
-    await connection.query(
-      `UPDATE CATALOG_ITEMS SET ${updates.join(', ')} WHERE CatalogID = ? AND ItemID = ?`,
-      values
-    );
-
-    const result = await connection.query(
-      `SELECT 
-        ItemID as id,
-        APIID as externalProductId,
-        ItemName as name,
-        OriginalSource as originalSource,
-        Description as description,
-        PointCost as pointCost,
-        ImageUrl as imageUrl
-       FROM CATALOG_ITEMS
-       WHERE CatalogID = ? AND ItemID = ?`,
-      [catalogId, itemId]
-    );
-
-    if (result[0].length === 0) {
-      await connection.rollback();
+    if (result.rows.length === 0) {
       return response.status(404).json({ error: 'Item not found' });
     }
 
-    await connection.commit();
-    response.json(result[0][0]);
+    response.json(result.rows[0]);
   } catch (error) {
-    if (connection) {
-      await connection.rollback();
-    }
+    await connection.rollback();
     console.error('Error updating catalog item:', error);
     response.status(500).json({ error: 'Internal Server Error' });
   } finally {
-    if (connection) {
-      connection.release();
-    }
+    connection.release();
   }
 });
 
 // DELETE /catalogs/:catalogId/items/:itemId
 router.delete('/:catalogId/items/:itemId', async (request, response) => {
-  let connection;
   try {
-    connection = await pool.getConnection();
+    const connection = await db.pool.getConnection();
     await connection.beginTransaction();
 
     const { catalogId, itemId } = request.params;
 
-    const result = await connection.query(
-      'DELETE FROM CATALOG_ITEMS WHERE CatalogID = ? AND ItemID = ?',
-      [catalogId, itemId]
-    );
+    // TODO: add query
+    const result = await connection.query();
 
-    if (result[0].affectedRows === 0) {
-      await connection.rollback();
+    if (result.rows.length === 0) {
       return response.status(404).json({ error: 'Item not found' });
     }
 
-    await connection.commit();
     response.status(204).send();
   } catch (error) {
-    if (connection) {
-      await connection.rollback();
-    }
+    await connection.rollback();
     console.error('Error deleting catalog item:', error);
     response.status(500).json({ error: 'Internal Server Error' });
   } finally {
-    if (connection) {
-      connection.release();
-    }
+    connection.release();
   }
 });
 
-export default router;
+module.exports = router;
