@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     
     steps:
       - name: Checkout dev branch
@@ -17,7 +15,6 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
-          token: ${{ secrets.ACCESS_TOKEN }}
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -69,8 +66,6 @@ jobs:
           else
             git commit -m "Build from dev - $(date +'%Y-%m-%d %H:%M:%S')" || true
           fi
-
-          git remote set-url origin https://x-access-token:${{ secrets.ACCESS_TOKEN }}@github.com/edenasharpie/S26-CPSC4910-Team21.git
           
           # Push to build branch
           git push origin build
@@ -102,23 +97,25 @@ jobs:
           EOF
         
       - name: Transfer files to server
+        env:
+          STAGING_HOST: ${{ secrets.DEV_EC2_HOST }}
+          STAGING_USER: ${{ secrets.DEV_EC2_USER }}
         run: |
           # Clone repo if it doesn't exist, otherwise pull latest
           ssh -i ~/.ssh/staging_key -o StrictHostKeyChecking=no \
-            ${{ secrets.DEV_EC2_USER }}@${{ secrets.DEV_EC2_HOST }} << ENDSSH
-          if [ ! -d /home/${{ secrets.DEV_EC2_USER }}/FleetScore/S26-CPSC4910-Team21 ]; then
-            cd /home/${{ secrets.DEV_EC2_USER }}/FleetScore
-            git clone https://github.com/edenasharpie/S26-CPSC4910-Team21
-          fi
-          cd /home/${{ secrets.DEV_EC2_USER }}/FleetScore/S26-CPSC4910-Team21
-          git fetch origin build
-          git checkout build
-          git reset --hard origin/build
-          ENDSSH
+            $STAGING_USER@$STAGING_HOST \
+            "if [ ! -d /home/$STAGING_USER/FleetScore/S26-CPSC4910-Team21 ]; then \
+               cd /home/$STAGING_USER/FleetScore && \
+               git clone https://github.com/edenasharpie/S26-CPSC4910-Team21 \
+             fi && \
+             cd /home/$STAGING_USER/FleetScore/S26-CPSC4910-Team21 && \
+             git fetch origin build && \
+             git checkout build && \
+             git reset --hard origin/build"
           
           # Transfer environment file
           scp -i ~/.ssh/staging_key -o StrictHostKeyChecking=no \
-            .fs-env.staging ${{ secrets.DEV_EC2_USER }}@${{ secrets.DEV_EC2_HOST }}:/home/${{ secrets.DEV_EC2_USER }}/FleetScore/.fs-env
+            .fs-env.staging $STAGING_USER@$STAGING_HOST:/home/$STAGING_USER/FleetScore/.fs-env
       
       - name: Run deployment script
         env:
