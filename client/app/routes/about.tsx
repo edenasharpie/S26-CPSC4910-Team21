@@ -3,7 +3,12 @@ import type { Route } from "./+types/about";
 
 // fetch data before rendering anything
 export async function loader({ params }: Route.LoaderArgs) {
-  const response = await fetch("http://localhost:5000/about");
+  // absolute URL for server-side fetches, relative for client-side
+  const apiUrl = typeof window === 'undefined' 
+    ? process.env.API_URL || 'http://localhost:5000'
+    : '';
+    
+  const response = await fetch(`${apiUrl}/api/about`);
   
   if (!response.ok) {
     throw new Response('Failed to load "About" information', { status: 500 });
