@@ -6,7 +6,8 @@ module.exports = {
     cwd: "/home/ubuntu/FleetScore/S26-CPSC4910-Team21/client",
     env: {
       NODE_ENV: "production",
-      PORT: 3000
+      PORT: 3000,
+      API_URL: "http://localhost:5000"
     },
     instances: 1,
     autorestart: true,
