@@ -14,12 +14,14 @@ mkdir -p $CLIENT_DIR/logs
 # install server dependencies
 cd $SERVER_DIR
 echo "Installing server dependencies..."
-npm ci --production
+npm ci
 
 # install client dependencies
 cd $CLIENT_DIR
 echo "Installing client dependencies..."
-npm ci --production
+npm ci
+echo "Building client application..."
+npm run build
 
 # restart PM2 processes
 echo "Restarting services..."
