@@ -238,4 +238,47 @@ export async function getSponsorDriverReview(companyId: string) {
   return stmt.all(companyId); 
 }
 
+/**
+ * Update sponsor company description
+ * @param companyId - The ID of the sponsor company
+ * @param companyDescription - The new company description (max 1000 characters)
+ * @returns Promise with success/error status
+ */
+export async function updateSponsorCompanyDescription(
+  companyId: number | string,
+  companyDescription: string
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  try {
+    const connection = await pool.getConnection();
+    
+    try {
+      // Update the description
+      const [result] = await connection.execute(
+        'UPDATE SPONSOR_COMPANIES SET companyDescription = ?, updatedAt = NOW() WHERE id = ?',
+        [companyDescription, companyId]
+      );
+
+      if ((result as any).affectedRows === 0) {
+        return { success: false, error: 'Sponsor company not found' };
+      }
+
+      // Fetch and return updated record
+      const [rows] = await connection.execute(
+        'SELECT id, companyDescription FROM SPONSOR_COMPANIES WHERE id = ?',
+        [companyId]
+      );
+
+      return {
+        success: true,
+        data: (rows as any[])[0]
+      };
+    } finally {
+      connection.release();
+    }
+  } catch (error: any) {
+    console.error('Error updating sponsor company description:', error);
+    return { success: false, error: 'Database error occurred' };
+  }
+}
+
 export default db;
