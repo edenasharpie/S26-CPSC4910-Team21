@@ -29,25 +29,31 @@ export async function action({ request, params }: Route.ActionArgs) {
   const userId = Number(params.id);
   
   const updates = {
-    username: formData.get("username") as string, // Added username
+    username: formData.get("username") as string,
     displayName: formData.get("displayName") as string,
     email: formData.get("email") as string,
-    accountType: formData.get("accountType") as string, // Added accountType
+    accountType: formData.get("accountType") as string,
+    pointToDollarRatio: formData.get("pointToDollarRatio") 
+      ? Number(formData.get("pointToDollarRatio")) 
+      : null,
   };
 
   try {
+    // This call goes to your RDS endpoint
     await updateUser(userId, updates);
-    // Redirecting back to the profile view after successful AWS update
     return redirect(`/admin/profile/${userId}`); 
   } catch (error: any) {
     return { error: error.message };
   }
-}
+};
 
 export default function EditUserProfile({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
   const actionData = useActionData();
   const [isEditing, setIsEditing] = useState(false);
+
+  // Determine if the user is a Sponsor
+  const isSponsor = user.accountType === "Sponsor" || user.account_type === "Sponsor";
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
@@ -68,7 +74,8 @@ export default function EditUserProfile({ loaderData }: Route.ComponentProps) {
         )}
 
         <div className="grid gap-4 bg-white dark:bg-gray-900 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800">
-          {/* New Username Field */}
+          
+          {/* USERNAME: Editable by all when isEditing is true */}
           <Input 
             label="Username" 
             name="username" 
@@ -76,13 +83,15 @@ export default function EditUserProfile({ loaderData }: Route.ComponentProps) {
             disabled={!isEditing} 
           />
 
+          {/* DISPLAY NAME: Editable by all when isEditing is true */}
           <Input 
             label="Display Name" 
             name="displayName" 
-            defaultValue={user.displayName} 
+            defaultValue={user.displayName || user.display_name} 
             disabled={!isEditing} 
           />
 
+          {/* EMAIL: Editable by all when isEditing is true */}
           <Input 
             label="Email Address" 
             name="email" 
@@ -90,19 +99,17 @@ export default function EditUserProfile({ loaderData }: Route.ComponentProps) {
             disabled={!isEditing} 
           />
 
-          {/* New Account Type Dropdown */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Account Type</label>
-            <select
-              name="accountType"
-              disabled={!isEditing}
-              defaultValue={user.accountType || "Driver"}
-              className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 dark:border-gray-800 dark:bg-gray-950 dark:ring-offset-gray-950"
-            >
-              <option value="Driver">Driver</option>
-              <option value="Sponsor">Sponsor</option>
-              <option value="Admin">Admin</option>
-            </select>
+          {/* POINT TO DOLLAR: Only editable if isEditing is true AND user is a Sponsor */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <Input 
+              label="Point to Dollar Ratio" 
+              name="pointToDollarRatio" 
+              type="number"
+              step="0.01"
+              defaultValue={user.pointToDollarRatio || user.point_to_dollar_ratio} 
+              disabled={!isEditing || !isSponsor} 
+              description={isEditing && !isSponsor ? "Only Sponsor accounts can modify this ratio." : ""}
+            />
           </div>
           
           {isEditing && (

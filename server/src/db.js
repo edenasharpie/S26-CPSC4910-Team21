@@ -36,10 +36,12 @@ export async function getAllUsers() {
 };
 
 export async function updateUser(id, updates) {
-  const { username, displayName, email, accountType } = updates;
+  const { username, displayName, email, accountType, pointToDollarRatio } = updates;
   const [result] = await pool.execute(
-    'UPDATE users SET username = ?, displayName = ?, email = ?, accountType = ? WHERE id = ?',
-    [username, displayName, email, accountType, id]
+    `UPDATE users 
+     SET username = ?, displayName = ?, email = ?, accountType = ?, point_to_dollar_ratio = ? 
+     WHERE id = ?`,
+    [username, displayName, email, accountType, pointToDollarRatio, id]
   );
   return result;
 };
