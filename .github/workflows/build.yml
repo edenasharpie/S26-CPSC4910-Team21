@@ -108,15 +108,16 @@ jobs:
         run: |
           # Clone repo if it doesn't exist, otherwise pull latest
           ssh -i ~/.ssh/staging_key -o StrictHostKeyChecking=no \
-            $STAGING_USER@$STAGING_HOST \
-            "if [ ! -d /home/$STAGING_USER/FleetScore/S26-CPSC4910-Team21 ]; then \
-               cd /home/$STAGING_USER/FleetScore && \
-               git clone https://github.com/edenasharpie/S26-CPSC4910-Team21 \
-             fi && \
-             cd /home/$STAGING_USER/FleetScore/S26-CPSC4910-Team21 && \
-             git fetch origin build && \
-             git checkout build && \
-             git reset --hard origin/build"
+            $STAGING_USER@$STAGING_HOST << 'ENDSSH'
+          if [ ! -d /home/$STAGING_USER/FleetScore/S26-CPSC4910-Team21 ]; then
+            cd /home/$STAGING_USER/FleetScore
+            git clone https://github.com/edenasharpie/S26-CPSC4910-Team21
+          fi
+          cd /home/$STAGING_USER/FleetScore/S26-CPSC4910-Team21
+          git fetch origin build
+          git checkout build
+          git reset --hard origin/build
+          ENDSSH
           
           # Transfer environment file
           scp -i ~/.ssh/staging_key -o StrictHostKeyChecking=no \
