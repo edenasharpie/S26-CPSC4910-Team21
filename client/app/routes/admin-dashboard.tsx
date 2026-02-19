@@ -1,6 +1,7 @@
 import type { Route } from "./+types/admin";
 import { useState } from "react";
 import { Table, Input, Button, Badge, Modal} from "~/components";
+import { useNavigate } from "react-router";
 
 // mock user data
 // TODO: replace with real data
@@ -56,6 +57,7 @@ export function meta({}: Route.MetaArgs) {
 
 export default function AdminPortal() {
   const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useNavigate();
 
   // map badge variants to account types
   const getAccountTypeBadge = (accountType: string) => {
@@ -147,7 +149,7 @@ export default function AdminPortal() {
             variant="secondary"
             onClick={(e) => {
               e.stopPropagation();
-              alert(`Edit user ${user.username}`);
+              navigate(`/admin/profile/${user.id}`);
             }}
           >
             Edit
