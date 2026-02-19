@@ -26,7 +26,7 @@ npm run build
 # restart PM2 processes
 echo "Restarting services..."
 cd $SERVER_DIR
-pm2 restart ecosystem.config.cjs || pm2 start ecosystem.config.cjs
+pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
 
 cd $CLIENT_DIR
 pm2 restart ecosystem.config.cjs || pm2 start ecosystem.config.cjs

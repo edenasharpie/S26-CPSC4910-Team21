@@ -3,13 +3,13 @@ import { useState, useEffect } from "react";
 import { useLoaderData, useActionData, Form, useSubmit } from "react-router";
 import type { Route } from "./+types/profile";
 import { Table, Input, Button, Badge } from "~/components";
-//import { getUserById } from "../../../server/database/db";
+import { getUserById } from "../../../server/database/db";
 
 // 1. THE LOADER: This pulls real data from the DB before the page renders
 export async function loader({ params }: Route.LoaderArgs) {
   // In a real app, you'd get the ID from the session. 
   // For now, we are using ID 2 (Jane Smith) as per your mock.
-  const user = await fetch(`/api/users/${params.id}`); 
+  const user = getUserById(2); 
   
   if (!user) {
     throw new Response("User Not Found", { status: 404 });

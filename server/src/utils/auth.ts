@@ -1,23 +1,19 @@
+import bcrypt from "bcrypt";
 import crypto from "crypto";
 
+const SALT_ROUNDS = 10;
 const ALGORITHM = 'aes-256-cbc';
-const KEY = Buffer.from("abcdef0123456789abcdef0123456789"); // TODO: Populate (and move it to environment variable?)
+const KEY = Buffer.from("abcdef0123456789abcdef0123456789");
 const IV_LENGTH = 16;
 
-// Use a salted SHA-256 hash for password storage. Format: <saltHex>:<hashHex>
+// Function to compare the input password with the stored hashed password
 export async function verifyPassword(plain: string, hashed: string): Promise<boolean> {
-    if (!hashed) return false;
-    const parts = hashed.split(":");
-    if (parts.length !== 2) return false;
-    const [saltHex, hashHex] = parts;
-    const computed = crypto.createHash('sha256').update(saltHex + plain).digest('hex');
-    return computed === hashHex;
+    return await bcrypt.compare(plain, hashed);
 }
 
+// Function to hash a new password that has been created
 export async function hashPassword(plain: string): Promise<string> {
-    const salt = crypto.randomBytes(16).toString('hex');
-    const hash = crypto.createHash('sha256').update(salt + plain).digest('hex');
-    return `${salt}:${hash}`;
+    return await bcrypt.hash(plain, SALT_ROUNDS);
 }
 
 // Function to hash new private data
