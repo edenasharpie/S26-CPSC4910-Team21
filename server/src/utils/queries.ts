@@ -142,4 +142,41 @@ export function cleanupOldPasswords() {
   return result.changes;
 }
 
+export async function getAllUsersWithApps() {
+  const query = `
+    SELECT 
+      u.UserID, 
+      u.FirstName, 
+      u.LastName, 
+      u.Username, 
+      u.UserType, 
+      u.ProfilePicture,
+      da.TimeSubmitted
+    FROM USERS u
+    LEFT JOIN DRIVER_APPLICATIONS da ON u.UserID = da.DriverID
+    ORDER BY u.LastName ASC
+  `;
+  const stmt = db.prepare(query);
+  return stmt.all(); 
+}
+
+// Based off performanceStatus enum
+export async function getSponsorDriverReview(companyId: string) {
+  const query = `
+    SELECT 
+      u.FirstName, 
+      u.LastName, 
+      d.PerformanceStatus,
+      d.PointBalance
+    FROM USERS u
+    JOIN DRIVERS d ON u.UserID = d.UserID
+    WHERE d.SponsorCompanyID = ?
+    ORDER BY d.PerformanceStatus ASC; 
+  `;
+
+  // For your better-sqlite3 or mysql2 setup:
+  const stmt = db.prepare(query);
+  return stmt.all(companyId); 
+}
+
 export default db;
