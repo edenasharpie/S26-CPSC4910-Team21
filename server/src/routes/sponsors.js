@@ -40,7 +40,7 @@ router.post('/change-password', async (req, res) => {
         console.error("Sponsor Password Change Error:", error);
         return res.status(500).json({ error: "Internal server error." });
     }
-}
+});
 /**
  * PATCH /api/sponsors/:companyId/description
  * Update a sponsor company's description
@@ -60,6 +60,7 @@ router.post('/change-password', async (req, res) => {
  *   "status": 200
  * }
  */
+
 router.patch('/:companyId/description', async (req, res) => {
   try {
     const { companyId } = req.params;

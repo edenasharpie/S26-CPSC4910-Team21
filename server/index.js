@@ -1,18 +1,12 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import { pool } from './src/db.js';
-import aboutRoutes from './src/routes/about.js';
-import catalogRoutes from './src/routes/catalogs.js';
-import userRoute from './src/routes/users.js';
-import sponsorRoute from './src/routes/sponsors.js';
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config({ path: '../../.fs-env' });
 
-dotenv.config({ path: '../../.fs-env' });
+// API endpoints
+const aboutRoutes = require('./src/routes/about');
+const catalogRoutes = require('./src/routes/catalogs');
 
 const app = express();
-
-app.set('pool', pool);
-
 app.use(cors());
 app.use(express.json());
 
@@ -23,8 +17,6 @@ app.use('/api/sponsors', sponsorRoute);
 //app.use('/api/admins', adminRoute);     
 app.use('/api/drivers', driverRoute);
 
-//Start the server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
+app.listen(process.env.PORT || 5000, () => {
+  console.log(`Backend running on port ${process.env.PORT || 5000}`);
 });

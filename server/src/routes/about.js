@@ -1,13 +1,12 @@
-import express from 'express';
-import { pool } from '../db.js';
-
+const express = require('express');
 const router = express.Router();
+const db = require('../db');
 
 // GET /about
 router.get('/', async (request, response) => {
   let connection;
   try {
-    connection = await pool.getConnection();
+    connection = await db.pool.getConnection();
 
     const result = await connection.query('SELECT * FROM METADATA');
 
@@ -22,4 +21,4 @@ router.get('/', async (request, response) => {
   }
 });
 
-export default router;
+module.exports = router;

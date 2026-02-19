@@ -95,6 +95,8 @@ jobs:
           DB_USER=${{ secrets.DB_USER }}
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           DB_NAME=${{ secrets.DEV_DB_NAME }}
+          ETSY_API_KEYSTRING=${{ secrets.ETSY_API_KEYSTRING }}
+          ETSY_API_SHARED_SECRET=${{ secrets.ETSY_API_SHARED_SECRET }}
           EOF
         
       - name: Transfer files to server

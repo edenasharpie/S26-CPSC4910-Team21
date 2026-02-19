@@ -1,6 +1,12 @@
 // server/api/user.ts
-import { verifyPassword, hashPassword } from '../src/utils/auth';
-import { Pool, RowDataPacket } from 'mysql2/promise';
+import bcrypt from 'bcrypt';
+import {
+  getUserById,
+  updateUserProfile,
+  changePassword,
+  updatePointRatio,
+  getPasswordHistory
+} from '../database/db';
 
 /** * 1. TYPE DEFINITIONS
  * These tell TypeScript exactly what properties exist on your objects.
@@ -27,20 +33,11 @@ interface PasswordHistoryEntry {
   changed_at: string;
 }
 
-// Helper function to call to db
-export async function getUserById(pool: any, userId: number | string): Promise<User | undefined> {
-  const [rows] = await pool.query(
-    'SELECT * FROM USERS WHERE UserID = ?',
-    [userId]
-  );
-  const results = rows as any[];
-  return results[0] as User | undefined;
-}
 /**
  * GET /api/user/profile
  */
-export async function getProfile(pool: any, userId: number) {
-  const user = await getUserById(pool, userId);
+export async function getProfile(userId: number) {
+  const user = getUserById(userId) as User | undefined;
   
   if (!user) {
     return { error: 'User not found', status: 404 };
@@ -57,22 +54,15 @@ export async function getProfile(pool: any, userId: number) {
 /**
  * PATCH /api/user/profile
  */
-export async function updateProfile(
-  pool: any, 
-  userId: number, 
-  updates: Partial<Omit<User, 'id' | 'password_hash'>>,
-  updateUserProfileFn: Function
-) {
+export async function updateProfile(userId: number, updates: Partial<Omit<User, 'id' | 'password_hash'>>) {
   try {
     if (updates.email && !isValidEmail(updates.email)) {
       return { error: 'Invalid email address', status: 400 };
     }
     
-    await updateUserProfileFn(pool, userId, updates);
+    updateUserProfile(userId, updates);
     
-    const updatedUser = await getUserById(pool, userId);
-    if (!updatedUser) return { error: 'User not found', status: 404 };
-
+    const updatedUser = getUserById(userId) as User;
     const { password_hash, ...userProfile } = updatedUser;
     
     return {
@@ -91,21 +81,19 @@ export async function updateProfile(
  * POST /api/user/change-password
  */
 export async function changeUserPassword(
-  pool: any,
   userId: number,
   currentPassword: string,
   newPassword: string,
-  changePasswordFn: Function, // Pass the changePassword logic in
   ipAddress?: string,
   userAgent?: string
 ) {
   try {
-    const user = await getUserById(pool, userId);
+    const user = getUserById(userId) as User | undefined;
     if (!user) {
       return { error: 'User not found', status: 404 };
     }
     
-    const isValidPassword = await verifyPassword(currentPassword, user.password_hash);
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
     if (!isValidPassword) {
       return { error: 'Current password is incorrect', status: 401 };
     }
@@ -114,11 +102,10 @@ export async function changeUserPassword(
       return { error: 'Password must be at least 8 characters long', status: 400 };
     }
     
-    const newPasswordHash = await hashPassword(newPassword);
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
     
-    // Fix: Await the change logic and pass pool
-    const result = await changePasswordFn(
-      pool,
+    // Casting result to DBResponse fixes the error on result.success and result.error
+    const result = changePassword(
       userId,
       user.password_hash, 
       newPasswordHash,
@@ -130,10 +117,10 @@ export async function changeUserPassword(
       return { error: result.error || 'Password change failed', status: 400 };
     }
     
-    const updatedUser = await getUserById(pool, userId);
+    const updatedUser = getUserById(userId) as User;
     
     return {
-      data: { lastPasswordChange: updatedUser?.last_password_change },
+      data: { lastPasswordChange: updatedUser.last_password_change },
       message: 'Password changed successfully',
       status: 200
     };
@@ -147,14 +134,9 @@ export async function changeUserPassword(
 /**
  * PATCH /api/user/point-ratio
  */
-export async function updateUserPointRatio(
-    pool: any, 
-    userId: number, 
-    ratio: number,
-    updatePointRatioFn: Function
-) {
+export async function updateUserPointRatio(userId: number, ratio: number) {
   try {
-    const user = await getUserById(pool, userId);
+    const user = getUserById(userId) as User | undefined;
     if (!user) {
       return { error: 'User not found', status: 404 };
     }
@@ -167,10 +149,10 @@ export async function updateUserPointRatio(
       return { error: 'Point to dollar ratio must be greater than 0', status: 400 };
     }
     
-    await updatePointRatioFn(pool, userId, ratio);
+    updatePointRatio(userId, ratio);
     
-    const updatedUser = await getUserById(pool, userId);
-    const { password_hash, ...userProfile } = updatedUser!;
+    const updatedUser = getUserById(userId) as User;
+    const { password_hash, ...userProfile } = updatedUser;
     
     return {
       data: userProfile,
@@ -187,22 +169,22 @@ export async function updateUserPointRatio(
 /**
  * GET /api/user/password-history
  */
-export async function getUserPasswordHistory(pool: any, userId: number) {
+export async function getUserPasswordHistory(userId: number) {
   try {
-    const [rows] = await pool.query(
-      'SELECT password_hash, changed_at FROM PasswordHistory WHERE UserID = ? ORDER BY changed_at DESC LIMIT 5',
-      [userId]
-    );
+    const history = getPasswordHistory(userId) as PasswordHistoryEntry[];
     
-    const history = rows as PasswordHistoryEntry[];
+    const safeHistory = history.map(entry => ({
+      changed_at: entry.changed_at
+    }));
     
     return {
-      data: history.map(h => ({ changed_at: h.changed_at })),
+      data: safeHistory,
       status: 200
     };
+    
   } catch (error) {
-    console.error('Error getting history:', error);
-    return { error: 'Failed to get history', status: 500 };
+    console.error('Error getting password history:', error);
+    return { error: 'Failed to get password history', status: 500 };
   }
 }
 
