@@ -30,6 +30,14 @@ interface PasswordHistoryRecord {
 export async function action({ request }: Route.ActionArgs) {
   try {
     const { userId, currentPassword, newPassword } = await request.json();
+    
+    // --- NEW: Password Complexity Validation ---
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return data({ 
+        error: "Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, and a special symbol." 
+      }, { status: 400 });
+    }
 
     // Get user from database
     const user = getUserById(userId) as User | undefined;
