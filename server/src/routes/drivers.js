@@ -23,3 +23,21 @@ router.get('/profile/:userId', async (req, res) => {
 });
 
 module.exports = router;
+
+// GET /api/server/drivers/performance/:userId
+router.get('/performance/:userId', async (req, res) => {
+    const pool = req.app.get('pool');
+    const { userId } = req.params;
+
+    try {
+        const result = await getDriverPerformance(pool, userId);
+        if (result.success) {
+            res.status(200).json(result.data);
+        } else {
+            res.status(404).json({ message: result.message });
+        }
+    } catch (error) {
+        console.error("Performance Tracking Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
