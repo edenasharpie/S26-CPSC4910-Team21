@@ -1,6 +1,7 @@
-const express = require('express'); 
+import express from 'express';
+import { pool } from '../db.js';
+
 const router = express.Router();
-const { pool } = require('../db.js');
 
 // Get drivers based off performance
 router.get('/my-drivers/:companyId', async (req, res) => {
@@ -101,4 +102,4 @@ router.patch('/:companyId/description', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
