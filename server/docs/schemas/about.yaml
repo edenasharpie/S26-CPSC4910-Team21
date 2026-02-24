@@ -1,0 +1,19 @@
+About:
+  type: object
+  description: Information about the application
+  properties:
+    name:
+      type: string
+      description: Name of the application
+    description:
+      type: string
+      description: A brief description of the application
+    team:
+      type: integer
+      description: The team that developed the application
+    version:
+      type: integer
+      description: The current version of the application
+    releaseDate:
+      type: string
+      format: date

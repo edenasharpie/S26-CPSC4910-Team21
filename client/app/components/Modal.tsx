@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 // declare some attributes for the modal component
 interface ModalProps {
@@ -51,20 +52,19 @@ export function Modal({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
-
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* backdrop */}
       <div
         className="absolute inset-0 bg-black/50 dark:bg-black/70"
         onClick={onClose}
-        aria-hidden="true"
       />
 
-      {/* modal */}
       <div
         ref={modalRef}
-        className={`relative card shadow-xl w-full ${sizeStyles[size]} max-h-[90vh] flex flex-col`}
+        className="relative w-[32rem] max-w-[90vw] max-h-[90vh] flex flex-col
+             bg-white dark:bg-gray-800
+             border border-gray-200 dark:border-gray-700
+             rounded-lg shadow-xl"
         role="dialog"
         aria-modal="true"
       >
@@ -95,7 +95,7 @@ export function Modal({
         )}
 
         {/* content */}
-        <div className="px-6 py-4 overflow-y-auto flex-1">
+        <div className="px-6 py-4 overflow-y-auto flex-1 min-w-0">
           {children}
         </div>
 
@@ -106,6 +106,7 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
