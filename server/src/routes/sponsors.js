@@ -3,6 +3,19 @@ import { pool } from '../db.js';
 
 const router = express.Router();
 
+// GET /api/sponsors - Get all sponsor companies
+router.get('/', async (req, res) => {
+  try {
+    const [sponsors] = await pool.execute(
+      'SELECT SponsorCompanyID as id, CompanyName as companyName, PointDollarValue as pointDollarValue FROM SPONSOR_COMPANIES ORDER BY CompanyName'
+    );
+    res.json(sponsors);
+  } catch (error) {
+    console.error('Error fetching sponsor companies:', error);
+    res.status(500).json({ error: 'Failed to fetch sponsor companies' });
+  }
+});
+
 // Get drivers based off performance
 router.get('/my-drivers/:companyId', async (req, res) => {
   try {
@@ -62,7 +75,7 @@ router.patch('/:companyId/description', async (req, res) => {
 
     // Update the sponsor company description in database
     const [result] = await pool.execute(
-      'UPDATE SPONSOR_COMPANIES SET companyDescription = ?, updatedAt = NOW() WHERE id = ?',
+      'UPDATE SPONSOR_COMPANIES SET companyDescription = ?, updatedAt = NOW() WHERE SponsorCompanyID = ?',
       [companyDescription, companyId]
     );
 
@@ -76,7 +89,7 @@ router.patch('/:companyId/description', async (req, res) => {
 
     // Fetch and return updated company
     const [companies] = await pool.execute(
-      'SELECT id, companyDescription FROM SPONSOR_COMPANIES WHERE id = ?',
+      'SELECT SponsorCompanyID as id, companyDescription FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?',
       [companyId]
     );
 

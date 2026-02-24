@@ -4,6 +4,9 @@ Catalog:
     id:
       type: integer
       readOnly: true
+    sponsorCompanyID:
+      type: integer
+      readOnly: true
     itemCount:
       type: integer
       example: 10
@@ -16,6 +19,9 @@ CatalogSummary:
   type: object
   properties:
     id:
+      type: integer
+      readOnly: true
+    sponsorCompanyID:
       type: integer
       readOnly: true
     itemCount:

@@ -17,9 +17,11 @@ router.get('/', async (request, response) => {
       SELECT 
         c.CatalogID as id,
         c.SponsorCompanyID as sponsorCompanyId,
+        sc.CompanyName as sponsorCompanyName,
         COUNT(ci.ItemID) as itemCount
       FROM CATALOGS c
       LEFT JOIN CATALOG_ITEMS ci ON c.CatalogID = ci.CatalogID
+      LEFT JOIN SPONSOR_COMPANIES sc ON c.SponsorCompanyID = sc.SponsorCompanyID
       GROUP BY c.CatalogID
       LIMIT ? OFFSET ?
     `;
@@ -85,9 +87,11 @@ router.post('/', async (request, response) => {
       `SELECT 
         c.CatalogID as id,
         c.SponsorCompanyID as sponsorCompanyId,
+        sc.CompanyName as sponsorCompanyName,
         COUNT(ci.ItemID) as itemCount
        FROM CATALOGS c
        LEFT JOIN CATALOG_ITEMS ci ON c.CatalogID = ci.CatalogID
+       LEFT JOIN SPONSOR_COMPANIES sc ON c.SponsorCompanyID = sc.SponsorCompanyID
        WHERE c.CatalogID = ?
        GROUP BY c.CatalogID`,
       [catalogId]
@@ -99,6 +103,60 @@ router.post('/', async (request, response) => {
       await connection.rollback();
     }
     console.error('Error creating catalog:', error);
+    response.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+// GET /catalogs/:catalogId
+router.get('/:catalogId', async (request, response) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+
+    const { catalogId } = request.params;
+
+    // Check if catalog exists and get metadata
+    const catalogResult = await connection.query(
+      `SELECT 
+        c.CatalogID as id,
+        c.SponsorCompanyID as sponsorCompanyId,
+        sc.CompanyName as sponsorCompanyName
+       FROM CATALOGS c
+       LEFT JOIN SPONSOR_COMPANIES sc ON c.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE c.CatalogID = ?`,
+      [catalogId]
+    );
+
+    if (catalogResult[0].length === 0) {
+      return response.status(404).json({ error: 'Catalog not found' });
+    }
+
+    // Get all items in the catalog
+    const itemsResult = await connection.query(
+      `SELECT 
+        ItemID as id,
+        APIID as externalProductId,
+        ItemName as name,
+        OriginalSource as originalSource,
+        Description as description,
+        PointCost as pointCost,
+        ImageUrl as imageUrl
+       FROM CATALOG_ITEMS
+       WHERE CatalogID = ?`,
+      [catalogId]
+    );
+
+    const catalog = catalogResult[0][0];
+    catalog.itemCount = itemsResult[0].length;
+    catalog.items = itemsResult[0];
+
+    response.json(catalog);
+  } catch (error) {
+    console.error('Error fetching catalog:', error);
     response.status(500).json({ error: 'Internal Server Error' });
   } finally {
     if (connection) {
@@ -129,9 +187,11 @@ router.patch('/:catalogId', async (request, response) => {
       `SELECT 
         c.CatalogID as id,
         c.SponsorCompanyID as sponsorCompanyId,
+        sc.CompanyName as sponsorCompanyName,
         COUNT(ci.ItemID) as itemCount
        FROM CATALOGS c
        LEFT JOIN CATALOG_ITEMS ci ON c.CatalogID = ci.CatalogID
+       LEFT JOIN SPONSOR_COMPANIES sc ON c.SponsorCompanyID = sc.SponsorCompanyID
        WHERE c.CatalogID = ?
        GROUP BY c.CatalogID`,
       [catalogId]
@@ -189,42 +249,6 @@ router.delete('/:catalogId', async (request, response) => {
       await connection.rollback();
     }
     console.error('Error deleting catalog:', error);
-    response.status(500).json({ error: 'Internal Server Error' });
-  } finally {
-    if (connection) {
-      connection.release();
-    }
-  }
-});
-
-// GET /catalogs/:catalogId/items
-router.get('/:catalogId/items', async (request, response) => {
-  let connection;
-  try {
-    connection = await pool.getConnection();
-
-    const { catalogId } = request.params;
-    const limit = parseInt(request.query.limit) || 10;
-    const offset = parseInt(request.query.offset) || 0;
-
-    const result = await connection.query(
-      `SELECT 
-        ItemID as id,
-        APIID as externalProductId,
-        ItemName as name,
-        OriginalSource as originalSource,
-        Description as description,
-        PointCost as pointCost,
-        ImageUrl as imageUrl
-       FROM CATALOG_ITEMS
-       WHERE CatalogID = ?
-       LIMIT ? OFFSET ?`,
-      [catalogId, limit, offset]
-    );
-
-    response.json(result[0]);
-  } catch (error) {
-    console.error('Error fetching catalog items:', error);
     response.status(500).json({ error: 'Internal Server Error' });
   } finally {
     if (connection) {
