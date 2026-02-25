@@ -1,10 +1,30 @@
 import type { Route } from "./+types/admin";
 import { useState } from "react";
 import { Table, Input, Button, Badge, Modal} from "~/components";
-import { useNavigate } from "react-router";
+import { useLoaderData, useNavigate } from "react-router";
+import { getAllUsers } from "../../../../server/src/db.js";
 
 // mock user data
 // TODO: replace with real data
+interface DBUser {
+  UserID: string;
+  Username: string;
+  FirstName: string;
+  LastName: string;
+  UserType: string;
+  Email?: string;
+}
+
+export async function loader() {
+  try {
+    const users = await getAllUsers();
+    return { users: users as DBUser[] };
+  } catch (error) {
+    console.error("Database fetch failed:", error);
+    return { users: [], error: "Failed to load users" };
+  }
+}
+
 const mockUsers = [
   {
     id: 1,
@@ -56,6 +76,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function AdminPortal() {
+  const { users } = useLoaderData<typeof loader>()
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
 
