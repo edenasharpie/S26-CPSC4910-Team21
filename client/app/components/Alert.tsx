@@ -1,17 +1,17 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { useState } from "react";
 
-// declare some attributes for the error component
-interface ErrorProps extends HTMLAttributes<HTMLDivElement> {
+// declare some attributes for the alert component
+interface AlertProps extends HTMLAttributes<HTMLDivElement> {
   title?: string;
   message?: string | ReactNode;
   error?: any; // Can accept error objects from server
-  variant?: "error" | "warning" | "info";
+  variant?: "error" | "warning" | "info" | "success";
   dismissible?: boolean;
   onDismiss?: () => void;
 }
 
-export function Error({
+export function Alert({
   title,
   message,
   error,
@@ -21,7 +21,7 @@ export function Error({
   className = "",
   children,
   ...props
-}: ErrorProps) {
+}: AlertProps) {
   const [isVisible, setIsVisible] = useState(true);
 
   // Extract error message from various error formats
@@ -50,18 +50,21 @@ export function Error({
     error: "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800",
     warning: "bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800",
     info: "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800",
+    success: "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800",
   };
 
   const iconColors = {
     error: "text-red-600 dark:text-red-400",
     warning: "text-yellow-600 dark:text-yellow-400",
     info: "text-blue-600 dark:text-blue-400",
+    success: "text-green-600 dark:text-green-400",
   };
 
   const textColors = {
     error: "text-red-800 dark:text-red-300",
     warning: "text-yellow-800 dark:text-yellow-300",
     info: "text-blue-800 dark:text-blue-300",
+    success: "text-green-800 dark:text-green-300",
   };
 
   const icons = {
@@ -80,6 +83,11 @@ export function Error({
         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
       </svg>
     ),
+    success: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+      </svg>
+    ),
   };
 
   const errorMessage = getErrorMessage();
@@ -91,7 +99,7 @@ export function Error({
       {...props}
     >
       <div className="flex">
-        <div className={`flex-shrink-0 ${iconColors[variant]}`}>
+        <div className={`shrink-0 ${iconColors[variant]}`}>
           {icons[variant]}
         </div>
         <div className="ml-3 flex-1">

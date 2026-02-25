@@ -5,4 +5,4 @@ export { Card } from "./Card";
 export { Modal } from "./Modal";
 export { Table } from "./Table";
 export { Badge } from "./Badge";
-export { Error } from "./Error";
+export { Alert } from "./Alert";

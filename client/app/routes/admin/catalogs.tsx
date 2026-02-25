@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Table, Modal, Input } from '~/components';
+import { Button, Card, Table, Modal, Input, Alert } from '~/components';
 
 const BASE_URL = 'http://localhost:5000';
 
@@ -45,6 +45,7 @@ export default function Catalogs() {
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Store search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,6 +85,7 @@ export default function Catalogs() {
 
   const fetchCatalogs = async () => {
     try {
+      setError(null);
       const response = await fetch(`${BASE_URL}/api/catalogs`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -93,12 +95,13 @@ export default function Catalogs() {
       setCatalogs(data);
     } catch (error) {
       console.error('Error fetching catalogs:', error);
-      alert('Failed to fetch catalogs. Check console for details.');
+      setError('Failed to fetch catalogs. Please check your connection.');
     }
   };
 
   const fetchSponsorCompanies = async () => {
     try {
+      setError(null);
       console.log('Fetching sponsors from:', `${BASE_URL}/api/sponsors`);
       const response = await fetch(`${BASE_URL}/api/sponsors`);
       console.log('Sponsor response status:', response.status);
@@ -110,7 +113,7 @@ export default function Catalogs() {
       setSponsorCompanies(data);
     } catch (error) {
       console.error('Error fetching sponsor companies:', error);
-      alert('Failed to fetch sponsor companies. Check console for details.');
+      setError('Failed to fetch sponsor companies. Please check your connection.');
     }
   };
 
@@ -354,6 +357,11 @@ export default function Catalogs() {
           Create Catalog
         </Button>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <Alert message={error} onDismiss={() => setError(null)} />
+      )}
 
       {/* Catalogs List */}
       <Card title="All Catalogs">
