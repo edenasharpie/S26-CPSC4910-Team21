@@ -1,0 +1,78 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install server dependencies
+        working-directory: ./server
+        run: npm ci || npm install
+      
+      - name: Create environment file
+        working-directory: ./server
+        run: |
+          cat > .env << EOF
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_NAME=${{ secrets.DEV_DB_NAME }}
+          DB_PORT=3306
+          PORT=5000
+          EOF
+      
+      - name: Start server in background
+        working-directory: ./server
+        run: |
+          npm start &
+          echo $! > server.pid
+          # Wait for server to be ready
+          sleep 5
+          curl --retry 10 --retry-delay 3 --retry-connrefused http://localhost:5000 || true
+        env:
+          NODE_ENV: test
+      
+      - name: Run test setup
+        working-directory: ./server/tests
+        run: node setup.js
+        continue-on-error: false
+      
+      - name: Run tests
+        working-directory: ./server/tests/api
+        run: |
+          for test in *.js; do
+            if [ -f "$test" ]; then
+              echo "Running $test..."
+              node "$test"
+            fi
+          done
+        continue-on-error: false
+      
+      - name: Stop server
+        if: always()
+        working-directory: ./server
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+          fi
+      
+      - name: Test Results
+        if: always()
+        run: echo "Tests completed. Check individual test steps for results."

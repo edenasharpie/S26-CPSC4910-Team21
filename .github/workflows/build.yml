@@ -1,12 +1,17 @@
 name: Build and Deploy to Dev Server
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Run Tests"]
+    types:
+      - completed
     branches:
       - dev
 
 jobs:
   build:
+    # only run if tests passed
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -131,7 +136,7 @@ jobs:
         env:
           STAGING_HOST: ${{ secrets.DEV_EC2_HOST }}
         run: |
-          sleep 10
+          sleep 2
           curl -f http://$STAGING_HOST/health || curl -f http://$STAGING_HOST/api/about || exit 1
       
       - name: Success
