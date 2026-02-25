@@ -29,8 +29,99 @@ tags:
     description: Security-related endpoints
   - name: sponsor companies
     description: Sponsor company management
+  - name: store
+    description: External store product search and retrieval
 
 paths:
+
+  /store/search:
+    get:
+      tags:
+        - store
+      description: Search products from the Fake Store API
+      parameters:
+        - name: query
+          in: query
+          description: Search query to filter products by title, description, or category
+          schema:
+            type: string
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      responses:
+        '200':
+          description: List of products matching search criteria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 1
+                    title:
+                      type: string
+                      example: "Fjallraven - Foldsack No. 1 Backpack"
+                    description:
+                      type: string
+                      example: "Your perfect pack for everyday use"
+                    price:
+                      type: number
+                      example: 109.95
+                    category:
+                      type: string
+                      example: "men's clothing"
+                    image:
+                      type: string
+                      format: uri
+                      example: "https://fakestoreapi.com/img/81fPKd-2AYL._AC_SL1500_.jpg"
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /store/products/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        description: The unique identifier of the product from Fake Store API
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - store
+      description: Retrieve details for a specific product from Fake Store API
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  title:
+                    type: string
+                    example: "Fjallraven - Foldsack No. 1 Backpack"
+                  description:
+                    type: string
+                    example: "Your perfect pack for everyday use"
+                  price:
+                    type: number
+                    example: 109.95
+                  category:
+                    type: string
+                    example: "men's clothing"
+                  image:
+                    type: string
+                    format: uri
+                    example: "https://fakestoreapi.com/img/81fPKd-2AYL._AC_SL1500_.jpg"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
 
   /about:
     
@@ -136,6 +227,34 @@ paths:
         schema:
           type: integer
 
+    get:
+      tags:
+        - catalog
+      description: Retrieve details for a specific catalog by its ID
+      responses:
+        '200':
+          description: Details of the specified catalog
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/Catalog'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
     patch:
       tags:
         - catalog
@@ -202,39 +321,6 @@ paths:
         required: true
         schema:
           type: integer
-
-    get:
-      tags:
-        - catalog
-      description: Retrieve a list of all items within a specific catalog by its ID
-      parameters:
-        - $ref: './schemas/common.yaml#/Parameters/Limit'
-        - $ref: './schemas/common.yaml#/Parameters/Offset'
-      responses:
-        '200':
-          description: A list of items within the specified catalog
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: './schemas/catalog.yaml#/CatalogItem'
-        '400':
-          $ref: './schemas/common.yaml#/Responses/400Error'
-        '401':
-          $ref: './schemas/common.yaml#/Responses/401Error'
-        '403':
-          $ref: './schemas/common.yaml#/Responses/403Error'
-        '404':
-          $ref: './schemas/common.yaml#/Responses/404Error'
-        '409':
-          $ref: './schemas/common.yaml#/Responses/409Error'
-        '422':
-          $ref: './schemas/common.yaml#/Responses/422Error'
-        '500':
-          $ref: './schemas/common.yaml#/Responses/500Error'
-        '503':
-          $ref: './schemas/common.yaml#/Responses/503Error'
 
     post:
       tags:

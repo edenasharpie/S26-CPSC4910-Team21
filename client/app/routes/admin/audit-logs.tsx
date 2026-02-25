@@ -1,6 +1,6 @@
 import type { Route } from "./+types/audit-logs";
 import { useState } from "react";
-import { Table, Input, Button, Badge } from "~/components";
+import { Table, Input, Button, Badge, Alert } from "~/components";
 
 // TODO: replace with API calls
 const mockData = [

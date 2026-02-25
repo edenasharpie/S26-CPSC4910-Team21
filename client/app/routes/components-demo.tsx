@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Route } from "./+types/components-demo";
-import { Button, Input, Card, Modal, Table, Badge } from "~/components";
+import { Button, Input, Card, Modal, Table, Badge, Alert } from "~/components";
 
 // metadata?
 export function meta({}: Route.MetaArgs) {
@@ -231,6 +231,60 @@ export default function ComponentsDemo() {
                 data={[]}
                 columns={columns}
                 emptyMessage="Empty table content"
+              />
+            </div>
+          </div>
+        </Card>
+
+        {/* error/notification alerts */}
+        <Card title="Alert & Notification Components" variant="elevated">
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Alert Variants
+              </h4>
+              <div className="space-y-3">
+                <Alert 
+                  variant="error"
+                  title="Server Error"
+                  message="Failed to connect to the server. Please try again later."
+                />
+                <Alert 
+                  variant="warning"
+                  title="Warning"
+                  message="Your session will expire in 5 minutes."
+                />
+                <Alert 
+                  variant="info"
+                  message="New features are available! Check them out."
+                />
+                <Alert 
+                  variant="success"
+                  message="Changes saved successfully!"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Non-dismissible Alert
+              </h4>
+              <Alert 
+                variant="error"
+                message="Critical system error - contact support"
+                dismissible={false}
+              />
+            </div>
+
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                With Error Object (simulated)
+              </h4>
+              <Alert 
+                error={{
+                  message: "Network request failed",
+                  status: 500
+                }}
               />
             </div>
           </div>
