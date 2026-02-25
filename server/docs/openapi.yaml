@@ -34,6 +34,34 @@ tags:
 
 paths:
 
+  /about:
+    
+    get:
+      tags:
+        - about
+      description: Retrieve information about FleetScore, including its purpose, features, and team. No authentication required.
+      responses:
+        '200':
+          description: Information about FleetScore
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/about.yaml#/About'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
   /store/search:
     get:
       tags:
@@ -122,34 +150,6 @@ paths:
           $ref: './schemas/common.yaml#/Responses/404Error'
         '500':
           $ref: './schemas/common.yaml#/Responses/500Error'
-
-  /about:
-    
-    get:
-      tags:
-        - about
-      description: Retrieve information about FleetScore, including its purpose, features, and team. No authentication required.
-      responses:
-        '200':
-          description: Information about FleetScore
-          content:
-            application/json:
-              schema:
-                $ref: './schemas/about.yaml#/About'
-        '401':
-          $ref: './schemas/common.yaml#/Responses/401Error'
-        '403':
-          $ref: './schemas/common.yaml#/Responses/403Error'
-        '404':
-          $ref: './schemas/common.yaml#/Responses/404Error'
-        '409':
-          $ref: './schemas/common.yaml#/Responses/409Error'
-        '422':
-          $ref: './schemas/common.yaml#/Responses/422Error'
-        '500':
-          $ref: './schemas/common.yaml#/Responses/500Error'
-        '503':
-          $ref: './schemas/common.yaml#/Responses/503Error'
 
   /catalogs:
     
