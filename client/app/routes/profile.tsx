@@ -2,19 +2,20 @@
 import { useState, useEffect } from "react";
 import { useLoaderData, useActionData, Form, useSubmit } from "react-router";
 import type { Route } from "./+types/profile";
-import { Table, Input, Button, Badge } from "~/components";
+import { Table, Input, Button, Badge, Alert } from "~/components";
 //import { getUserById } from "../../../server/database/db";
 
 // 1. THE LOADER: This pulls real data from the DB before the page renders
 export async function loader({ params }: Route.LoaderArgs) {
   // In a real app, you'd get the ID from the session. 
   // For now, we are using ID 2 (Jane Smith) as per your mock.
-  const user = await fetch(`/api/users/${params.id}`); 
+  const response = await fetch(`/api/users/${params.id}`); 
   
-  if (!user) {
+  if (!response.ok) {
     throw new Response("User Not Found", { status: 404 });
   }
 
+  const user = await response.json();
   return { user };
 }
 
@@ -83,16 +84,21 @@ export default function ProfilePage() {
 
       {/* SUCCESS NOTIFICATION */}
       {successMessage && (
-        <div className="mb-6 p-4 bg-green-100 border-l-4 border-green-500 text-green-700 animate-pulse">
-          {successMessage}
-        </div>
+        <Alert 
+          variant="success" 
+          message={successMessage}
+          onDismiss={() => setSuccessMessage("")} 
+          className="mb-6"
+        />
       )}
 
       {/* ERROR NOTIFICATION */}
       {errorMessage && (
-        <div className="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700">
-          {errorMessage}
-        </div>
+        <Alert 
+          message={errorMessage}
+          onDismiss={() => setErrorMessage("")} 
+          className="mb-6"
+        />
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -105,7 +111,7 @@ export default function ProfilePage() {
               className="w-32 h-32 rounded-full mb-4 border-4 border-blue-500"
             />
             <h2 className="text-2xl font-bold">{displayName}</h2>
-            <Badge variant="outline" className="mt-2 text-blue-600 border-blue-600">
+            <Badge variant="info" className="mt-2">
               {user.account_type}
             </Badge>
             <p className="text-gray-500 mt-2 text-sm italic">
@@ -157,8 +163,8 @@ export default function ProfilePage() {
                 </Button>
               ) : (
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setIsEditingPassword(false)}>Cancel</Button>
-                  <Button size="sm" color="blue" onClick={handlePasswordChange}>Update Password</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setIsEditingPassword(false)}>Cancel</Button>
+                  <Button variant="primary" size="sm" onClick={handlePasswordChange}>Update Password</Button>
                 </div>
               )}
             </div>

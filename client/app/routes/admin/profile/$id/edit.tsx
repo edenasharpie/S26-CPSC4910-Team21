@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLoaderData, Form, redirect, useActionData } from "react-router";
 import type { Route } from "./+types/edit";
-import { Input, Button } from "~/components";
+import { Input, Button, Alert } from "~/components";
 
 // Ensure this path matches your working db.js
 // @ts-ignore
@@ -68,9 +68,7 @@ export default function EditUserProfile({ loaderData }: Route.ComponentProps) {
         </div>
 
         {actionData?.error && (
-          <div className="p-3 bg-red-100 text-red-700 rounded border border-red-200">
-            {actionData.error}
-          </div>
+          <Alert message={actionData.error} />
         )}
 
         <div className="grid gap-4 bg-white dark:bg-gray-900 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800">
@@ -108,7 +106,7 @@ export default function EditUserProfile({ loaderData }: Route.ComponentProps) {
               step="0.01"
               defaultValue={user.pointToDollarRatio || user.point_to_dollar_ratio} 
               disabled={!isEditing || !isSponsor} 
-              description={isEditing && !isSponsor ? "Only Sponsor accounts can modify this ratio." : ""}
+              helperText={isEditing && !isSponsor ? "Only Sponsor accounts can modify this ratio." : ""}
             />
           </div>
           
