@@ -1,8 +1,7 @@
 import type { Route } from "./+types/admin";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
-// Added 'Form', 'redirect', and 'useActionData'
-import { useNavigate, useLoaderData, Form, redirect, useActionData } from "react-router";
+import { useNavigate, useLoaderData, Form, useActionData } from "react-router";
 import { getAllUsers, createUser } from "../../../../server/src/db.js"; 
 
 export async function loader() {
@@ -17,16 +16,13 @@ export async function loader() {
   }
 }
 
-/**
- * SERVER-SIDE: Action
- * This handles the POST request from the "Add User" form.
- */
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const username = formData.get("username") as string;
   const firstName = formData.get("firstName") as string;
   const lastName = formData.get("lastName") as string;
   const accountType = formData.get("accountType") as string;
+  const licenseNumber = formData.get("licenseNumber") as string;
 
   try {
     await createUser({ 
@@ -34,9 +30,9 @@ export async function action({ request }: Route.ActionArgs) {
       FirstName: firstName, 
       LastName: lastName, 
       UserType: accountType,
-      ActiveStatus: 1 // Default to active
+      ActiveStatus: 1,
+      LicenseNumber: licenseNumber
     });
-    // This triggers the loader to re-run, updating your totals automatically!
     return { success: true };
   } catch (error: any) {
     return { error: error.message };
@@ -45,12 +41,12 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function AdminPortal() {
   const { users, error } = useLoaderData<typeof loader>();
-  const actionData = useActionData(); // Catch errors or success from the action
+  const actionData = useActionData(); 
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState("Driver");
   const navigate = useNavigate();
 
-  // Close modal when user is successfully created
   useEffect(() => {
     if (actionData?.success) {
       setIsAddUserOpen(false);
@@ -102,15 +98,16 @@ export default function AdminPortal() {
       header: "Actions",
       render: (user: any) => (
         <div className="flex gap-2">
-          {/* New Points Button */}
-          <Button
-            size="sm"
-            variant="primary"
-            className="bg-indigo-600 hover:bg-indigo-700"
-            onClick={() => navigate(`/admin/profile/${user.UserID}/points`)}
-          >
-            Points
-          </Button>
+          {user.UserType?.toLowerCase() === "driver" && (
+            <Button
+                size="sm"
+                variant="primary"
+                className="bg-indigo-600 hover:bg-indigo-700"
+                onClick={() => navigate(`/admin/profile/${user.UserID}/points`)}
+            >
+                Points
+            </Button>
+          )}
           <Button
             size="sm"
             variant="secondary"
@@ -127,7 +124,7 @@ export default function AdminPortal() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container-padding section-spacing">
         {(error || actionData?.error) && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-left">
             {error || actionData?.error}
           </div>
         )}
@@ -150,7 +147,6 @@ export default function AdminPortal() {
           </Button>
         </div>
 
-        {/* Stats Section - Dynamically calculated from users array */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard title="Total Users" value={users.length} color="text-gray-900" />
           <StatCard 
@@ -174,13 +170,11 @@ export default function AdminPortal() {
           <Table data={users} columns={columns} />
         </div>
 
-        {/* Add User Modal */}
         <Modal
           isOpen={isAddUserOpen}
           onClose={() => setIsAddUserOpen(false)}
           title="Add New User"
         >
-          {/* Using the React Router Form component */}
           <Form method="post" className="space-y-4">
             <Input label="Username" name="username" required />
             <div className="grid grid-cols-2 gap-4">
@@ -191,13 +185,25 @@ export default function AdminPortal() {
               <label className="text-sm font-medium mb-1 block text-left">Account Type</label>
               <select
                 name="accountType"
-                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2"
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-sm"
               >
                 <option value="Driver">Driver</option>
                 <option value="Sponsor">Sponsor</option>
                 <option value="Admin">Admin</option>
               </select>
             </div>
+
+            {selectedType === "Driver" && (
+                <Input 
+                    label="License Number" 
+                    name="licenseNumber" 
+                    placeholder="Required for point tracking" 
+                    required 
+                />
+            )}
+
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="ghost" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
               <Button type="submit" variant="primary">Create User</Button>

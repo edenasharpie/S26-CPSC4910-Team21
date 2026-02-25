@@ -41,14 +41,45 @@ export async function getAllUsers() {
   return rows;
 } 
 
-export async function createUser(user) {
-  const { Username, FirstName, LastName, UserType, ActiveStatus } = user;
-  const [result] = await pool.execute(
-    `INSERT INTO USERS (Username, FirstName, LastName, UserType, ActiveStatus) 
-     VALUES (?, ?, ?, ?, ?)`,
-    [Username, FirstName, LastName, UserType, ActiveStatus]
-  );
-  return result;
+export async function createUser(userData) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [userResult] = await connection.execute(
+      `INSERT INTO USERS (Username, FirstName, LastName, UserType, ActiveStatus) 
+       VALUES (?, ?, ?, ?, 1)`,
+      [userData.Username, userData.FirstName, userData.LastName, userData.UserType]
+    );
+
+    const newUserId = userResult.insertId;
+
+    console.log("Created UserID:", newUserId);
+    console.log("UserType received:", userData.UserType);
+
+    // 2️⃣ Normalize UserType check (prevents casing issues)
+    if (userData.UserType?.toLowerCase() === "admin") {
+
+      await connection.execute(
+        `INSERT INTO ADMINS (UserID) VALUES (?)`,
+        [newUserId]
+      );
+
+      console.log(`✅ Admin record successfully created for UserID: ${newUserId}`);
+    }
+
+    // 3. COMMIT is what makes it show up in Workbench
+    await connection.commit(); 
+    return { success: true };
+
+  } catch (error) {
+    await connection.rollback();
+    // This will tell us if there's a specific constraint error
+    console.error("DATABASE ERROR:", error.sqlMessage || error.message);
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 export async function updateUser(id, updates) {
