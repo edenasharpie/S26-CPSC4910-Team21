@@ -1,187 +1,104 @@
 import type { Route } from "./+types/admin";
 import { useState } from "react";
-import { Table, Input, Button, Badge, Modal} from "~/components";
-import { useLoaderData, useNavigate } from "react-router";
-import { getAllUsers } from "../../../../server/src/db.js";
+import { Table, Input, Button, Badge, Modal } from "~/components";
+import { useNavigate, useLoaderData } from "react-router";
+// Import your DB functions - Ensure this path correctly points to your db.js
+import { getAllUsers } from "../../../../server/src/db.js"; 
 
-// mock user data
-// TODO: replace with real data
-interface DBUser {
-  UserID: string;
-  Username: string;
-  FirstName: string;
-  LastName: string;
-  UserType: string;
-  Email?: string;
-}
-
+/**
+ * SERVER-SIDE: Loader
+ * This runs only on the server to fetch data before the page loads.
+ */
 export async function loader() {
   try {
     const users = await getAllUsers();
-    return { users: users as DBUser[] };
-  } catch (error) {
-    console.error("Database fetch failed:", error);
-    return { users: [], error: "Failed to load users" };
+    return { users: users || [], error: null };
+  } catch (error: any) {
+    // This will show the actual SQL error on your screen
+    return { users: [], error: `DB Error: ${error.message}` };
   }
 }
 
-const mockUsers = [
-  {
-    id: 1,
-    username: "johndoe",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=johndoe",
-    firstName: "John",
-    lastName: "Doe",
-    accountType: "Driver",
-  },
-  {
-    id: 2,
-    username: "janesmith",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=janesmith",
-    firstName: "Jane",
-    lastName: "Smith",
-    accountType: "Sponsor",
-  },
-  {
-    id: 3,
-    username: "bobwilson",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=bobwilson",
-    firstName: "Bob",
-    lastName: "Wilson",
-    accountType: "Admin",
-  },
-  {
-    id: 4,
-    username: "alicejones",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=alicejones",
-    firstName: "Alice",
-    lastName: "Jones",
-    accountType: "Driver",
-  },
-  {
-    id: 5,
-    username: "charliebrwn",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=charliebrwn",
-    firstName: "Charlie",
-    lastName: "Brown",
-    accountType: "Sponsor",
-  },
-];
-
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Admin Portal" },
+    { title: "Admin Portal | FleetScore" },
     { name: "description", content: "Manage users in the FleetScore system" },
   ];
 }
 
 export default function AdminPortal() {
-  const { users } = useLoaderData<typeof loader>()
+  const { users, error } = useLoaderData<typeof loader>();
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
 
-  // map badge variants to account types
-  const getAccountTypeBadge = (accountType: string) => {
-    switch (accountType) {
-      case "Admin":
-        return <Badge variant="danger">{accountType}</Badge>;
-      case "Sponsor":
-        return <Badge variant="info">{accountType}</Badge>;
-      case "Driver":
-        return <Badge variant="success">{accountType}</Badge>;
+  // Map SQL 'UserType' to Badge variants
+  const getAccountTypeBadge = (userType: string) => {
+    const type = userType?.toLowerCase() || "";
+    switch (type) {
+      case "admin":
+        return <Badge variant="danger">Admin</Badge>;
+      case "sponsor":
+        return <Badge variant="info">Sponsor</Badge>;
+      case "driver":
+        return <Badge variant="success">Driver</Badge>;
       default:
-        return <Badge variant="default">{accountType}</Badge>;
+        return <Badge variant="default">{userType || "N/A"}</Badge>;
     }
   };
 
-  // table columns setup
+  // Setup Table columns to match your SQL Column Names
   const columns = [
     {
-      key: "profilePicture",
+      key: "Avatar",
       header: "Avatar",
-      render: (user: typeof mockUsers[0]) => (
+      render: (user: any) => (
         <img
-          src={user.profilePicture}
-          alt={`${user.username}'s avatar`}
+          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`}
+          alt="avatar"
           className="w-10 h-10 rounded-full"
         />
       ),
     },
     {
-      key: "name",
+      key: "Name",
       header: "User",
       render: (user: any) => (
         <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-900 dark:text-white">
-              {user.firstName} {user.lastName}
-            </span>
-            {user.accountType === "sponsor" && (
-              <Badge
-                variant="info"
-                size="sm"
-                className="px-2 py-0.5 font-bold uppercase tracking-widest text-[10px]"
-              >
-                Sponsor
-              </Badge>
-            )}
-          </div>
-          <span className="text-xs text-gray-500">{user.email}</span>
+          <span className="font-medium text-gray-900 dark:text-white">
+            {user.FirstName} {user.LastName}
+          </span>
+          <span className="text-xs text-gray-500">{user.Email || "No Email"}</span>
         </div>
       ),
     },
     {
-      key: "username",
+      key: "Username",
       header: "Username",
-      render: (user: typeof mockUsers[0]) => (
-        <span className="font-medium">{user.username}</span>
-      ),
     },
     {
-      key: "firstName",
-      header: "First Name",
-    },
-    {
-      key: "lastName",
-      header: "Last Name",
-    },
-    {
-      key: "accountType",
+      key: "UserType",
       header: "Account Type",
-      render: (user: typeof mockUsers[0]) => getAccountTypeBadge(user.accountType),
+      render: (user: any) => getAccountTypeBadge(user.UserType),
     },
     {
       key: "actions",
       header: "Actions",
-      render: (user: typeof mockUsers[0]) => (
+      render: (user: any) => (
         <div className="flex gap-2">
           <Button
             size="sm"
-            variant="ghost"
-            onClick={(e) => {
-              e.stopPropagation();
-              alert(`View details for ${user.username}`);
-            }}
-          >
-            View
-          </Button>
-          <Button
-            size="sm"
             variant="secondary"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/admin/profile/${user.id}`);
-            }}
+            onClick={() => navigate(`/admin/profile/${user.UserID}`)}
           >
             Edit
           </Button>
           <Button
             size="sm"
             variant="danger"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm(`Are you sure you want to delete ${user.username}?`)) {
-                alert(`Delete user ${user.username}`);
+            onClick={() => {
+              if (confirm(`Delete ${user.Username}?`)) {
+                // Future: Add form submission to a React Router 'action'
+                console.log("Delete ID:", user.UserID);
               }
             }}
           >
@@ -192,40 +109,15 @@ export default function AdminPortal() {
     },
   ];
 
-  // state for user creation
+  // State for user creation modal
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [form, setForm] = useState({
     username: "",
     firstName: "",
     lastName: "",
-    accountType: "Driver" as "Admin" | "Driver" | "Sponsor",
+    accountType: "Driver",
   });
-
-  type CreateUserPayload = {
-    username: string;
-    firstName: string;
-    lastName: string;
-    accountType: "Admin" | "Driver" | "Sponsor";
-  };
-  // backend call for creating a new user, and dialogue completetion trigger
-  async function createUser(payload: CreateUserPayload) {
-    const response = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message ?? "Failed to create user");
-    }
-
-    return response.json();
-  }
 
   async function handleCreateUser() {
     if (!form.username || !form.firstName || !form.lastName) {
@@ -235,23 +127,19 @@ export default function AdminPortal() {
 
     try {
       setIsSubmitting(true);
-
-      await createUser({
-        username: form.username,
-        firstName: form.firstName,
-        lastName: form.lastName,
-        accountType: form.accountType,
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
       });
+
+      if (!response.ok) throw new Error("Failed to create user");
 
       setIsAddUserOpen(false);
-      setForm({
-        username: "",
-        firstName: "",
-        lastName: "",
-        accountType: "Driver",
-      });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to create user");
+      setForm({ username: "", firstName: "", lastName: "", accountType: "Driver" });
+      navigate(".", { replace: true }); // Refresh data
+    } catch (err: any) {
+      alert(err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -260,12 +148,17 @@ export default function AdminPortal() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container-padding section-spacing">
-        {/* Header */}
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
+
         <div className="mb-8">
-          <h1 className="mb-2">Admin Portal</h1>
+          <h1 className="mb-2 text-2xl font-bold">Admin Portal</h1>
         </div>
 
-        {/* search */}
+        {/* Search & Actions */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="w-full sm:w-96">
             <Input
@@ -273,122 +166,79 @@ export default function AdminPortal() {
               placeholder="Search users..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              disabled
-              helperText="Search functionality will be implemented in a future update"
+              helperText="Searching local database records"
             />
           </div>
           <div className="flex gap-2">
             <Button variant="primary" onClick={() => setIsAddUserOpen(true)}>
               Add User
             </Button>
-            <Button variant="secondary">Export</Button>
           </div>
         </div>
 
-        {/* stats cards */}
+        {/* Stats Section */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="card p-6">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Users</div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {mockUsers.length}
-            </div>
-          </div>
-          <div className="card p-6">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Drivers</div>
-            <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-              {mockUsers.filter((u) => u.accountType === "Driver").length}
-            </div>
-          </div>
-          <div className="card p-6">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Sponsors</div>
-            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-              {mockUsers.filter((u) => u.accountType === "Sponsor").length}
-            </div>
-          </div>
-          <div className="card p-6">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Admins</div>
-            <div className="text-3xl font-bold text-red-600 dark:text-red-400">
-              {mockUsers.filter((u) => u.accountType === "Admin").length}
-            </div>
-          </div>
+          <StatCard title="Total Users" value={users.length} color="text-gray-900" />
+          <StatCard 
+            title="Drivers" 
+            value={users.filter((u: any) => u.UserType === "Driver").length} 
+            color="text-green-600" 
+          />
+          <StatCard 
+            title="Sponsors" 
+            value={users.filter((u: any) => u.UserType === "Sponsor").length} 
+            color="text-blue-600" 
+          />
+          <StatCard 
+            title="Admins" 
+            value={users.filter((u: any) => u.UserType === "Admin").length} 
+            color="text-red-600" 
+          />
         </div>
 
-        {/* users table */}
-        <Table
-          data={mockUsers}
-          columns={columns}
-          onRowClick={(user) => {
-            console.log("Row clicked:", user);
-          }}
-        />
+        {/* Real Data Table */}
+        <div className="card overflow-hidden">
+          <Table data={users} columns={columns} />
+        </div>
 
-        {/* create-new-user dialogue */}
+        {/* Add User Modal */}
         <Modal
           isOpen={isAddUserOpen}
           onClose={() => setIsAddUserOpen(false)}
-          title="Add User"
-          size="md"
+          title="Add New User"
           footer={
             <div className="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setIsAddUserOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleCreateUser}
-                isLoading={isSubmitting}
-              >
+              <Button variant="ghost" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
+              <Button variant="primary" onClick={handleCreateUser} isLoading={isSubmitting}>
                 Create User
               </Button>
             </div>
           }
         >
-          <div>
+          <div className="space-y-4">
             <Input
               label="Username"
               value={form.username}
-              onChange={(e) =>
-                setForm({ ...form, username: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
             />
-            <div className="w-full">
+            <div className="grid grid-cols-2 gap-4">
               <Input
                 label="First Name"
                 value={form.firstName}
-                onChange={(e) =>
-                  setForm({ ...form, firstName: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              />
+              <Input
+                label="Last Name"
+                value={form.lastName}
+                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
               />
             </div>
-            <div className="w-full">
-            <Input
-              label="Last Name"
-              value={form.lastName}
-              onChange={(e) =>
-                setForm({ ...form, lastName: e.target.value })
-              }
-            />
-            </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Account Type
-              </label>
+              <label className="text-sm font-medium mb-1 block">Account Type</label>
               <select
-                className="mt-1 w-full rounded-md border bg-transparent p-2"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2"
                 value={form.accountType}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    accountType: e.target.value as
-                      | "Admin"
-                      | "Driver"
-                      | "Sponsor",
-                  })
-                }
+                onChange={(e) => setForm({ ...form, accountType: e.target.value })}
               >
                 <option value="Driver">Driver</option>
                 <option value="Sponsor">Sponsor</option>
@@ -398,6 +248,16 @@ export default function AdminPortal() {
           </div>
         </Modal>
       </div>
+    </div>
+  );
+}
+
+// Simple Helper Component for Stats
+function StatCard({ title, value, color }: { title: string; value: number; color: string }) {
+  return (
+    <div className="card p-6 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-lg">
+      <div className="text-sm text-gray-500 mb-1">{title}</div>
+      <div className={`text-3xl font-bold ${color}`}>{value}</div>
     </div>
   );
 }

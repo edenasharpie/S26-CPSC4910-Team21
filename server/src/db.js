@@ -1,9 +1,13 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
-import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import fs from 'fs';
 
-dotenv.config();
-dotenv.config({ path: path.resolve(process.cwd(), '../..', '.fs-env') });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+join(__dirname, '../../../fs-env');
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -11,11 +15,9 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   port: Number(process.env.DB_PORT) || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  connectTimeout: 10000
 });
+
+export { pool };
 
 // Use named exports for ESM compatibility
 export const query = async (sql, params) => {
