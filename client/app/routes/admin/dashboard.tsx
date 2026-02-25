@@ -18,20 +18,14 @@ export async function loader() {
 
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
-  const username = formData.get("username") as string;
-  const firstName = formData.get("firstName") as string;
-  const lastName = formData.get("lastName") as string;
-  const accountType = formData.get("accountType") as string;
-  const licenseNumber = formData.get("licenseNumber") as string;
-
   try {
     await createUser({ 
-      Username: username, 
-      FirstName: firstName, 
-      LastName: lastName, 
-      UserType: accountType,
+      Username: formData.get("username") as string, 
+      FirstName: formData.get("firstName") as string, 
+      LastName: formData.get("lastName") as string, 
+      UserType: formData.get("accountType") as string,
       ActiveStatus: 1,
-      LicenseNumber: licenseNumber
+      LicenseNumber: formData.get("licenseNumber") as string
     });
     return { success: true };
   } catch (error: any) {
@@ -48,9 +42,7 @@ export default function AdminPortal() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (actionData?.success) {
-      setIsAddUserOpen(false);
-    }
+    if (actionData?.success) setIsAddUserOpen(false);
   }, [actionData]);
 
   const getAccountTypeBadge = (userType: string) => {
@@ -83,7 +75,7 @@ export default function AdminPortal() {
           <span className="font-medium text-gray-900 dark:text-white">
             {user.FirstName} {user.LastName}
           </span>
-          <span className="text-xs text-gray-500">{user.Email || "No Email"}</span>
+          <span className="text-xs text-gray-500">{user.Username}</span>
         </div>
       ),
     },
@@ -99,22 +91,9 @@ export default function AdminPortal() {
       render: (user: any) => (
         <div className="flex gap-2">
           {user.UserType?.toLowerCase() === "driver" && (
-            <Button
-                size="sm"
-                variant="primary"
-                className="bg-indigo-600 hover:bg-indigo-700"
-                onClick={() => navigate(`/admin/profile/${user.UserID}/points`)}
-            >
-                Points
-            </Button>
+            <Button size="sm" variant="primary" className="bg-indigo-600" onClick={() => navigate(`/admin/profile/${user.UserID}/points`)}>Points</Button>
           )}
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => navigate(`/admin/profile/${user.UserID}`)}
-          >
-            Edit
-          </Button>
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/admin/profile/${user.UserID}`)}>Edit</Button>
         </div>
       ),
     },
@@ -124,9 +103,7 @@ export default function AdminPortal() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container-padding section-spacing">
         {(error || actionData?.error) && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-left">
-            {error || actionData?.error}
-          </div>
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-left">{error || actionData?.error}</div>
         )}
 
         <div className="mb-8 text-left">
@@ -135,46 +112,26 @@ export default function AdminPortal() {
 
         <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="w-full sm:w-96">
-            <Input
-              type="search"
-              placeholder="Search users..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <Input type="search" placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
-          <Button variant="primary" onClick={() => setIsAddUserOpen(true)}>
-            Add User
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => navigate("/admin/invoices")}>View Invoices</Button>
+            <Button variant="primary" onClick={() => setIsAddUserOpen(true)}>Add User</Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard title="Total Users" value={users.length} color="text-gray-900" />
-          <StatCard 
-            title="Drivers" 
-            value={users.filter((u: any) => u.UserType?.toLowerCase() === "driver").length} 
-            color="text-green-600" 
-          />
-          <StatCard 
-            title="Sponsors" 
-            value={users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor").length} 
-            color="text-blue-600" 
-          />
-          <StatCard 
-            title="Admins" 
-            value={users.filter((u: any) => u.UserType?.toLowerCase() === "admin").length} 
-            color="text-red-600" 
-          />
+          <StatCard title="Drivers" value={users.filter((u: any) => u.UserType?.toLowerCase() === "driver").length} color="text-green-600" />
+          <StatCard title="Sponsors" value={users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor").length} color="text-blue-600" />
+          <StatCard title="Admins" value={users.filter((u: any) => u.UserType?.toLowerCase() === "admin").length} color="text-red-600" />
         </div>
 
         <div className="card overflow-hidden">
-          <Table data={users} columns={columns} />
+          <Table data={users.filter((u: any) => u.Username.toLowerCase().includes(searchQuery.toLowerCase()))} columns={columns} />
         </div>
 
-        <Modal
-          isOpen={isAddUserOpen}
-          onClose={() => setIsAddUserOpen(false)}
-          title="Add New User"
-        >
+        <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add New User">
           <Form method="post" className="space-y-4">
             <Input label="Username" name="username" required />
             <div className="grid grid-cols-2 gap-4">
@@ -183,27 +140,13 @@ export default function AdminPortal() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block text-left">Account Type</label>
-              <select
-                name="accountType"
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-sm"
-              >
+              <select name="accountType" value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="w-full rounded-md border p-2 text-sm bg-white dark:bg-gray-800">
                 <option value="Driver">Driver</option>
                 <option value="Sponsor">Sponsor</option>
                 <option value="Admin">Admin</option>
               </select>
             </div>
-
-            {selectedType === "Driver" && (
-                <Input 
-                    label="License Number" 
-                    name="licenseNumber" 
-                    placeholder="Required for point tracking" 
-                    required 
-                />
-            )}
-
+            {selectedType === "Driver" && <Input label="License Number" name="licenseNumber" required />}
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="ghost" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
               <Button type="submit" variant="primary">Create User</Button>

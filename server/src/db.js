@@ -252,5 +252,25 @@ export async function updatePointTransaction(transactionId, newPoints, newReason
   }
 }
 
+export async function getAllPointTransactions() {
+  const [rows] = await pool.execute(`
+    SELECT 
+      pt.TransactionID,
+      pt.DriverID, -- This is the LicenseNumber
+      d.UserID AS DriverUserID,
+      u.FirstName,
+      u.LastName,
+      pt.UserChanged AS AdminUserID,
+      pt.PointChange,
+      pt.ReasonForChange,
+      DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') as TimeChanged
+    FROM POINT_TRANSACTIONS pt
+    JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
+    JOIN USERS u ON d.UserID = u.UserID
+    ORDER BY pt.TimeChanged DESC
+  `);
+  return rows;
+}
+
 export { pool }; // Only one export { pool } at the bottom
 
