@@ -12,9 +12,12 @@ import { getAllUsers } from "../../../../server/src/db.js";
 export async function loader() {
   try {
     const users = await getAllUsers();
-    return { users: users || [], error: null };
+    console.log("DB Result:", users[0]); 
+    return { 
+      users: Array.isArray(users) ? users : [],
+      error: null 
+    };
   } catch (error: any) {
-    // This will show the actual SQL error on your screen
     return { users: [], error: `DB Error: ${error.message}` };
   }
 }

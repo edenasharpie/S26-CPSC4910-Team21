@@ -27,20 +27,20 @@ export const query = async (sql, params) => {
 
 // Example of the function your loader needs
 export const getUserById = async (id) => {
-  const [rows] = await pool.execute('SELECT * FROM users WHERE id = ?', [id]);
+  const [rows] = await pool.execute('SELECT * FROM USERS WHERE id = ?', [id]);
   return rows[0];
 };
 
 // In your server/src/db.js
 export async function getAllUsers() {
-  const [rows] = await pool.execute('SELECT * FROM users');
+  const [rows] = await pool.execute('SELECT * FROM USERS');
   return rows;
 };
 
 export async function updateUser(id, updates) {
   const { username, displayName, email, accountType, pointToDollarRatio } = updates;
   const [result] = await pool.execute(
-    `UPDATE users 
+    `UPDATE USERS 
      SET username = ?, displayName = ?, email = ?, accountType = ?, point_to_dollar_ratio = ? 
      WHERE id = ?`,
     [username, displayName, email, accountType, pointToDollarRatio, id]
