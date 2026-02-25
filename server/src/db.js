@@ -25,9 +25,15 @@ export const query = async (sql, params) => {
   return { rows };
 };
 
-// Example of the function your loader needs
 export const getUserById = async (id) => {
-  const [rows] = await pool.execute('SELECT * FROM USERS WHERE id = ?', [id]);
+  // We cast dates to strings directly in SQL to prevent React hydration errors
+  const [rows] = await pool.execute(
+    `SELECT *, 
+     DATE_FORMAT(LastLogin, '%Y-%m-%d %H:%i:%s') as LastLogin, 
+     DATE_FORMAT(LastPasswordChange, '%Y-%m-%d %H:%i:%s') as LastPasswordChange 
+     FROM USERS WHERE UserID = ?`, 
+    [id]
+  );
   return rows[0];
 };
 
@@ -38,12 +44,22 @@ export async function getAllUsers() {
 };
 
 export async function updateUser(id, updates) {
-  const { username, displayName, email, accountType, pointToDollarRatio } = updates;
+  const { 
+    Username, Email, Phone, PassHash, 
+    FirstName, MiddleName, LastName, 
+    Pronouns, ProfilePicture, Bio, 
+    UserType, ActiveStatus 
+  } = updates;
+
   const [result] = await pool.execute(
     `UPDATE USERS 
-     SET username = ?, displayName = ?, email = ?, accountType = ?, point_to_dollar_ratio = ? 
-     WHERE id = ?`,
-    [username, displayName, email, accountType, pointToDollarRatio, id]
+     SET Username = ?, Email = ?, Phone = ?, PassHash = ?, 
+         FirstName = ?, MiddleName = ?, LastName = ?, 
+         Pronouns = ?, ProfilePicture = ?, Bio = ?, 
+         UserType = ?, ActiveStatus = ? 
+     WHERE UserID = ?`,
+    [Username, Email, Phone, PassHash, FirstName, MiddleName, LastName, 
+     Pronouns, ProfilePicture, Bio, UserType, ActiveStatus, id]
   );
   return result;
 };
