@@ -1,7 +1,10 @@
 import crypto from "crypto";
+import { recordAuditEntry } from './audit.ts';
 
 const ALGORITHM = 'aes-256-cbc';
-const KEY = Buffer.from("abcdef0123456789abcdef0123456789"); // TODO: Populate (and move it to environment variable?)
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY 
+    ? Buffer.from(process.env.ENCRYPTION_KEY, 'hex') 
+    : Buffer.from("abcdef0123456789abcdef0123456789");
 const IV_LENGTH = 16;
 
 // Use a salted SHA-256 hash for password storage. Format: <saltHex>:<hashHex>
@@ -23,7 +26,7 @@ export async function hashPassword(plain: string): Promise<string> {
 // Function to hash new private data
 export function encryptPrivateData(text: string): string {
     const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
+    const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
 
     let encrypted = cipher.update(text);
     encrypted = Buffer.concat([encrypted, cipher.final()]);
@@ -39,7 +42,7 @@ export function decryptPrivateData(encryptedText: string): string {
     const iv = Buffer.from(ivHex, 'hex');
     const encrypted = Buffer.from(dataHex, 'hex');
 
-    const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
     let decrypted = decipher.update(encrypted);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
 
@@ -59,3 +62,46 @@ export async function isOldPassword(
     }
     return false;
 }
+
+export async function authenticateUser(
+    pool: any, 
+    username: string, 
+    password: string, 
+    ipAddress: string = '0.0.0.0'
+) {
+    try {
+        // Fetch User
+        const [rows]: any = await pool.execute(
+            'SELECT UserID, PassHash, UserType FROM USERS WHERE Username = ?', 
+            [username]
+        );
+        const user = rows[0];
+
+        if (!user) {
+            console.log(`>>> No user found for: ${username}. Logging failure.`);
+            await recordAuditEntry(pool, null, 'LOGIN_ATTEMPT', 'FAILURE', ipAddress);
+            return { success: false, message: "Invalid credentials", status: 401 };
+        }
+
+        // Verify password
+        const isValid = await verifyPassword(password, user.password_hash);
+
+        if (isValid) {
+            // LOG SUCCESS
+            await recordAuditEntry(pool, user.UserID, 'LOGIN_ATTEMPT', 'SUCCESS', ipAddress);
+            return { 
+                success: true, 
+                data: { userId: user.UserID, role: user.account_type }, 
+                status: 200 
+            };
+        } else {
+            // LOG FAILURE
+            await recordAuditEntry(pool, user.UserID, 'LOGIN_ATTEMPT', 'FAILURE', ipAddress);
+            return { success: false, message: "Invalid credentials", status: 401 };
+        }
+    } catch (error) {
+        console.error("Auth System Error:", error);
+        return { success: false, message: "Internal server error", status: 500 };
+    }
+}
+

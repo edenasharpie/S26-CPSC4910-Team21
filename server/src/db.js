@@ -1,9 +1,15 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
-import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 dotenv.config();
-dotenv.config({ path: path.resolve(process.cwd(), '../..', '.fs-env') });
+//dotenv.config({ path: path.resolve(process.cwd(), '../..', '.fs-env') });
+dotenv.config({ path: resolve(__dirname, '../../.fs-env') });
+
+console.log("Connecting to DB Host:", process.env.DB_HOST || "NOT FOUND");
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,

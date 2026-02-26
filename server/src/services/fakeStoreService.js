@@ -1,4 +1,5 @@
-const axios = require('axios');
+//const axios = require('axios');
+import axios from 'axios';
 
 const BASE_URL = 'https://fakestoreapi.com';
 
@@ -53,4 +54,7 @@ class FakeStoreService {
   }
 }
 
-module.exports = new FakeStoreService();
+//module.exports = new FakeStoreService();
+
+const store = new FakeStoreService();
+export default store;

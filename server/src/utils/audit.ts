@@ -1,14 +1,12 @@
 // Helper function to record activity into audit logs
-export async function recordAuditEntry(
-  pool: any, 
-  userId: number, 
-  action: 'LOGIN_ATTEMPT' | 'PASSWORD_CHANGE' | 'ACCOUNT_LOCK',
-  status: 'SUCCESS' | 'FAILURE',
-  details?: string
-) {
-  const query = `
-    INSERT INTO AUDIT_LOGS (UserID, ActionType, Status, Details, CreatedAt)
-    VALUES (?, ?, ?, ?, NOW())
-  `;
-  await pool.execute(query, [userId, action, status, details]);
+export async function recordAuditEntry(pool: any, userId: number | null, action: string, status: string, ip: string) {
+    try {
+        await pool.execute(
+            'INSERT INTO AUDIT_LOGS (UserID, ActionType, Status, IPAddress) VALUES (?, ?, ?, ?)',
+            [userId, action, status, ip]
+        );
+        console.log(`Audit Log Created: ${action} - ${status}`);
+    } catch (err) {
+        console.error("CRITICAL: Failed to write to Audit Log:", err);
+    }
 }

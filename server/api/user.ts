@@ -98,7 +98,7 @@ export async function updateProfile(
 /**
  * POST /api/user/change-password
  */
-export async function changeUserPassword(
+export async function changePasswordWithHistory(
   pool: any,
   userId: number,
   currentPassword: string,
