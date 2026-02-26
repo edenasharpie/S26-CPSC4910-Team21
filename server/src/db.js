@@ -15,8 +15,12 @@ if (result.error) {
   console.log('Environment variables loaded successfully');
 }
 
+console.log('--- DB Config Check ---');
+console.log('Host from env:', process.env.DB_HOST);
+console.log('User from env:', process.env.DB_USER);
+
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
+  host: process.env.DB_HOST || 'MISSING_HOST',
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
