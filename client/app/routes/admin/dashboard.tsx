@@ -1,382 +1,168 @@
 import type { Route } from "./+types/admin";
-import { useState } from "react";
-import { Table, Input, Button, Badge, Modal, Alert} from "~/components";
-import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { Table, Input, Button, Badge, Modal, Alert } from "~/components";
+import { useNavigate, useLoaderData, Form, useActionData } from "react-router";
+import { getAllUsers, createUser } from "../../../../server/src/db.js"; 
 
-// mock user data
-// TODO: replace with real data
-const mockUsers = [
-  {
-    id: 1,
-    username: "johndoe",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=johndoe",
-    firstName: "John",
-    lastName: "Doe",
-    accountType: "Driver",
-  },
-  {
-    id: 2,
-    username: "janesmith",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=janesmith",
-    firstName: "Jane",
-    lastName: "Smith",
-    accountType: "Sponsor",
-  },
-  {
-    id: 3,
-    username: "bobwilson",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=bobwilson",
-    firstName: "Bob",
-    lastName: "Wilson",
-    accountType: "Admin",
-  },
-  {
-    id: 4,
-    username: "alicejones",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=alicejones",
-    firstName: "Alice",
-    lastName: "Jones",
-    accountType: "Driver",
-  },
-  {
-    id: 5,
-    username: "charliebrwn",
-    profilePicture: "https://api.dicebear.com/7.x/avataaars/svg?seed=charliebrwn",
-    firstName: "Charlie",
-    lastName: "Brown",
-    accountType: "Sponsor",
-  },
-];
+export async function loader() {
+  try {
+    const users = await getAllUsers();
+    return { 
+      users: Array.isArray(users) ? users : [],
+      error: null 
+    };
+  } catch (error: any) {
+    return { users: [], error: `DB Error: ${error.message}` };
+  }
+}
 
-export function meta({}: Route.MetaArgs) {
-  return [
-    { title: "Admin Portal" },
-    { name: "description", content: "Manage users in the FleetScore system" },
-  ];
+export async function action({ request }: Route.ActionArgs) {
+  const formData = await request.formData();
+  try {
+    await createUser({ 
+      Username: formData.get("username") as string, 
+      FirstName: formData.get("firstName") as string, 
+      LastName: formData.get("lastName") as string, 
+      UserType: formData.get("accountType") as string,
+      ActiveStatus: 1,
+      LicenseNumber: formData.get("licenseNumber") as string
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 }
 
 export default function AdminPortal() {
+  const { users, error } = useLoaderData<typeof loader>();
+  const actionData = useActionData(); 
   const [searchQuery, setSearchQuery] = useState("");
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState("Driver");
   const navigate = useNavigate();
 
-  // map badge variants to account types
-  const getAccountTypeBadge = (accountType: string) => {
-    switch (accountType) {
-      case "Admin":
-        return <Badge variant="danger">{accountType}</Badge>;
-      case "Sponsor":
-        return <Badge variant="info">{accountType}</Badge>;
-      case "Driver":
-        return <Badge variant="success">{accountType}</Badge>;
-      default:
-        return <Badge variant="default">{accountType}</Badge>;
+  useEffect(() => {
+    if (actionData?.success) setIsAddUserOpen(false);
+  }, [actionData]);
+
+  const getAccountTypeBadge = (userType: string) => {
+    const type = userType?.toLowerCase() || "";
+    switch (type) {
+      case "admin": return <Badge variant="danger">Admin</Badge>;
+      case "sponsor": return <Badge variant="info">Sponsor</Badge>;
+      case "driver": return <Badge variant="success">Driver</Badge>;
+      default: return <Badge variant="default">{userType || "N/A"}</Badge>;
     }
   };
 
-  // table columns setup
   const columns = [
     {
-      key: "profilePicture",
+      key: "Avatar",
       header: "Avatar",
-      render: (user: typeof mockUsers[0]) => (
+      render: (user: any) => (
         <img
-          src={user.profilePicture}
-          alt={`${user.username}'s avatar`}
+          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`}
+          alt="avatar"
           className="w-10 h-10 rounded-full"
         />
       ),
     },
     {
-      key: "name",
+      key: "Name",
       header: "User",
       render: (user: any) => (
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-900 dark:text-white">
-              {user.firstName} {user.lastName}
-            </span>
-            {user.accountType === "sponsor" && (
-              <Badge
-                variant="info"
-                size="sm"
-                className="px-2 py-0.5 font-bold uppercase tracking-widest text-[10px]"
-              >
-                Sponsor
-              </Badge>
-            )}
-          </div>
-          <span className="text-xs text-gray-500">{user.email}</span>
+        <div className="flex flex-col text-left">
+          <span className="font-medium text-gray-900 dark:text-white">
+            {user.FirstName} {user.LastName}
+          </span>
+          <span className="text-xs text-gray-500">{user.Username}</span>
         </div>
       ),
     },
+    { key: "Username", header: "Username" },
     {
-      key: "username",
-      header: "Username",
-      render: (user: typeof mockUsers[0]) => (
-        <span className="font-medium">{user.username}</span>
-      ),
-    },
-    {
-      key: "firstName",
-      header: "First Name",
-    },
-    {
-      key: "lastName",
-      header: "Last Name",
-    },
-    {
-      key: "accountType",
+      key: "UserType",
       header: "Account Type",
-      render: (user: typeof mockUsers[0]) => getAccountTypeBadge(user.accountType),
+      render: (user: any) => getAccountTypeBadge(user.UserType),
     },
     {
       key: "actions",
       header: "Actions",
-      render: (user: typeof mockUsers[0]) => (
+      render: (user: any) => (
         <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={(e) => {
-              e.stopPropagation();
-              alert(`View details for ${user.username}`);
-            }}
-          >
-            View
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/admin/profile/${user.id}`);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            size="sm"
-            variant="danger"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm(`Are you sure you want to delete ${user.username}?`)) {
-                alert(`Delete user ${user.username}`);
-              }
-            }}
-          >
-            Delete
-          </Button>
+          {user.UserType?.toLowerCase() === "driver" && (
+            <Button size="sm" variant="primary" className="bg-indigo-600" onClick={() => navigate(`/admin/profile/${user.UserID}/points`)}>Points</Button>
+          )}
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/admin/profile/${user.UserID}`)}>Edit</Button>
         </div>
       ),
     },
   ];
 
-  // state for user creation
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const [form, setForm] = useState({
-    username: "",
-    firstName: "",
-    lastName: "",
-    accountType: "Driver" as "Admin" | "Driver" | "Sponsor",
-  });
-
-  type CreateUserPayload = {
-    username: string;
-    firstName: string;
-    lastName: string;
-    accountType: "Admin" | "Driver" | "Sponsor";
-  };
-  // backend call for creating a new user, and dialogue completetion trigger
-  async function createUser(payload: CreateUserPayload) {
-    const response = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message ?? "Failed to create user");
-    }
-
-    return response.json();
-  }
-
-  async function handleCreateUser() {
-    if (!form.username || !form.firstName || !form.lastName) {
-      alert("All fields are required");
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-
-      await createUser({
-        username: form.username,
-        firstName: form.firstName,
-        lastName: form.lastName,
-        accountType: form.accountType,
-      });
-
-      setIsAddUserOpen(false);
-      setForm({
-        username: "",
-        firstName: "",
-        lastName: "",
-        accountType: "Driver",
-      });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to create user");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container-padding section-spacing">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="mb-2">Admin Portal</h1>
+        {(error || actionData?.error) && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-left">{error || actionData?.error}</div>
+        )}
+
+        <div className="mb-8 text-left">
+          <h1 className="mb-2 text-2xl font-bold">Admin Portal</h1>
         </div>
 
-        {/* search */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
           <div className="w-full sm:w-96">
-            <Input
-              type="search"
-              placeholder="Search users..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              disabled
-              helperText="Search functionality will be implemented in a future update"
-            />
+            <Input type="search" placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           <div className="flex gap-2">
-            <Button variant="primary" onClick={() => setIsAddUserOpen(true)}>
-              Add User
-            </Button>
-            <Button variant="secondary">Export</Button>
+            <Button variant="secondary" onClick={() => navigate("/admin/invoices")}>View Invoices</Button>
+            <Button variant="primary" onClick={() => setIsAddUserOpen(true)}>Add User</Button>
           </div>
         </div>
 
-        {/* stats cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="card p-6">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Users</div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {mockUsers.length}
-            </div>
-          </div>
-          <div className="card p-6">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Drivers</div>
-            <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-              {mockUsers.filter((u) => u.accountType === "Driver").length}
-            </div>
-          </div>
-          <div className="card p-6">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Sponsors</div>
-            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-              {mockUsers.filter((u) => u.accountType === "Sponsor").length}
-            </div>
-          </div>
-          <div className="card p-6">
-            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Admins</div>
-            <div className="text-3xl font-bold text-red-600 dark:text-red-400">
-              {mockUsers.filter((u) => u.accountType === "Admin").length}
-            </div>
-          </div>
+          <StatCard title="Total Users" value={users.length} color="text-gray-900" />
+          <StatCard title="Drivers" value={users.filter((u: any) => u.UserType?.toLowerCase() === "driver").length} color="text-green-600" />
+          <StatCard title="Sponsors" value={users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor").length} color="text-blue-600" />
+          <StatCard title="Admins" value={users.filter((u: any) => u.UserType?.toLowerCase() === "admin").length} color="text-red-600" />
         </div>
 
-        {/* users table */}
-        <Table
-          data={mockUsers}
-          columns={columns}
-          onRowClick={(user) => {
-            console.log("Row clicked:", user);
-          }}
-        />
+        <div className="card overflow-hidden">
+          <Table data={users.filter((u: any) => u.Username.toLowerCase().includes(searchQuery.toLowerCase()))} columns={columns} />
+        </div>
 
-        {/* create-new-user dialogue */}
-        <Modal
-          isOpen={isAddUserOpen}
-          onClose={() => setIsAddUserOpen(false)}
-          title="Add User"
-          size="md"
-          footer={
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setIsAddUserOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleCreateUser}
-                isLoading={isSubmitting}
-              >
-                Create User
-              </Button>
-            </div>
-          }
-        >
-          <div>
-            <Input
-              label="Username"
-              value={form.username}
-              onChange={(e) =>
-                setForm({ ...form, username: e.target.value })
-              }
-            />
-            <div className="w-full">
-              <Input
-                label="First Name"
-                value={form.firstName}
-                onChange={(e) =>
-                  setForm({ ...form, firstName: e.target.value })
-                }
-              />
-            </div>
-            <div className="w-full">
-            <Input
-              label="Last Name"
-              value={form.lastName}
-              onChange={(e) =>
-                setForm({ ...form, lastName: e.target.value })
-              }
-            />
+        <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add New User">
+          <Form method="post" className="space-y-4">
+            <Input label="Username" name="username" required />
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="First Name" name="firstName" required />
+              <Input label="Last Name" name="lastName" required />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Account Type
-              </label>
-              <select
-                className="mt-1 w-full rounded-md border bg-transparent p-2"
-                value={form.accountType}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    accountType: e.target.value as
-                      | "Admin"
-                      | "Driver"
-                      | "Sponsor",
-                  })
-                }
-              >
+              <label className="text-sm font-medium mb-1 block text-left">Account Type</label>
+              <select name="accountType" value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="w-full rounded-md border p-2 text-sm bg-white dark:bg-gray-800">
                 <option value="Driver">Driver</option>
                 <option value="Sponsor">Sponsor</option>
                 <option value="Admin">Admin</option>
               </select>
             </div>
-          </div>
+            {selectedType === "Driver" && <Input label="License Number" name="licenseNumber" required />}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="ghost" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="primary">Create User</Button>
+            </div>
+          </Form>
         </Modal>
       </div>
+    </div>
+  );
+}
+
+function StatCard({ title, value, color }: { title: string; value: number; color: string }) {
+  return (
+    <div className="card p-6 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-lg text-left">
+      <div className="text-sm text-gray-500 mb-1">{title}</div>
+      <div className={`text-3xl font-bold ${color}`}>{value}</div>
     </div>
   );
 }

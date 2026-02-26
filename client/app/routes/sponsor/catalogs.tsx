@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Table, Modal, Input, Alert } from '~/components';
+import { Button } from '../../components/Button';
+import { Card } from '../../components/Card';
+import { Table } from '../../components/Table';
+import { Modal } from '../../components/Modal';
+import { Input } from '../../components/Input';
+import { Alert } from '../../components/Alert';
 
 const BASE_URL = 'http://localhost:5000';
 
@@ -20,12 +25,6 @@ interface Catalog {
   itemCount: number;
 }
 
-interface SponsorCompany {
-  id: number;
-  companyName: string;
-  pointDollarValue: number;
-}
-
 interface StoreProduct {
   id: number;
   title: string;
@@ -35,11 +34,10 @@ interface StoreProduct {
   image: string;
 }
 
-export default function Catalogs() {
+export default function SponsorCatalogs() {
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [selectedCatalog, setSelectedCatalog] = useState<number | null>(null);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
-  const [sponsorCompanies, setSponsorCompanies] = useState<SponsorCompany[]>([]);
   const [isCreateCatalogOpen, setIsCreateCatalogOpen] = useState(false);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
@@ -54,8 +52,10 @@ export default function Catalogs() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [itemSource, setItemSource] = useState<'manual' | 'store'>('manual');
 
+  // TODO: Replace with actual user ID from authentication
+  const userId = 1; // Placeholder - should come from auth context
+
   // Form states
-  const [newCatalog, setNewCatalog] = useState({ sponsorCompanyId: '' });
   const [newItem, setNewItem] = useState({
     name: '',
     description: '',
@@ -70,13 +70,10 @@ export default function Catalogs() {
     imageUrl: ''
   });
 
-  // Fetch catalogs and sponsor companies on mount
   useEffect(() => {
     fetchCatalogs();
-    fetchSponsorCompanies();
   }, []);
 
-  // Fetch items when catalog is selected
   useEffect(() => {
     if (selectedCatalog) {
       fetchCatalogItems(selectedCatalog);
@@ -86,12 +83,12 @@ export default function Catalogs() {
   const fetchCatalogs = async () => {
     try {
       setError(null);
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs`);
+      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      console.log('Fetched catalogs:', data);
+      console.log('Fetched sponsor catalogs:', data);
       setCatalogs(data);
     } catch (error) {
       console.error('Error fetching catalogs:', error);
@@ -99,28 +96,10 @@ export default function Catalogs() {
     }
   };
 
-  const fetchSponsorCompanies = async () => {
-    try {
-      setError(null);
-      console.log('Fetching sponsors from:', `${BASE_URL}/api/sponsors`);
-      const response = await fetch(`${BASE_URL}/api/sponsors`);
-      console.log('Sponsor response status:', response.status);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      console.log('Fetched sponsor companies:', data);
-      setSponsorCompanies(data);
-    } catch (error) {
-      console.error('Error fetching sponsor companies:', error);
-      setError('Failed to fetch sponsor companies. Please check your connection.');
-    }
-  };
-
   const fetchCatalogItems = async (catalogId: number) => {
     try {
       setLoading(true);
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${catalogId}`);
+      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${catalogId}`);
       const data = await response.json();
       setCatalogItems(data.items || []);
     } catch (error) {
@@ -133,11 +112,10 @@ export default function Catalogs() {
   const handleCreateCatalog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs`, {
+      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sponsorCompanyId: parseInt(newCatalog.sponsorCompanyId),
           externalProductIds: [],
           pointCost: 0
         })
@@ -145,11 +123,11 @@ export default function Catalogs() {
 
       if (response.ok) {
         setIsCreateCatalogOpen(false);
-        setNewCatalog({ sponsorCompanyId: '' });
         fetchCatalogs();
       }
     } catch (error) {
       console.error('Error creating catalog:', error);
+      setError('Failed to create catalog.');
     }
   };
 
@@ -161,6 +139,7 @@ export default function Catalogs() {
       setSearchResults(data);
     } catch (error) {
       console.error('Error searching store:', error);
+      setError('Failed to search store.');
     } finally {
       setSearchLoading(false);
     }
@@ -195,7 +174,7 @@ export default function Catalogs() {
             originalSource: newItem.originalSource
           };
 
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${selectedCatalog}/items`, {
+      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${selectedCatalog}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -218,6 +197,7 @@ export default function Catalogs() {
       }
     } catch (error) {
       console.error('Error adding item:', error);
+      setError('Failed to add item.');
     }
   };
 
@@ -226,7 +206,7 @@ export default function Catalogs() {
     if (!selectedCatalog || !selectedItem) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${selectedCatalog}/items/${selectedItem.id}`, {
+      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${selectedCatalog}/items/${selectedItem.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -244,6 +224,7 @@ export default function Catalogs() {
       }
     } catch (error) {
       console.error('Error updating item:', error);
+      setError('Failed to update item.');
     }
   };
 
@@ -251,7 +232,7 @@ export default function Catalogs() {
     if (!selectedCatalog || !confirm('Are you sure you want to delete this item?')) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${selectedCatalog}/items/${itemId}`, {
+      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${selectedCatalog}/items/${itemId}`, {
         method: 'DELETE'
       });
 
@@ -260,6 +241,7 @@ export default function Catalogs() {
       }
     } catch (error) {
       console.error('Error deleting item:', error);
+      setError('Failed to delete item.');
     }
   };
 
@@ -267,7 +249,7 @@ export default function Catalogs() {
     if (!confirm('Are you sure you want to delete this catalog? This will delete all items.')) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${catalogId}`, {
+      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${catalogId}`, {
         method: 'DELETE'
       });
 
@@ -280,6 +262,7 @@ export default function Catalogs() {
       }
     } catch (error) {
       console.error('Error deleting catalog:', error);
+      setError('Failed to delete catalog.');
     }
   };
 
@@ -298,8 +281,8 @@ export default function Catalogs() {
     { key: 'id', header: 'Catalog ID' },
     { 
       key: 'sponsorCompanyName', 
-      header: 'Sponsor Company',
-      render: (catalog: Catalog) => catalog.sponsorCompanyName || `ID: ${catalog.sponsorCompanyId}`
+      header: 'Company',
+      render: (catalog: Catalog) => catalog.sponsorCompanyName || 'Your Company'
     },
     { key: 'itemCount', header: 'Item Count' },
     {
@@ -352,7 +335,7 @@ export default function Catalogs() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Catalog Management</h1>
+        <h1 className="text-3xl font-bold">My Catalogs</h1>
         <Button variant="primary" onClick={() => setIsCreateCatalogOpen(true)}>
           Create Catalog
         </Button>
@@ -364,8 +347,12 @@ export default function Catalogs() {
       )}
 
       {/* Catalogs List */}
-      <Card title="All Catalogs">
-        <Table data={catalogs} columns={catalogColumns} />
+      <Card title="Your Catalogs">
+        {catalogs.length === 0 ? (
+          <p className="text-center py-4 text-gray-500">No catalogs yet. Create your first catalog!</p>
+        ) : (
+          <Table data={catalogs} columns={catalogColumns} />
+        )}
       </Card>
 
       {/* Catalog Items */}
@@ -396,24 +383,9 @@ export default function Catalogs() {
         title="Create New Catalog"
       >
         <form onSubmit={handleCreateCatalog} className="space-y-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Sponsor Company <span className="text-red-500">*</span>
-            </label>
-            <select
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={newCatalog.sponsorCompanyId}
-              onChange={(e) => setNewCatalog({ sponsorCompanyId: e.target.value })}
-              required
-            >
-              <option value="">Select a sponsor company</option>
-              {sponsorCompanies.map((sponsor) => (
-                <option key={sponsor.id} value={sponsor.id}>
-                  {sponsor.companyName}
-                </option>
-              ))}
-            </select>
-          </div>
+          <p className="text-gray-600">
+            Create a new catalog for your company. You can add items after creation.
+          </p>
           <div className="flex gap-2 justify-end">
             <Button variant="secondary" onClick={() => setIsCreateCatalogOpen(false)}>
               Cancel
@@ -466,73 +438,57 @@ export default function Catalogs() {
 
           {/* Store Search Section */}
           {itemSource === 'store' && (
-            <div className="space-y-4">
+            <div className="space-y-4 mb-4">
               <div className="flex gap-2">
                 <Input
-                  label="Search Products"
+                  label=""
+                  placeholder="Search products..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Enter product name or category..."
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSearchStore();
+                    }
+                  }}
                 />
-                <Button
-                  variant="primary"
+                <Button 
+                  variant="primary" 
                   onClick={handleSearchStore}
                   disabled={searchLoading}
-                  style={{ marginTop: '24px' }}
                 >
                   {searchLoading ? 'Searching...' : 'Search'}
                 </Button>
               </div>
 
-              {/* Search Results */}
               {searchResults.length > 0 && (
-                <div className="border rounded-lg p-4 max-h-96 overflow-y-auto">
-                  <h3 className="font-semibold mb-2">Search Results:</h3>
-                  <div className="space-y-2">
-                    {searchResults.map((product) => (
-                      <div
-                        key={product.id}
-                        className={`border rounded p-3 cursor-pointer transition ${
-                          selectedStoreProduct?.id === product.id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 hover:border-blue-300'
-                        }`}
-                        onClick={() => handleSelectStoreProduct(product)}
-                      >
-                        <div className="flex gap-3">
-                          <img
-                            src={product.image}
-                            alt={product.title}
-                            className="w-16 h-16 object-cover rounded"
-                          />
-                          <div className="flex-1">
-                            <h4 className="font-medium">{product.title}</h4>
-                            <p className="text-sm text-gray-600 line-clamp-2">
-                              {product.description}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Category: {product.category} | Price: ${product.price}
-                            </p>
-                          </div>
-                        </div>
+                <div className="max-h-64 overflow-y-auto border rounded-md">
+                  {searchResults.map((product) => (
+                    <div
+                      key={product.id}
+                      className={`p-3 flex gap-3 cursor-pointer hover:bg-gray-50 border-b ${
+                        selectedStoreProduct?.id === product.id ? 'bg-blue-50' : ''
+                      }`}
+                      onClick={() => handleSelectStoreProduct(product)}
+                    >
+                      <img 
+                        src={product.image} 
+                        alt={product.title} 
+                        className="w-16 h-16 object-cover rounded"
+                      />
+                      <div className="flex-1">
+                        <h4 className="font-medium">{product.title}</h4>
+                        <p className="text-sm text-gray-600 truncate">{product.description}</p>
+                        <p className="text-sm text-gray-500">${product.price}</p>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {selectedStoreProduct && (
-                <div className="border-t pt-4">
-                  <h3 className="font-semibold mb-2">Selected Product:</h3>
-                  <div className="bg-gray-50 p-3 rounded">
-                    <p className="font-medium">{selectedStoreProduct.title}</p>
-                  </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           )}
 
-          {/* Add Item Form */}
+          {/* Item Form */}
           <form onSubmit={handleAddItem} className="space-y-4">
             {itemSource === 'manual' && (
               <>
@@ -579,11 +535,7 @@ export default function Catalogs() {
               >
                 Cancel
               </Button>
-              <Button
-                variant="primary"
-                type="submit"
-                disabled={itemSource === 'store' && !selectedStoreProduct}
-              >
+              <Button variant="primary" type="submit">
                 Add Item
               </Button>
             </div>
@@ -629,7 +581,7 @@ export default function Catalogs() {
               Cancel
             </Button>
             <Button variant="primary" type="submit">
-              Update
+              Save Changes
             </Button>
           </div>
         </form>

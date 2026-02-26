@@ -9,7 +9,7 @@ const createdSponsorIds = [];
 
 async function runTests() {
   try {
-    console.log('Starting catalog endpoint tests...\n');
+    console.log('Starting admin catalog endpoint tests...\n');
 
     // test setup: create a sponsor company
     log('TEST SETUP: Creating sponsor company...', 'Setup');

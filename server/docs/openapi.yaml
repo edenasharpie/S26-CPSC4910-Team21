@@ -34,7 +34,36 @@ tags:
 
 paths:
 
-  /store/search:
+  /about:
+    
+    get:
+      tags:
+        - about
+      description: Retrieve information about FleetScore, including its purpose, features, and team. No authentication required.
+      responses:
+        '200':
+          description: Information about FleetScore
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/about.yaml#/About'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          $ref: './schemas/common.yaml#/Responses/403Error'
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '409':
+          $ref: './schemas/common.yaml#/Responses/409Error'
+        '422':
+          $ref: './schemas/common.yaml#/Responses/422Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+        '503':
+          $ref: './schemas/common.yaml#/Responses/503Error'
+
+  /admin/store/search:
+
     get:
       tags:
         - store
@@ -79,7 +108,8 @@ paths:
         '500':
           $ref: './schemas/common.yaml#/Responses/500Error'
 
-  /store/products/{productId}:
+  /admin/store/products/{productId}:
+
     parameters:
       - name: productId
         in: path
@@ -123,35 +153,7 @@ paths:
         '500':
           $ref: './schemas/common.yaml#/Responses/500Error'
 
-  /about:
-    
-    get:
-      tags:
-        - about
-      description: Retrieve information about FleetScore, including its purpose, features, and team. No authentication required.
-      responses:
-        '200':
-          description: Information about FleetScore
-          content:
-            application/json:
-              schema:
-                $ref: './schemas/about.yaml#/About'
-        '401':
-          $ref: './schemas/common.yaml#/Responses/401Error'
-        '403':
-          $ref: './schemas/common.yaml#/Responses/403Error'
-        '404':
-          $ref: './schemas/common.yaml#/Responses/404Error'
-        '409':
-          $ref: './schemas/common.yaml#/Responses/409Error'
-        '422':
-          $ref: './schemas/common.yaml#/Responses/422Error'
-        '500':
-          $ref: './schemas/common.yaml#/Responses/500Error'
-        '503':
-          $ref: './schemas/common.yaml#/Responses/503Error'
-
-  /catalogs:
+  /admin/catalogs:
     
     get:
       tags:
@@ -218,7 +220,8 @@ paths:
         '503':
           $ref: './schemas/common.yaml#/Responses/503Error'
 
-  /catalogs/{catalogId}:
+  /admin/catalogs/{catalogId}:
+
     parameters:
       - name: catalogId
         in: path
@@ -313,7 +316,8 @@ paths:
         '503':
           $ref: './schemas/common.yaml#/Responses/503Error'
 
-  /catalogs/{catalogId}/items:
+  /admin/catalogs/{catalogId}/items:
+
     parameters:
       - name: catalogId
         in: path
@@ -355,8 +359,9 @@ paths:
           $ref: './schemas/common.yaml#/Responses/500Error'
         '503':
           $ref: './schemas/common.yaml#/Responses/503Error'
-    
-  /catalogs/{catalogId}/items/{itemId}:
+
+  /admin/catalogs/{catalogId}/items/{itemId}:
+
     parameters:
       - name: catalogId
         in: path
@@ -457,7 +462,8 @@ paths:
         '503':
           $ref: './schemas/common.yaml#/Responses/503Error'
 
-  /catalogs/{catalogId}/items/{itemId}/reviews:
+  /admin/catalogs/{catalogId}/items/{itemId}/reviews:
+
     parameters:
       - name: catalogId
         in: path
@@ -539,7 +545,8 @@ paths:
         '503':
           $ref: './schemas/common.yaml#/Responses/503Error'
 
-  /catalogs/{catalogId}/items/{itemId}/reviews/{reviewId}:
+  /admin/catalogs/{catalogId}/items/{itemId}/reviews/{reviewId}:
+
     parameters:
       - name: catalogId
         in: path
@@ -645,3 +652,614 @@ paths:
           $ref: './schemas/common.yaml#/Responses/500Error'
         '503':
           $ref: './schemas/common.yaml#/Responses/503Error'
+
+  /driver/{userId}/catalogs:
+
+    parameters:
+      - name: userId
+        in: path
+        description: The user ID of the driver
+        required: true
+        schema:
+          type: integer
+    
+    get:
+      tags:
+        - catalog
+      description: Retrieve a list of catalogs available to the driver based on their sponsor company association. Driver access required.
+      parameters:
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      responses:
+        '200':
+          description: A list of product catalog summaries for the driver's sponsor company
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: './schemas/catalog.yaml#/CatalogSummary'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Driver not associated with a sponsor company
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: Driver not associated with a sponsor company"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /driver/{userId}/catalogs/{catalogId}:
+
+    parameters:
+      - name: userId
+        in: path
+        description: The user ID of the driver
+        required: true
+        schema:
+          type: integer
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - catalog
+      description: Retrieve details for a specific catalog available to the driver. Driver access required.
+      responses:
+        '200':
+          description: Details of the specified catalog with items
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/Catalog'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Driver not associated with a sponsor company
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /driver/{userId}/catalogs/{catalogId}/items/{itemId}:
+
+    parameters:
+      - name: userId
+        in: path
+        description: The user ID of the driver
+        required: true
+        schema:
+          type: integer
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+          type: integer
+      - name: itemId
+        in: path
+        description: The unique identifier of the catalog item
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - catalog
+      description: Retrieve details for a specific item within a catalog available to the driver. Driver access required.
+      responses:
+        '200':
+          description: Details of the specified catalog item
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/CatalogItem'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Driver not associated with a sponsor company
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /sponsor/{userId}/catalogs:
+
+    parameters:
+      - name: userId
+        in: path
+        description: The user ID of the sponsor
+        required: true
+        schema:
+          type: integer
+    
+    get:
+      tags:
+        - catalog
+      description: Retrieve a list of catalogs owned by the sponsor's company. Sponsor access required.
+      parameters:
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      responses:
+        '200':
+          description: A list of product catalog summaries for the sponsor's company
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: './schemas/catalog.yaml#/CatalogSummary'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: User is not a sponsor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: User is not a sponsor"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+    
+    post:
+      tags:
+        - catalog
+      description: Create a new product catalog for the sponsor's company. The sponsorCompanyId is automatically populated from the sponsor's user record. Sponsor access required.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                externalProductIds:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional array of external product IDs to add to the catalog
+                pointCost:
+                  type: number
+                  description: Point cost for items added from external products
+      responses:
+        '201':
+          description: Catalog created successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/CatalogSummary'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: User is not a sponsor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /sponsor/{userId}/catalogs/{catalogId}:
+
+    parameters:
+      - name: userId
+        in: path
+        description: The user ID of the sponsor
+        required: true
+        schema:
+          type: integer
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - catalog
+      description: Retrieve details for a specific catalog owned by the sponsor's company. Sponsor access required.
+      responses:
+        '200':
+          description: Details of the specified catalog with items
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/Catalog'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Catalog does not belong to sponsor's company or user is not a sponsor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+    patch:
+      tags:
+        - catalog
+      description: Update an existing product catalog owned by the sponsor's company. Sponsor access required.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Currently no updatable fields at catalog level (items managed separately)
+      responses:
+        '200':
+          description: Catalog updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/CatalogSummary'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Catalog does not belong to sponsor's company
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: Catalog does not belong to your company"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+    delete:
+      tags:
+        - catalog
+      description: Delete a product catalog owned by the sponsor's company. Sponsor access required.
+      responses:
+        '204':
+          description: Catalog deleted successfully
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Catalog does not belong to sponsor's company
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: Catalog does not belong to your company"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /sponsor/{userId}/catalogs/{catalogId}/items:
+
+    parameters:
+      - name: userId
+        in: path
+        description: The user ID of the sponsor
+        required: true
+        schema:
+          type: integer
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+          type: integer
+
+    post:
+      tags:
+        - catalog
+      description: Add a new item to a catalog owned by the sponsor's company. Sponsor access required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/catalog.yaml#/CatalogItem'
+      responses:
+        '201':
+          description: Catalog item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/CatalogItem'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Catalog does not belong to sponsor's company
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: Catalog does not belong to your company"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /sponsor/{userId}/catalogs/{catalogId}/items/{itemId}:
+
+    parameters:
+      - name: userId
+        in: path
+        description: The user ID of the sponsor
+        required: true
+        schema:
+          type: integer
+      - name: catalogId
+        in: path
+        description: The unique identifier of the product catalog
+        required: true
+        schema:
+          type: integer
+      - name: itemId
+        in: path
+        description: The unique identifier of the catalog item
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - catalog
+      description: Retrieve details for a specific item within a catalog owned by the sponsor's company. Sponsor access required.
+      responses:
+        '200':
+          description: Details of the specified catalog item
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/CatalogItem'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Catalog does not belong to sponsor's company
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: Catalog does not belong to your company"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+    
+    patch:
+      tags:
+        - catalog
+      description: Update an existing item within a catalog owned by the sponsor's company. Sponsor access required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/catalog.yaml#/CatalogItem'
+      responses:
+        '200':
+          description: Catalog item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/catalog.yaml#/CatalogItem'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Catalog does not belong to sponsor's company
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: Catalog does not belong to your company"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+    delete:
+      tags:
+        - catalog
+      description: Delete an item from a catalog owned by the sponsor's company. Sponsor access required.
+      responses:
+        '204':
+          description: Catalog item deleted successfully
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '403':
+          description: Catalog does not belong to sponsor's company
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: Catalog does not belong to your company"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /admin/reports/driver-applications:
+
+    get:
+      tags:
+        - reports
+      description: Generate a report of driver application statistics. Returns aggregated counts of applications by status. Admin access required. Can filter by sponsor company, driver, status, and date range.
+      parameters:
+        - name: status
+          in: query
+          description: Filter applications by status
+          schema:
+            type: string
+            enum: [pending, accepted, rejected]
+        - name: startDate
+          in: query
+          description: Filter applications submitted on or after this date
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-01T00:00:00Z"
+        - name: endDate
+          in: query
+          description: Filter applications submitted on or before this date
+          schema:
+            type: string
+            format: date-time
+            example: "2026-02-26T23:59:59Z"
+        - name: sponsorCompanyId
+          in: query
+          description: Filter applications by sponsor company ID
+          schema:
+            type: integer
+            example: 5
+        - name: driverId
+          in: query
+          description: Filter applications by driver license number
+          schema:
+            type: string
+            example: "DL123456789"
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      
+      responses:
+        '200':
+          description: Driver application report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/report.yaml#/DriverApplicationReport'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          description: User is not an admin
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: Admin access required"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /sponsor/{userId}/reports/driver-applications:
+
+    parameters:
+      - name: userId
+        in: path
+        description: The user ID of the sponsor
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - reports
+      description: Generate a report of driver application statistics for the sponsor's company. Returns aggregated counts of applications by status. The report is automatically filtered to only include applications for the sponsor's company. Sponsor access required.
+      parameters:
+        - name: status
+          in: query
+          description: Filter applications by status
+          schema:
+            type: string
+            enum: [pending, accepted, rejected]
+        - name: startDate
+          in: query
+          description: Filter applications submitted on or after this date
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-01T00:00:00Z"
+        - name: endDate
+          in: query
+          description: Filter applications submitted on or before this date
+          schema:
+            type: string
+            format: date-time
+            example: "2026-02-26T23:59:59Z"
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      responses:
+        '200':
+          description: Driver application report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/report.yaml#/DriverApplicationReport'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          description: User is not a sponsor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: User is not a sponsor"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'

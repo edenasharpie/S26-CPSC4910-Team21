@@ -5,7 +5,7 @@ const KEY = Buffer.from("abcdef0123456789abcdef0123456789"); // TODO: Populate (
 const IV_LENGTH = 16;
 
 // Use a salted SHA-256 hash for password storage. Format: <saltHex>:<hashHex>
-export async function verifyPassword(plain: string, hashed: string): Promise<boolean> {
+export async function verifyPassword(plain, hashed) {
     if (!hashed) return false;
     const parts = hashed.split(":");
     if (parts.length !== 2) return false;
@@ -14,14 +14,14 @@ export async function verifyPassword(plain: string, hashed: string): Promise<boo
     return computed === hashHex;
 }
 
-export async function hashPassword(plain: string): Promise<string> {
+export async function hashPassword(plain) {
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.createHash('sha256').update(salt + plain).digest('hex');
     return `${salt}:${hash}`;
 }
 
 // Function to hash new private data
-export function encryptPrivateData(text: string): string {
+export function encryptPrivateData(text) {
     const iv = crypto.randomBytes(IV_LENGTH);
     const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
 
@@ -32,7 +32,7 @@ export function encryptPrivateData(text: string): string {
 }
 
 // Function to decrypt private data
-export function decryptPrivateData(encryptedText: string): string {
+export function decryptPrivateData(encryptedText) {
     const [ivHex, dataHex] = encryptedText.split(':');
     if (!ivHex || !dataHex) throw new Error("Invalid encrypted format");
 
@@ -47,10 +47,7 @@ export function decryptPrivateData(encryptedText: string): string {
 }
 
 // Function to check against database if newly made password is a match to a user's historic passwords
-export async function isOldPassword(
-    newPassword: string,
-    oldHashes: string[]
-): Promise<boolean> {
+export async function isOldPassword(newPassword, oldHashes) {
     for (const hash of oldHashes) {
         const isMatch = await verifyPassword(newPassword, hash);
         if (isMatch) {
