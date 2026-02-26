@@ -37,12 +37,22 @@ export async function createTestSponsor(options = {}) {
   try {
     const contactInfoJson = JSON.stringify(contactInfo);
     
+    console.log('Attempting to insert sponsor:', { companyName, pointDollarValue, contactInfoJson });
+    
     const [sponsorResult] = await connection.query(
-      'INSERT INTO SPONSOR_COMPANIES (CompanyName, PointDollarValue, ContactInfo) VALUES (?, ?, ?)',
+      'INSERT INTO SPONSOR_COMPANIES (CompanyName, PointDollarValue, ContactInfo, createdAt, updatedAt) VALUES (?, ?, ?, NOW(), NOW())',
       [companyName, pointDollarValue, contactInfoJson]
     );
     
+    console.log('Insert result:', sponsorResult);
+    
     return sponsorResult.insertId;
+  } catch (error) {
+    console.error('Error in createTestSponsor:', error);
+    console.error('Error message:', error.message);
+    console.error('Error code:', error.code);
+    console.error('SQL message:', error.sqlMessage);
+    throw error;
   } finally {
     connection.release();
   }
