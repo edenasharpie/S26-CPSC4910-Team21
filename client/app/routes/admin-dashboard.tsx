@@ -50,6 +50,34 @@ export default function AdminPortal() {
   const { invoices } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
+  const [reportData, setReportData] = useState([]);
+  const [reportFilter, setReportFilter] = useState({
+    driverId: "",
+    startDate: "",
+    endDate: ""
+  });
+  const [isFetchingReport, setIsFetchingReport] = useState(false);
+
+  const fetchReport = async (e: React.MouseEvent) => {
+    const { driverId, startDate, endDate } = reportFilter;
+    if (!driverId || !startDate || !endDate) {
+       alert("Please select a driver and date range");
+       return;
+    }
+  
+    setIsFetchingReport(true);
+
+    try {
+    const res = await fetch(`http://localhost:5001/api/admins/driver-report/${driverId}?startDate=${startDate}&endDate=${endDate}`);
+    const data = await res.json();
+    setReportData(data);
+  } catch (error) {
+    console.error("Report fetch error:", error);
+  } finally {
+    setIsFetchingReport(false); 
+  }
+  };
+
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -124,6 +152,44 @@ export default function AdminPortal() {
           </Card>
         </div>
         <Table data={invoices} columns={invoiceColumns} />
+      </section>
+
+      <hr className="my-10" />
+
+      <section className="mb-12 p-6 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200">
+        <h2 className="text-2xl font-semibold mb-4">Driver Fee Reporting</h2>
+        <div className="flex flex-wrap items-end gap-4 mb-6">
+          <div className="flex-1 min-w-[200px]">
+             <label className="block text-sm font-medium mb-1">Driver ID</label>
+             <Input 
+               placeholder="Enter User ID" 
+               value={reportFilter.driverId}
+               onChange={(e) => setReportFilter({...reportFilter, driverId: e.target.value})} 
+             />
+          </div>
+          <Input 
+            type="date" 
+            label="Start Date" 
+            onChange={(e) => setReportFilter({...reportFilter, startDate: e.target.value})} 
+          />
+          <Input 
+            type="date" 
+            label="End Date" 
+            onChange={(e) => setReportFilter({...reportFilter, endDate: e.target.value})} 
+          />
+          <Button onClick={fetchReport}>Generate Report</Button>
+        </div>
+
+        {reportData.length > 0 ? (
+          <div>
+            <Table data={reportData} columns={invoiceColumns} />
+            <div className="mt-4 p-4 bg-green-50 text-green-800 font-bold rounded-lg border border-green-200">
+              Total Fee for Period: ${reportData.reduce((sum: number, inv: any) => sum + parseFloat(inv.Amount), 0).toFixed(2)}
+            </div>
+          </div>
+        ) : (
+          <p className="text-gray-500 italic">No report generated yet. Select a driver and date range.</p>
+        )}
       </section>
 
       <hr className="my-10" />

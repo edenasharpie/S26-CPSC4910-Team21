@@ -9,7 +9,7 @@ import aboutRoutes from './src/routes/about.js';
 import catalogRoutes from './src/routes/catalogs.js';
 import userRoute from './src/routes/users.js';
 import sponsorRoute from './src/routes/sponsors.js';
-import adminRoute from '.src/routes/admins.js';
+import adminRoute from './src/routes/admins.js';
 import { authenticateUser } from './src/utils/auth.js';
 
 

@@ -128,5 +128,36 @@ router.get('/audit-logs', async (req, res) => {
   }
 });
 
+// GET passworc changes based on sponsorId
+router.get('/security-report/:sponsorId', async (req, res) => {
+  const { sponsorId } = req.params;
+  const { startDate, endDate } = req.query;
+
+  try {
+    const query = `
+      SELECT 
+        u.Username,
+        u.FirstName,
+        u.LastName,
+        al.ActionType,
+        al.CreatedAt AS EventDate,
+        al.IPAddress
+      FROM AUDIT_LOGS al
+      JOIN USERS u ON al.UserID = u.UserID
+      JOIN SPONSORS s ON u.UserID = s.UserID
+      WHERE s.SponsorCompanyID = ? 
+        AND al.ActionType = 'PASSWORD_CHANGE'
+        AND al.CreatedAt BETWEEN ? AND ?
+      ORDER BY al.CreatedAt DESC
+    `;
+    
+    const [rows] = await pool.execute(query, [sponsorId, startDate, endDate]);
+    res.json(rows);
+  } catch (error) {
+    console.error("Security Report Error:", error);
+    res.status(500).json({ error: "Failed to fetch security logs" });
+  }
+});
+
 //module.exports = router;
 export default router;
