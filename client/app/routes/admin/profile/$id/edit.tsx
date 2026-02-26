@@ -19,7 +19,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     try {
       await deleteUser(userId);
       // Hard redirect to the dashboard after a successful delete
-      return redirect("/admin-dashboard"); 
+      return redirect("/admin/dashboard"); 
     } catch (error: any) {
       return { error: error.message };
     }
@@ -73,7 +73,7 @@ export default function EditUserProfile() {
       {/* Navigation - Fixed to explicit path */}
       <div className="flex justify-between items-center">
         <Link 
-          to="/admin-dashboard" 
+          to="/admin/dashboard" 
           className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
         >
           ← Back to Dashboard

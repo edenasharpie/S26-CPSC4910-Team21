@@ -62,7 +62,7 @@ export default function InvoicesPage() {
             <h1 className="text-2xl font-bold mb-1">Point Invoices</h1>
             <p className="text-sm text-gray-500">Historical record of all point adjustments</p>
           </div>
-          <Button variant="secondary" onClick={() => navigate("/admin-dashboard")}>
+          <Button variant="secondary" onClick={() => navigate("/admin/dashboard")}>
             Back to Portal
           </Button>
         </div>

@@ -44,7 +44,7 @@ export default function PointsPage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-10 text-left">
-      <Link to="/admin-dashboard" className="text-sm font-medium text-blue-600">← Back</Link>
+      <Link to="/admin/dashboard" className="text-sm font-medium text-blue-600">← Back</Link>
 
       <div className="flex justify-between items-center border-b pb-6">
         <div>
