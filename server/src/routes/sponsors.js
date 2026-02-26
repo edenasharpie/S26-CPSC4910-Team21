@@ -103,5 +103,30 @@ router.patch('/:companyId/description', async (req, res) => {
   }
 });
 
+// GET /api/sponsors/audit-logs
+// Fetches the security audit history for the system
+router.get('/audit-logs', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(`
+      SELECT 
+        a.LogID, 
+        u.Username, 
+        a.ActionType, 
+        a.Status, 
+        a.IPAddress, 
+        a.CreatedAt 
+      FROM AUDIT_LOGS a
+      LEFT JOIN USERS u ON a.UserID = u.UserID
+      ORDER BY a.CreatedAt DESC 
+      LIMIT 50
+    `);
+    
+    res.json(rows);
+  } catch (error) {
+    console.error("Error fetching audit logs:", error);
+    res.status(500).json({ error: "Failed to fetch security report" });
+  }
+});
+
 //module.exports = router;
 export default router;

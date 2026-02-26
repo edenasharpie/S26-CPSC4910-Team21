@@ -9,6 +9,7 @@ import aboutRoutes from './src/routes/about.js';
 import catalogRoutes from './src/routes/catalogs.js';
 import userRoute from './src/routes/users.js';
 import sponsorRoute from './src/routes/sponsors.js';
+import adminRoute from '.src/routes/admins.js';
 import { authenticateUser } from './src/utils/auth.js';
 
 
@@ -29,7 +30,7 @@ app.use('/api/about', aboutRoutes);
 app.use('/api/catalogs', catalogRoutes);
 app.use('/api/user', userRoute); 
 app.use('/api/sponsors', sponsorRoute); 
-//app.use('/api/admin', adminRoute);     
+app.use('/api/admins', adminRoute);     
 //app.use('/api/drivers', driverRoute);
 
 app.post('/api/login', async (req, res) => {

@@ -1,7 +1,163 @@
 import type { Route } from "./+types/audit-logs";
 import { useState } from "react";
-import { Table, Input, Button, Badge } from "~/components";
+import { useLoaderData } from "react-router";
+import { Table, Button, Badge } from "~/components";
 
+interface AuditLog {
+  LogID: number;
+  Username: string | null;
+  ActionType: string;
+  Status: string;
+  IPAddress: string;
+  CreatedAt: string;
+}
+
+export async function loader() {
+  try {
+    const response = await fetch("http://localhost:5001/api/sponsors/audit-logs");
+    if (!response.ok) throw new Error("Failed to fetch");
+    const logs = await response.json();
+    return { logs };
+  } catch (error) {
+    console.error("Fetch error:", error);
+    return { logs: [] };
+  }
+}
+
+export function meta({}: Route.MetaArgs) {
+  return [{ title: "Audit Logs | Sponsor Dashboard" }];
+}
+
+export default function AuditLogs() {
+  // Get the live data from the loader
+  const { logs } = useLoaderData<typeof loader>();
+  
+  // Utility to format the RDS timestamp
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status.toUpperCase()) {
+      case "SUCCESS":
+        return <Badge variant="success">Success</Badge>;
+      case "FAILURE":
+        return <Badge variant="danger">Failed</Badge>;
+      default:
+        return <Badge variant="default">{status}</Badge>;
+    }
+  };
+
+  const getEventTypeBadge = (eventType: string) => {
+    switch (eventType) {
+      case "LOGIN_ATTEMPT":
+        return <Badge variant="info">Login Attempt</Badge>;
+      case "PASSWORD_CHANGE":
+        return <Badge variant="warning">Password Change</Badge>;
+      default:
+        return <Badge variant="default">{eventType || "System Event"}</Badge>;
+    }
+  };
+
+  const columns = [
+    {
+      key: "CreatedAt",
+      header: "Timestamp",
+      render: (log: AuditLog) => (
+        <span className="text-sm font-mono">{formatTimestamp(log.CreatedAt)}</span>
+      ),
+    },
+    {
+      key: "ActionType",
+      header: "Event Type",
+      render: (log: AuditLog) => getEventTypeBadge(log.ActionType),
+    },
+    {
+      key: "Username",
+      header: "Username",
+      render: (log: AuditLog) => (
+        <span className="font-medium text-gray-700 dark:text-gray-300">
+          {log.Username || "Unknown / Non-existent User"}
+        </span>
+      ),
+    },
+    {
+      key: "Status",
+      header: "Status",
+      render: (log: AuditLog) => getStatusBadge(log.Status),
+    },
+    {
+      key: "IPAddress",
+      header: "IP Address",
+      render: (log: AuditLog) => (
+        <span className="text-xs text-gray-500 font-mono">{log.IPAddress}</span>
+      ),
+    },
+  ];
+
+  const totalEvents = logs.length;
+  const successfulEvents = logs.filter((log: AuditLog) => log.Status?.toUpperCase() === "SUCCESS").length;
+  const failedEvents = logs.filter((log: AuditLog) => log.Status?.toUpperCase() === "FAILURE").length;
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="container-padding section-spacing">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Security Audit Logs</h1>
+          <p className="text-gray-500">Monitoring real-time authentication events from AWS RDS.</p>
+        </div>
+
+        {/* Dynamic Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <div className="card p-6 shadow-sm bg-white dark:bg-gray-900">
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Logs</div>
+            <div className="text-3xl font-bold">{totalEvents}</div>
+          </div>
+          <div className="card p-6 shadow-sm bg-white dark:bg-gray-900 border-l-4 border-green-500">
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1 text-green-600">Successful Actions</div>
+            <div className="text-3xl font-bold text-green-600">{successfulEvents}</div>
+          </div>
+          <div className="card p-6 shadow-sm bg-white dark:bg-gray-900 border-l-4 border-red-500">
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1 text-red-600">Failed Attempts</div>
+            <div className="text-3xl font-bold text-red-600">{failedEvents}</div>
+          </div>
+        </div>
+
+        {/* table */}
+        <div className="card shadow-sm overflow-hidden bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
+          <Table
+            data={logs} // Now using live data from loader
+            columns={columns} // Using the updated column definitions
+            onRowClick={(log: AuditLog) => {
+              console.log("Log entry clicked:", log);
+            }}
+          />
+          
+          {/* Empty State */}
+          {logs.length === 0 && (
+            <div className="p-12 text-center">
+              <p className="text-gray-500 dark:text-gray-400 italic">
+                No audit logs found. Try triggering a login event via Postman or the login page.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+
+/*
 // TODO: replace with API calls
 const mockData = [
   {
@@ -89,6 +245,7 @@ const mockData = [
     status: "Success"
   },
 ];
+
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -203,12 +360,12 @@ export default function AuditLogs() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container-padding section-spacing">
-        {/* header */}
+        {/* header */ /*}
         <div className="mb-8">
           <h1 className="mb-2">Audit Logs</h1>
         </div>
 
-        {/* stats cards */}
+        {/* stats cards */ /*}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="card p-6">
             <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Events</div>
@@ -236,7 +393,7 @@ export default function AuditLogs() {
           </div>
         </div>
 
-        {/* table */}
+        {/* table */ /*}
         <Table
           data={mockData}
           columns={columns}
@@ -248,3 +405,4 @@ export default function AuditLogs() {
     </div>
   );
 }
+*/
