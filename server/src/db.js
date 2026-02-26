@@ -6,7 +6,14 @@ import { dirname, join } from 'path';
 // Fix: Load environment variables correctly
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '../../../fs-env') }); // Ensure this points to your actual .env file
+const envPath = join(__dirname, '../../../.fs-env');
+console.log('Looking for .fs-env at:', envPath);
+const result = dotenv.config({ path: envPath });
+if (result.error) {
+  console.error('Error loading .fs-env file:', result.error.message);
+} else {
+  console.log('Environment variables loaded successfully');
+}
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,

@@ -40,7 +40,7 @@ export async function createTestSponsor(options = {}) {
     console.log('Attempting to insert sponsor:', { companyName, pointDollarValue, contactInfoJson });
     
     const [sponsorResult] = await connection.query(
-      'INSERT INTO SPONSOR_COMPANIES (CompanyName, PointDollarValue, ContactInfo, createdAt, updatedAt) VALUES (?, ?, ?, NOW(), NOW())',
+      'INSERT INTO SPONSOR_COMPANIES (CompanyName, PointDollarValue, ContactInfo) VALUES (?, ?, ?)',
       [companyName, pointDollarValue, contactInfoJson]
     );
     
