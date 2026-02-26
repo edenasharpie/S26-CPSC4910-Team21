@@ -173,41 +173,6 @@ export async function getPointHistory(userId) {
   return rows;
 }
 
-// Add a new transaction and update the driver balance
-export async function addPointTransaction(driverUserId, adminUserId, pointChange, reason) {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // 1. Get LicenseNumber (DriverID) for the constraint
-    const [driverRows] = await connection.execute(
-      'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?',
-      [driverUserId]
-    );
-    const licenseNumber = driverRows[0]?.LicenseNumber;
-
-    // 2. Insert into POINT_TRANSACTIONS
-    await connection.execute(
-      `INSERT INTO POINT_TRANSACTIONS (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged) 
-       VALUES (?, ?, ?, ?, NOW())`,
-      [licenseNumber, adminUserId, pointChange, reason]
-    );
-
-    // 3. Update the DRIVERS table
-    await connection.execute(
-      `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE UserID = ?`,
-      [pointChange, driverUserId]
-    );
-
-    await connection.commit();
-  } catch (err) {
-    await connection.rollback();
-    throw err;
-  } finally {
-    connection.release();
-  }
-}
-
 export async function updatePointTransaction(transactionId, newPoints, newReason, adminUserId) {
   const connection = await pool.getConnection();
   try {
