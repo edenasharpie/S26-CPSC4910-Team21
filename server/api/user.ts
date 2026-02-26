@@ -30,7 +30,10 @@ interface PasswordHistoryEntry {
 // Helper function to call to db
 export async function getUserById(pool: any, userId: number | string): Promise<User | undefined> {
   const [rows] = await pool.query(
-    'SELECT * FROM USERS WHERE UserID = ?',
+    `SELECT u.*, d.PerformanceStatus as performance_status 
+     FROM USERS u 
+     LEFT JOIN DRIVERS d ON u.UserID = d.UserID 
+     WHERE u.UserID = ?`,
     [userId]
   );
   const results = rows as any[];
@@ -47,6 +50,11 @@ export async function getProfile(pool: any, userId: number) {
   }
   
   const { password_hash, ...userProfile } = user;
+
+  const profileWithDisplayName = {
+    ...userProfile,
+    displayName: `${user.first_name} ${user.last_name}`
+  };
   
   return { 
     data: userProfile,
@@ -113,6 +121,21 @@ export async function changeUserPassword(
     if (newPassword.length < 8) {
       return { error: 'Password must be at least 8 characters long', status: 400 };
     }
+
+    // Compare with password history
+    const [historyRows] = await pool.query(
+      'SELECT password_hash FROM PasswordHistory WHERE UserID = ? ORDER BY changed_at DESC LIMIT 5',
+      [userId]
+    );
+    const history = historyRows as PasswordHistoryEntry[];
+    
+    // Check if new password matches any in the last 5
+    for (const entry of history) {
+      const isMatch = await verifyPassword(newPassword, entry.password_hash);
+      if (isMatch) {
+        return { error: 'New password cannot be one of your last 5 passwords', status: 400 };
+      }
+    }
     
     const newPasswordHash = await hashPassword(newPassword);
     
@@ -129,11 +152,9 @@ export async function changeUserPassword(
     if (!result.success) {
       return { error: result.error || 'Password change failed', status: 400 };
     }
-    
-    const updatedUser = await getUserById(pool, userId);
+
     
     return {
-      data: { lastPasswordChange: updatedUser?.last_password_change },
       message: 'Password changed successfully',
       status: 200
     };
