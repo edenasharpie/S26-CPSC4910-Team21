@@ -15,6 +15,7 @@ if (result.error) {
   console.log('Environment variables loaded successfully');
 }
 
+dotenv.config({ path: envPath });
 console.log('--- DB Config Check ---');
 console.log('Host from env:', process.env.DB_HOST);
 console.log('User from env:', process.env.DB_USER);
