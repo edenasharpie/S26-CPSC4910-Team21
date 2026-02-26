@@ -14,7 +14,9 @@ if (result.error) {
 } else {
   console.log('Environment variables loaded successfully');
 }
-
+if (typeof window !== 'undefined') {
+  throw new Error("DB.JS IS RUNNING IN THE BROWSER! THIS IS THE PROBLEM.");
+}
 dotenv.config({ path: envPath });
 console.log('--- DB Config Check ---');
 console.log('Host from env:', process.env.DB_HOST);
