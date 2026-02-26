@@ -1,0 +1,43 @@
+DriverApplicationReport:
+  type: object
+  required:
+    - totalApplications
+    - pendingCount
+    - acceptedCount
+    - rejectedCount
+
+  properties:
+    totalApplications:
+      type: integer
+      description: Total number of driver applications in the report
+      example: 45
+    pendingCount:
+      type: integer
+      description: Number of applications with pending status
+      example: 12
+    acceptedCount:
+      type: integer
+      description: Number of applications with accepted status
+      example: 28
+    rejectedCount:
+      type: integer
+      description: Number of applications with rejected status
+      example: 5
+    dateRangeStart:
+      type: string
+      format: date-time
+      description: Start date of the report period (if filtered by date)
+      example: "2026-01-01T00:00:00Z"
+    dateRangeEnd:
+      type: string
+      format: date-time
+      description: End date of the report period (if filtered by date)
+      example: "2026-02-26T23:59:59Z"
+    sponsorCompanyId:
+      type: integer
+      description: The sponsor company ID the report is filtered by (admin reports only)
+      example: 5
+    driverId:
+      type: string
+      description: The driver license number the report is filtered by (admin reports only)
+      example: "DL123456789"

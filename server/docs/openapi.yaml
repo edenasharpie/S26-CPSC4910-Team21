@@ -1132,3 +1132,134 @@ paths:
           $ref: './schemas/common.yaml#/Responses/404Error'
         '500':
           $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /admin/reports/driver-applications:
+
+    get:
+      tags:
+        - reports
+      description: Generate a report of driver application statistics. Returns aggregated counts of applications by status. Admin access required. Can filter by sponsor company, driver, status, and date range.
+      parameters:
+        - name: status
+          in: query
+          description: Filter applications by status
+          schema:
+            type: string
+            enum: [pending, accepted, rejected]
+        - name: startDate
+          in: query
+          description: Filter applications submitted on or after this date
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-01T00:00:00Z"
+        - name: endDate
+          in: query
+          description: Filter applications submitted on or before this date
+          schema:
+            type: string
+            format: date-time
+            example: "2026-02-26T23:59:59Z"
+        - name: sponsorCompanyId
+          in: query
+          description: Filter applications by sponsor company ID
+          schema:
+            type: integer
+            example: 5
+        - name: driverId
+          in: query
+          description: Filter applications by driver license number
+          schema:
+            type: string
+            example: "DL123456789"
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      
+      responses:
+        '200':
+          description: Driver application report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/report.yaml#/DriverApplicationReport'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          description: User is not an admin
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: Admin access required"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
+
+  /sponsor/{userId}/reports/driver-applications:
+
+    parameters:
+      - name: userId
+        in: path
+        description: The user ID of the sponsor
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags:
+        - reports
+      description: Generate a report of driver application statistics for the sponsor's company. Returns aggregated counts of applications by status. The report is automatically filtered to only include applications for the sponsor's company. Sponsor access required.
+      parameters:
+        - name: status
+          in: query
+          description: Filter applications by status
+          schema:
+            type: string
+            enum: [pending, accepted, rejected]
+        - name: startDate
+          in: query
+          description: Filter applications submitted on or after this date
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-01T00:00:00Z"
+        - name: endDate
+          in: query
+          description: Filter applications submitted on or before this date
+          schema:
+            type: string
+            format: date-time
+            example: "2026-02-26T23:59:59Z"
+        - $ref: './schemas/common.yaml#/Parameters/Limit'
+        - $ref: './schemas/common.yaml#/Parameters/Offset'
+      responses:
+        '200':
+          description: Driver application report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/report.yaml#/DriverApplicationReport'
+        '400':
+          $ref: './schemas/common.yaml#/Responses/400Error'
+        '401':
+          $ref: './schemas/common.yaml#/Responses/401Error'
+        '403':
+          description: User is not a sponsor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Access forbidden: User is not a sponsor"
+        '404':
+          $ref: './schemas/common.yaml#/Responses/404Error'
+        '500':
+          $ref: './schemas/common.yaml#/Responses/500Error'
