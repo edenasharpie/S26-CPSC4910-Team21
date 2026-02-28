@@ -1,7 +1,7 @@
 import type { Route } from "./+types/admin";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal, Alert } from "~/components";
-import { useNavigate, useLoaderData, Form, useActionData } from "react-router";
+import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
 import { getAllUsers, createUser } from "../../../../server/src/db.js"; 
 
 export async function loader() {
@@ -106,6 +106,9 @@ export default function AdminPortal() {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-left">{error || actionData?.error}</div>
         )}
 
+        <div className="mb-4">
+          <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
+        </div>
         <div className="mb-8 text-left">
           <h1 className="mb-2 text-2xl font-bold">Admin Portal</h1>
         </div>

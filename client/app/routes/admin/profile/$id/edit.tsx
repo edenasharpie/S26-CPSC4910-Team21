@@ -71,13 +71,14 @@ export default function EditUserProfile() {
     <div className="p-8 max-w-5xl mx-auto space-y-10">
       
       {/* Navigation - Fixed to explicit path */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center gap-4">
         <Link 
           to="/admin/dashboard" 
           className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
         >
           ← Back to Dashboard
         </Link>
+        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">Home</Link>
       </div>
 
       <div className="flex items-center gap-8 pb-6 border-b border-gray-100">

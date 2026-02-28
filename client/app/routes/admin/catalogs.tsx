@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { Button, Card, Table, Modal, Input, Alert } from '~/components';
 
 const BASE_URL = 'http://localhost:5000';
@@ -351,6 +352,7 @@ export default function Catalogs() {
 
   return (
     <div className="p-6 space-y-6">
+      <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Catalog Management</h1>
         <Button variant="primary" onClick={() => setIsCreateCatalogOpen(true)}>
