@@ -1,4 +1,4 @@
-import { useLoaderData, useNavigate } from "react-router";
+import { useLoaderData, useNavigate, Link } from "react-router";
 import type { Route } from "./+types/invoices";
 import { Table, Button } from "~/components";
 import { getAllPointTransactions } from "../../../../server/src/db.js";
@@ -57,6 +57,9 @@ export default function InvoicesPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container-padding section-spacing">
+        <div className="mb-4">
+          <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
+        </div>
         <div className="mb-8 flex justify-between items-center">
           <div className="text-left">
             <h1 className="text-2xl font-bold mb-1">Point Invoices</h1>

@@ -1,4 +1,4 @@
-import { useLoaderData } from "react-router";
+import { useLoaderData, Link } from "react-router";
 import type { Route } from "./+types/about";
 
 // fetch data before rendering anything
@@ -28,6 +28,7 @@ export default function About() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
+        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6 block">← Home</Link>
         <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-8">
           About
         </h1>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import type { Route } from "./+types/components-demo";
 import { Button, Input, Card, Modal, Table, Badge, Alert } from "~/components";
 
@@ -63,6 +64,7 @@ export default function ComponentsDemo() {
       <div className="max-w-6xl mx-auto space-y-8">
         {/* header */}
         <div>
+          <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-4 block">← Home</Link>
           <h1>FleetScore - Components</h1>
           <p className="mt-2">
             Showcase of reusable UI components in React with Tailwind CSS.

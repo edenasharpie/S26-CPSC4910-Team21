@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
@@ -138,6 +139,7 @@ export default function DriverCatalogs() {
 
   return (
     <div className="p-6 space-y-6">
+      <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Available Catalogs</h1>
       </div>

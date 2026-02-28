@@ -1,5 +1,6 @@
 import type { Route } from "./+types/audit-logs";
 import { useState } from "react";
+import { Link } from "react-router";
 import { Table, Input, Button, Badge, Alert } from "~/components";
 
 // TODO: replace with API calls
@@ -205,6 +206,7 @@ export default function AuditLogs() {
       <div className="container-padding section-spacing">
         {/* header */}
         <div className="mb-8">
+          <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-4 block">← Home</Link>
           <h1 className="mb-2">Audit Logs</h1>
         </div>
 
