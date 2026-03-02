@@ -206,6 +206,97 @@ export async function getUserPasswordHistory(pool: any, userId: number) {
   }
 }
 
+/**
+ * POST /api/user/admin
+ * Creates a new Admin account. Only callable by an existing Admin.
+ *
+ * @param pool          - Database connection pool
+ * @param requesterId   - UserID of the admin making the request
+ * @param newAdminData  - Details for the new admin account
+ * @param getUserByUsernameFn - DB helper: checks whether a username is already taken
+ * @param createUserFn  - DB helper: inserts into USERS + ADMINS tables
+ */
+export async function createAdminAccount(
+  pool: any,
+  requesterId: number,
+  newAdminData: {
+    username: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    password: string;
+  },
+  getUserByUsernameFn: (pool: any, username: string) => Promise<any>,
+  createUserFn: (pool: any, userData: Record<string, any>) => Promise<DBResponse>
+) {
+  try {
+    // 1. Verify requester is an Admin
+    const requester = await getUserById(pool, requesterId);
+    if (!requester) {
+      return { error: 'Requester not found', status: 404 };
+    }
+    if (requester.account_type !== 'Admin') {
+      return { error: 'Only Admin accounts can create new admin users', status: 403 };
+    }
+
+    // 2. Validate required fields
+    const { username, firstName, lastName, email, phone, password } = newAdminData;
+    if (!username || !firstName || !lastName || !password) {
+      return { error: 'username, firstName, lastName, and password are required', status: 400 };
+    }
+
+    if (email && !isValidEmail(email)) {
+      return { error: 'Invalid email address', status: 400 };
+    }
+
+    if (password.length < 8) {
+      return { error: 'Password must be at least 8 characters long', status: 400 };
+    }
+
+    // 3. Ensure username is not already taken
+    const existing = await getUserByUsernameFn(pool, username);
+    if (existing) {
+      return { error: 'Username is already taken', status: 409 };
+    }
+
+    // 4. Hash the password before storing
+    const passwordHash = await hashPassword(password);
+
+    // 5. Delegate record creation to the provided DB function
+    const result = await createUserFn(pool, {
+      Username: username,
+      FirstName: firstName,
+      LastName: lastName,
+      Email: email ?? null,
+      Phone: phone ?? null,
+      PassHash: passwordHash,
+      UserType: 'Admin',
+    });
+
+    if (!result.success) {
+      return { error: result.error || 'Failed to create admin account', status: 500 };
+    }
+
+    // 6. Fetch and return the newly created user (without the password hash)
+    const newUser = await getUserByUsernameFn(pool, username);
+    if (!newUser) {
+      return { error: 'Account created but could not be retrieved', status: 500 };
+    }
+
+    const { password_hash: _pw, ...safeUser } = newUser;
+
+    return {
+      data: safeUser,
+      message: 'Admin account created successfully',
+      status: 201,
+    };
+  } catch (error) {
+    console.error('Error creating admin account:', error);
+    return { error: 'Failed to create admin account', status: 500 };
+  }
+}
+
 function isValidEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
