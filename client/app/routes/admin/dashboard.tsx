@@ -1,8 +1,8 @@
 import type { Route } from "./+types/admin";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal, Alert } from "~/components";
-import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
-import { getAllUsers, createUser } from "../../../../server/src/db.js"; 
+import { useNavigate, useLoaderData, Form, useActionData } from "react-router";
+//import { getAllUsers, createUser } from "../../../../server/src/db.js"; // IMPORT SERVER CODE IS NOT ALLOWED, IT WILL NOT WORK IN PROD. you need to use the api.
 
 export async function loader() {
   try {
