@@ -5,7 +5,7 @@ import { Table } from '../../components/Table';
 import { Modal } from '../../components/Modal';
 import { Alert } from '../../components/Alert';
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
 
 interface CatalogItem {
   id: number;

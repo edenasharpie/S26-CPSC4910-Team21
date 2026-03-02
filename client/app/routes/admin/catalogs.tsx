@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Card, Table, Modal, Input, Alert } from '~/components';
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
 
 interface CatalogItem {
   id: number;
