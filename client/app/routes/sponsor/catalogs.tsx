@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -6,8 +6,7 @@ import { Table } from '../../components/Table';
 import { Modal } from '../../components/Modal';
 import { Input } from '../../components/Input';
 import { Alert } from '../../components/Alert';
-
-const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
+import { createApiClient } from '~/utils/api';
 
 interface CatalogItem {
   id: number;
@@ -36,6 +35,9 @@ interface StoreProduct {
 }
 
 export default function SponsorCatalogs() {
+  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
+  const api = useMemo(() => createApiClient({ id: 1, role: 'sponsor' }), []);
+
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [selectedCatalog, setSelectedCatalog] = useState<number | null>(null);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
@@ -53,7 +55,8 @@ export default function SponsorCatalogs() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [itemSource, setItemSource] = useState<'manual' | 'store'>('manual');
 
-  const userId = 1; // TODO: Placeholder - should come from auth context. Replace with actual user ID from authentication
+  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
+  // const userId = 1; — now encoded in the api client above
 
   // Form states
   const [newItem, setNewItem] = useState({
@@ -83,7 +86,7 @@ export default function SponsorCatalogs() {
   const fetchCatalogs = async () => {
     try {
       setError(null);
-      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs`);
+      const response = await api.get('/catalogs');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -99,7 +102,7 @@ export default function SponsorCatalogs() {
   const fetchCatalogItems = async (catalogId: number) => {
     try {
       setLoading(true);
-      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${catalogId}`);
+      const response = await api.get(`/catalogs/${catalogId}`);
       const data = await response.json();
       setCatalogItems(data.items || []);
     } catch (error) {
@@ -112,13 +115,9 @@ export default function SponsorCatalogs() {
   const handleCreateCatalog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          externalProductIds: [],
-          pointCost: 0
-        })
+      const response = await api.post('/catalogs', {
+        externalProductIds: [],
+        pointCost: 0
       });
 
       if (response.ok) {
@@ -134,7 +133,7 @@ export default function SponsorCatalogs() {
   const handleSearchStore = async () => {
     try {
       setSearchLoading(true);
-      const response = await fetch(`${BASE_URL}/api/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
+      const response = await api.fetchApi(`/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
@@ -174,11 +173,7 @@ export default function SponsorCatalogs() {
             originalSource: newItem.originalSource
           };
 
-      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${selectedCatalog}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const response = await api.post(`/catalogs/${selectedCatalog}/items`, payload);
 
       if (response.ok) {
         setIsAddItemOpen(false);
@@ -206,15 +201,11 @@ export default function SponsorCatalogs() {
     if (!selectedCatalog || !selectedItem) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${selectedCatalog}/items/${selectedItem.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editItem.name,
-          description: editItem.description,
-          pointCost: parseFloat(editItem.pointCost),
-          imageUrl: editItem.imageUrl
-        })
+      const response = await api.patch(`/catalogs/${selectedCatalog}/items/${selectedItem.id}`, {
+        name: editItem.name,
+        description: editItem.description,
+        pointCost: parseFloat(editItem.pointCost),
+        imageUrl: editItem.imageUrl
       });
 
       if (response.ok) {
@@ -232,9 +223,7 @@ export default function SponsorCatalogs() {
     if (!selectedCatalog || !confirm('Are you sure you want to delete this item?')) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${selectedCatalog}/items/${itemId}`, {
-        method: 'DELETE'
-      });
+      const response = await api.delete(`/catalogs/${selectedCatalog}/items/${itemId}`);
 
       if (response.ok) {
         fetchCatalogItems(selectedCatalog);
@@ -249,9 +238,7 @@ export default function SponsorCatalogs() {
     if (!confirm('Are you sure you want to delete this catalog? This will delete all items.')) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/sponsor/${userId}/catalogs/${catalogId}`, {
-        method: 'DELETE'
-      });
+      const response = await api.delete(`/catalogs/${catalogId}`);
 
       if (response.ok) {
         if (selectedCatalog === catalogId) {

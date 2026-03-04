@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
 import { Modal } from '../../components/Modal';
 import { Alert } from '../../components/Alert';
-
-const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
+import { createApiClient } from '~/utils/api';
 
 interface CatalogItem {
   id: number;
@@ -26,6 +25,9 @@ interface Catalog {
 }
 
 export default function DriverCatalogs() {
+  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
+  const api = useMemo(() => createApiClient({ id: 1, role: 'driver' }), []);
+
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [selectedCatalog, setSelectedCatalog] = useState<number | null>(null);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
@@ -34,8 +36,8 @@ export default function DriverCatalogs() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // TODO: Replace with actual user ID from authentication
-  const userId = 1; // Placeholder - should come from auth context
+  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
+  // const userId = 1; — now encoded in the api client above
 
   useEffect(() => {
     fetchCatalogs();
@@ -51,7 +53,7 @@ export default function DriverCatalogs() {
     try {
       setError(null);
       setLoading(true);
-      const response = await fetch(`${BASE_URL}/api/driver/${userId}/catalogs`);
+      const response = await api.get('/catalogs');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -69,7 +71,7 @@ export default function DriverCatalogs() {
   const fetchCatalogItems = async (catalogId: number) => {
     try {
       setLoading(true);
-      const response = await fetch(`${BASE_URL}/api/driver/${userId}/catalogs/${catalogId}`);
+      const response = await api.get(`/catalogs/${catalogId}`);
       const data = await response.json();
       setCatalogItems(data.items || []);
     } catch (error) {
