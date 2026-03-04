@@ -1,0 +1,131 @@
+catalogs:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - catalog
+    summary: List driver catalogs
+    description: Retrieve a list of catalogs available to the driver based on their sponsor company association. Driver access required.
+    parameters:
+      - $ref: '../../schemas/common.yaml#/Parameters/Limit'
+      - $ref: '../../schemas/common.yaml#/Parameters/Offset'
+    responses:
+      '200':
+        description: A list of product catalog summaries for the driver's sponsor company
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../../schemas/catalog.yaml#/CatalogSummary'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Driver not associated with a sponsor company
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Access forbidden: Driver not associated with a sponsor company"
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+          $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+catalogsById:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver
+      required: true
+      schema:
+        type: integer
+    - name: catalogId
+      in: path
+      description: The unique identifier of the product catalog
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - catalog
+    summary: Get driver catalog by ID
+    description: Retrieve details for a specific catalog available to the driver. Driver access required.
+    responses:
+      '200':
+        description: Details of the specified catalog with items
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/catalog.yaml#/Catalog'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Driver not associated with a sponsor company
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+          $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+catalogItemById:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver
+      required: true
+      schema:
+        type: integer
+    - name: catalogId
+      in: path
+      description: The unique identifier of the product catalog
+      required: true
+      schema:
+        type: integer
+    - name: itemId
+      in: path
+      description: The unique identifier of the catalog item
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - catalog
+    summary: Get catalog item by ID
+    description: Retrieve details for a specific item within a catalog available to the driver. Driver access required.
+    responses:
+      '200':
+        description: Details of the specified catalog item
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/catalog.yaml#/CatalogItem'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Driver not associated with a sponsor company
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
