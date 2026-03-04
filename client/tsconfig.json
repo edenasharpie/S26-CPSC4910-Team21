@@ -23,9 +23,5 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true
-  },
-  "compilerOptions": {
-    "skipLibCheck": true,
-    "noImplicitAny": false
   }
 }

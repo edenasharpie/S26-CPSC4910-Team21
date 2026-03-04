@@ -1,17 +1,9 @@
-//Imports for connecting to backend and displaying user data
+import type { Route } from "./+types/admin";
 import { useState, useEffect } from "react";
-import type { LoaderFunction, ActionFunction } from "react-router";
 import { Table, Input, Button, Badge, Modal, Alert } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData } from "react-router";
-import { getAllUsers, createUser } from "../../../../../server/src/db.js"; 
+import { getAllUsers, createUser } from "../../../../server/src/db.js"; 
 
-//TODO: Add user in the top right corner specific to an Admin and editable
-//Add Admin name under the admin dashboard title
-//Add generate report button which creates a pop up for filtering how the report is generated (date range, user type, etc) 
-// and then generates a downloadable CSV file and route to webpage which displays in readable format based on the filters 
-// selected. This will require a new API route to generate the report on the backend and return it to the frontend for download.
-
-// Loader function to fetch all users for the dashboard
 export async function loader() {
   try {
     const users = await getAllUsers();
@@ -24,8 +16,7 @@ export async function loader() {
   }
 }
 
-// Action function to handle creating a new user from the dashboard form
-export async function action({ request }: Parameters<ActionFunction>[0]) {
+export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   try {
     await createUser({ 
@@ -54,7 +45,6 @@ export default function AdminPortal() {
     if (actionData?.success) setIsAddUserOpen(false);
   }, [actionData]);
 
-  //Badges for account types
   const getAccountTypeBadge = (userType: string) => {
     const type = userType?.toLowerCase() || "";
     switch (type) {
@@ -67,8 +57,6 @@ export default function AdminPortal() {
 
   const columns = [
     {
-      //Avatars for each user
-      //TODO: Change to profile picture URL from DB
       key: "Avatar",
       header: "Avatar",
       render: (user: any) => (
@@ -80,8 +68,6 @@ export default function AdminPortal() {
       ),
     },
     {
-      //Name display
-      //Remove underneath username
       key: "Name",
       header: "User",
       render: (user: any) => (
