@@ -1,14 +1,9 @@
-import type { Route } from "./+types/sponsor";
+import type { Route } from "./+types/admin";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal, Alert } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData } from "react-router";
 //import { getAllUsers, createUser } from "../../../../server/src/db.js"; // IMPORT SERVER CODE IS NOT ALLOWED, IT WILL NOT WORK IN PROD. you need to use the api.
 
-//MAKE SO THAT THIS PAGE IS UNIQUE TO SPONSORS, AND ONLY SHOWS DRIVERS UNDER THE SPONSOR, NOT ALL DRIVERS IN THE SYSTEM
-//Show the sponsor name at the top of the page, and profile in top right corner with option to edit profile
-
-//Adding users under a specific sponosor
-//TO BE IMPLEMENTED
 export async function loader() {
   try {
     const users = await getAllUsers();
@@ -21,8 +16,6 @@ export async function loader() {
   }
 }
 
-//Create Driver
-//Edit to only allow drivers to be created under a sponsor, and not other sponsors or admins
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   try {
@@ -40,7 +33,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 }
 
-export default function SponsorPortal() {
+export default function AdminPortal() {
   const { users, error } = useLoaderData<typeof loader>();
   const actionData = useActionData(); 
   const [searchQuery, setSearchQuery] = useState("");
@@ -98,9 +91,9 @@ export default function SponsorPortal() {
       render: (user: any) => (
         <div className="flex gap-2">
           {user.UserType?.toLowerCase() === "driver" && (
-            <Button size="sm" variant="primary" className="bg-indigo-600" onClick={() => navigate(`/sponsor/profile/${user.UserID}/points`)}>Points</Button>
+            <Button size="sm" variant="primary" className="bg-indigo-600" onClick={() => navigate(`/admin/profile/${user.UserID}/points`)}>Points</Button>
           )}
-          <Button size="sm" variant="secondary" onClick={() => navigate(`/sponsor/profile/${user.UserID}`)}>Edit</Button>
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/admin/profile/${user.UserID}`)}>Edit</Button>
         </div>
       ),
     },
@@ -117,7 +110,7 @@ export default function SponsorPortal() {
           <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
         </div>
         <div className="mb-8 text-left">
-          <h1 className="mb-2 text-2xl font-bold">Sponsor Portal</h1>
+          <h1 className="mb-2 text-2xl font-bold">Admin Portal</h1>
         </div>
 
         <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -125,7 +118,7 @@ export default function SponsorPortal() {
             <Input type="search" placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => navigate("/sponsor/invoices")}>View Invoices</Button>
+            <Button variant="secondary" onClick={() => navigate("/admin/invoices")}>View Invoices</Button>
             <Button variant="primary" onClick={() => setIsAddUserOpen(true)}>Add User</Button>
           </div>
         </div>
