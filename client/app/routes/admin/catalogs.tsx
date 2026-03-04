@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Button, Card, Table, Modal, Input, Alert } from '~/components';
-
-const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
+import { createApiClient } from '~/utils/api';
 
 interface CatalogItem {
   id: number;
@@ -37,6 +36,9 @@ interface StoreProduct {
 }
 
 export default function Catalogs() {
+  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
+  const api = useMemo(() => createApiClient({ id: 0, role: 'admin' }), []);
+
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [selectedCatalog, setSelectedCatalog] = useState<number | null>(null);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
@@ -87,7 +89,7 @@ export default function Catalogs() {
   const fetchCatalogs = async () => {
     try {
       setError(null);
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs`);
+      const response = await api.get('/catalogs');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -103,8 +105,7 @@ export default function Catalogs() {
   const fetchSponsorCompanies = async () => {
     try {
       setError(null);
-      console.log('Fetching sponsors from:', `${BASE_URL}/api/sponsors`);
-      const response = await fetch(`${BASE_URL}/api/sponsors`);
+      const response = await api.fetchApi('/sponsors');
       console.log('Sponsor response status:', response.status);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -121,7 +122,7 @@ export default function Catalogs() {
   const fetchCatalogItems = async (catalogId: number) => {
     try {
       setLoading(true);
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${catalogId}`);
+      const response = await api.get(`/catalogs/${catalogId}`);
       const data = await response.json();
       setCatalogItems(data.items || []);
     } catch (error) {
@@ -134,14 +135,10 @@ export default function Catalogs() {
   const handleCreateCatalog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sponsorCompanyId: parseInt(newCatalog.sponsorCompanyId),
-          externalProductIds: [],
-          pointCost: 0
-        })
+      const response = await api.post('/catalogs', {
+        sponsorCompanyId: parseInt(newCatalog.sponsorCompanyId),
+        externalProductIds: [],
+        pointCost: 0
       });
 
       if (response.ok) {
@@ -157,7 +154,7 @@ export default function Catalogs() {
   const handleSearchStore = async () => {
     try {
       setSearchLoading(true);
-      const response = await fetch(`${BASE_URL}/api/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
+      const response = await api.fetchApi(`/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
@@ -196,11 +193,7 @@ export default function Catalogs() {
             originalSource: newItem.originalSource
           };
 
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${selectedCatalog}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const response = await api.post(`/catalogs/${selectedCatalog}/items`, payload);
 
       if (response.ok) {
         setIsAddItemOpen(false);
@@ -227,15 +220,11 @@ export default function Catalogs() {
     if (!selectedCatalog || !selectedItem) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${selectedCatalog}/items/${selectedItem.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editItem.name,
-          description: editItem.description,
-          pointCost: parseFloat(editItem.pointCost),
-          imageUrl: editItem.imageUrl
-        })
+      const response = await api.patch(`/catalogs/${selectedCatalog}/items/${selectedItem.id}`, {
+        name: editItem.name,
+        description: editItem.description,
+        pointCost: parseFloat(editItem.pointCost),
+        imageUrl: editItem.imageUrl
       });
 
       if (response.ok) {
@@ -252,9 +241,7 @@ export default function Catalogs() {
     if (!selectedCatalog || !confirm('Are you sure you want to delete this item?')) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${selectedCatalog}/items/${itemId}`, {
-        method: 'DELETE'
-      });
+      const response = await api.delete(`/catalogs/${selectedCatalog}/items/${itemId}`);
 
       if (response.ok) {
         fetchCatalogItems(selectedCatalog);
@@ -268,9 +255,7 @@ export default function Catalogs() {
     if (!confirm('Are you sure you want to delete this catalog? This will delete all items.')) return;
 
     try {
-      const response = await fetch(`${BASE_URL}/api/admin/catalogs/${catalogId}`, {
-        method: 'DELETE'
-      });
+      const response = await api.delete(`/catalogs/${catalogId}`);
 
       if (response.ok) {
         if (selectedCatalog === catalogId) {
