@@ -52,9 +52,9 @@ export default function Home() {
             <h1 className="text-3xl sm:text-4xl font-bold">
               Welcome to FleetScore!
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            {/*<p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
               {"<subtitle/description>"}
-            </p>
+            </p>*/}
           </div>
 
           {/* Debug Navigation */}
