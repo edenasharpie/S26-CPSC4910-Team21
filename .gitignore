@@ -1,5 +1,6 @@
 build/
-copilot-instructions.md
+.github/*.md
+.github/*.pdf
 .DS_Store
 .fs-env
 setup-dev-server.sh
