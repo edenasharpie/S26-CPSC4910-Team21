@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Button, Card, Table, Modal, Input, Alert } from '~/components';
-import { createApiClient } from '~/utils/api';
+
+const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
 
 interface CatalogItem {
   id: number;

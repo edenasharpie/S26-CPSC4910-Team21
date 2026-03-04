@@ -6,7 +6,8 @@ import { Table } from '../../components/Table';
 import { Modal } from '../../components/Modal';
 import { Input } from '../../components/Input';
 import { Alert } from '../../components/Alert';
-import { createApiClient } from '~/utils/api';
+
+const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
 
 interface CatalogItem {
   id: number;
@@ -55,8 +56,7 @@ export default function SponsorCatalogs() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [itemSource, setItemSource] = useState<'manual' | 'store'>('manual');
 
-  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
-  // const userId = 1; — now encoded in the api client above
+  const userId = 1; // TODO: Placeholder - should come from auth context. Replace with actual user ID from authentication
 
   // Form states
   const [newItem, setNewItem] = useState({
