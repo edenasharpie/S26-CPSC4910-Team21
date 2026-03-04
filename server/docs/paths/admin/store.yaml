@@ -1,0 +1,90 @@
+productSearch:
+  get:
+    tags:
+      - store
+    summary: Search products
+    description: Search products from the Fake Store API
+    parameters:
+      - name: query
+        in: query
+        description: Search query to filter products by title, description, or category
+        schema:
+          type: string
+      - $ref: '../../schemas/common.yaml#/Parameters/Limit'
+      - $ref: '../../schemas/common.yaml#/Parameters/Offset'
+    responses:
+      '200':
+        description: List of products matching search criteria
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  title:
+                    type: string
+                    example: "Fjallraven - Foldsack No. 1 Backpack"
+                  description:
+                    type: string
+                    example: "Your perfect pack for everyday use"
+                  price:
+                    type: number
+                    example: 109.95
+                  category:
+                    type: string
+                    example: "men's clothing"
+                  image:
+                    type: string
+                    format: uri
+                    example: "https://fakestoreapi.com/img/81fPKd-2AYL._AC_SL1500_.jpg"
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+productsById:
+  parameters:
+    - name: productId
+      in: path
+      description: The unique identifier of the product from Fake Store API
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - store
+    summary: Get product by ID
+    description: Retrieve details for a specific product from Fake Store API
+    responses:
+      '200':
+        description: Product details
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                title:
+                  type: string
+                  example: "Fjallraven - Foldsack No. 1 Backpack"
+                description:
+                  type: string
+                  example: "Your perfect pack for everyday use"
+                price:
+                  type: number
+                  example: 109.95
+                category:
+                  type: string
+                  example: "men's clothing"
+                image:
+                  type: string
+                  format: uri
+                  example: "https://fakestoreapi.com/img/81fPKd-2AYL._AC_SL1500_.jpg"
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
