@@ -1,4 +1,4 @@
-//IMPORTS
+// IMPORTS
 import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
@@ -51,9 +51,9 @@ export default function AdminPortal() {
 
   //Counting users by type for statistics at top
   const totalUsers = users.length;
-  const driverCount = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").length;
-  const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor").length;
-  const adminCount = users.filter((u: any) => u.UserType?.toLowerCase() === "admin").length;
+  const driverCount = users.filter((u: any) => u.UserType?.toLowerCase() === "driver" && u.ActiveStatus !== 0).length;
+  const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor" && u.ActiveStatus !== 0).length;
+  const adminCount = users.filter((u: any) => u.UserType?.toLowerCase() === "admin" && u.ActiveStatus !== 0).length;
   const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
 
   useEffect(() => {
@@ -79,12 +79,10 @@ export default function AdminPortal() {
 
   const columns = [
     {
-      //TODO: Show and upload actual images rather than avatars, if user has no profilepicture, use a monogram logo instead of avatar
       key: "Avatar",
       header: "Avatar",
       render: (user: any) => {
-        const hasCustomPhoto = user.ProfilePicture && user.ProfilePicture.includes("base64");
-        const imageSrc = hasCustomPhoto 
+        const imageSrc = user.ProfilePicture && user.ProfilePicture.includes("base64")
           ? user.ProfilePicture 
           : `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`;
 
@@ -93,9 +91,6 @@ export default function AdminPortal() {
             src={imageSrc}
             alt="avatar"
             className="w-10 h-10 rounded-full object-cover border border-gray-100 dark:border-gray-800"
-            onError={(e) => {
-              e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`;
-            }}
           />
         );
       },
@@ -155,19 +150,19 @@ export default function AdminPortal() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="container-padding section-spacing">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Header Section */}
-        <div className="mb-8 border-b pb-6 dark:border-gray-800 flex justify-between items-center">
+        <div className="mb-8 border-b pb-6 dark:border-gray-800 flex justify-between items-end">
           <div className="text-left">
             <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Home</Link>
-            <h1 className="text-3xl font-extrabold tracking-tight">Admin Portal</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">Admin Portal</h1>
             <p className="text-gray-500 text-sm mt-1 font-medium italic">System administration and user oversight.</p>
           </div>
 
           <button 
             onClick={() => navigate(`/admin/profile/123456807`)}
-            className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group"
+            className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
           >
             <div className="relative">
               <img
@@ -179,7 +174,7 @@ export default function AdminPortal() {
             </div>
             <div className="text-left hidden sm:block">
               <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">System Admin</p>
-              <p className="text-[10px] text-gray-400 font-mono mt-0.5">ID: 123456807</p>
+              <p className="text-[10px] text-gray-400 font-mono mt-0.5 uppercase tracking-tighter">ID: 123456807</p>
             </div>
           </button>
         </div>
@@ -187,11 +182,11 @@ export default function AdminPortal() {
         {/* Main Dashboard Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* Sidebar: Statistics & Analytics */}
+          {/* Sidebar */}
           <aside className="lg:col-span-3 space-y-6">
             <div className="space-y-4">
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">Statistics</h2>
-              <div className="grid grid-cols-2 gap-3">
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">Overview</h2>
+              <div className="grid grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2">
                 <StatCard title="Total" value={totalUsers} color="text-gray-900 dark:text-white" />
                 <StatCard title="Drivers" value={driverCount} color="text-green-600" />
                 <StatCard title="Sponsors" value={sponsorCount} color="text-blue-600" />
@@ -205,33 +200,31 @@ export default function AdminPortal() {
               <Button 
                 variant="secondary" 
                 onClick={() => setIsAuditModalOpen(true)} 
-                className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all"
+                className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all shadow-sm"
               >
                 Audit Reports
               </Button>
               <Button 
                 variant="secondary" 
                 onClick={() => navigate("/admin/invoices")} 
-                className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all"
+                className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all shadow-sm"
               >
                 Invoices
               </Button>
             </div>
           </aside>
 
-          {/* Main Content: Search & Table */}
-          <main className="lg:col-span-9 space-y-4">
+          {/* Main Content */}
+          <main className="lg:col-span-9 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
               <div className="md:col-span-4">
                 <Input placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
-
               <div className="md:col-span-3">
-                <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block text-left">Account Type</label>
                 <select 
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="All">All Types</option>
                   <option value="driver">Drivers</option>
@@ -239,20 +232,17 @@ export default function AdminPortal() {
                   <option value="admin">Admins</option>
                 </select>
               </div>
-
               <div className="md:col-span-3">
-                <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block text-left">Status</label>
                 <select 
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="All">All Statuses</option>
                   <option value="Active">Active Only</option>
                   <option value="Inactive">Inactive Only</option>
                 </select>
               </div>
-
               <div className="md:col-span-2">
                 <Button variant="primary" className="w-full h-10" onClick={() => setIsAddUserOpen(true)}>
                   Add User
@@ -260,90 +250,94 @@ export default function AdminPortal() {
               </div>
             </div>
 
-            {error && <div className="p-4 bg-red-50 text-red-700 rounded-md border border-red-100 text-sm text-left">{error}</div>}
-
-            <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl border dark:border-gray-800 overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl border dark:border-gray-800 overflow-hidden text-left">
               <Table data={filteredUsers} columns={columns} />
               {filteredUsers.length === 0 && (
-                <div className="p-8 text-center text-gray-500 italic">No users found.</div>
+                <div className="p-8 text-center text-gray-500 italic">No users found matching your criteria.</div>
               )}
             </div>
           </main>
         </div>
+      </div>
 
-        {/* Audit Report Modal */}
-        <Modal 
-          isOpen={isAuditModalOpen} 
-          onClose={() => setIsAuditModalOpen(false)} 
-          title="Audit Report Configuration"
-        >
-          <Form method="get" action="/admin/audit-logs" className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 text-left">Select Log Types:</p>
-              <AuditOption label="Password Changes" name="type" value="password_change" />
-              <AuditOption label="Login Attempts" name="type" value="login" />
-              <AuditOption label="Point Transactions" name="type" value="points" />
-              <AuditOption label="Driver Applications" name="type" value="applications" />
+      {/* Audit Modal (Restored Robust Filtering) */}
+      <Modal isOpen={isAuditModalOpen} onClose={() => setIsAuditModalOpen(false)} title="Audit Report Configuration">
+        <Form method="get" action="/admin/audit-logs" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1 text-left">
+                <label className="text-xs font-bold text-gray-400 uppercase">Start Date</label>
+                <input type="date" name="startDate" className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 text-sm" />
+              </div>
+              <div className="space-y-1 text-left">
+                <label className="text-xs font-bold text-gray-400 uppercase">End Date</label>
+                <input type="date" name="endDate" className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 text-sm" />
+              </div>
             </div>
 
-            <div className="pt-4 border-t dark:border-gray-800">
-              <label className="block text-sm font-medium mb-1 text-left">Filter by Sponsor</label>
-              <select name="sponsorId" className="w-full rounded-md border border-gray-200 p-2 text-sm bg-white dark:bg-gray-800">
-                <option value="all">All Sponsors</option>
-                <option value="1">Global Logistics</option>
-                <option value="2">Swift Trucking</option>
+            <div className="space-y-1 text-left">
+              <label className="text-xs font-bold text-gray-400 uppercase">Specific User (Optional)</label>
+              <select name="targetUserId" className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 text-sm">
+                <option value="">All Users</option>
+                {users.map((u: any) => (
+                  <option key={u.UserID} value={u.UserID}>{u.FirstName} {u.LastName} ({u.Username})</option>
+                ))}
               </select>
             </div>
 
-            <div className="pt-2">
-              <label className="block text-sm font-medium mb-1 text-left">Date Range</label>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="date" name="start" className="p-2 text-xs border rounded bg-white dark:bg-gray-800 dark:border-gray-700" />
-                <input type="date" name="end" className="p-2 text-xs border rounded bg-white dark:bg-gray-800 dark:border-gray-700" />
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-gray-400 uppercase text-left">Log Categories</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <AuditOption label="Password Changes" name="type" value="password_change" />
+                <AuditOption label="Login Activity" name="type" value="login" />
+                <AuditOption label="Point Adjustments" name="type" value="points" />
+                <AuditOption label="Profile Edits" name="type" value="profile_edit" />
+                <AuditOption label="System Config" name="type" value="system" />
+                <AuditOption label="Applications" name="type" value="applications" />
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-6 border-t dark:border-gray-800">
               <Button type="button" variant="ghost" onClick={() => setIsAuditModalOpen(false)}>Cancel</Button>
-              <Button type="submit" variant="primary">Generate Report</Button>
+              <Button type="submit" variant="primary">Generate</Button>
             </div>
-          </Form>
-        </Modal>
+        </Form>
+      </Modal>
 
-        {/* Add User Modal */}
-        <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add New User">
-          <Form method="post" className="space-y-4">
-            <Input label="Username" name="username" required />
-            <div className="grid grid-cols-2 gap-4">
-              <Input label="First Name" name="firstName" required />
-              <Input label="Last Name" name="lastName" required />
-            </div>
-            <div className="text-left">
-              <label className="text-sm font-medium mb-1 block">Account Type</label>
-              <select name="accountType" value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="w-full rounded-md border border-gray-200 p-2 text-sm bg-white dark:bg-gray-800">
-                <option value="Driver">Driver</option>
-                <option value="Sponsor">Sponsor</option>
-                <option value="Admin">Admin</option>
-              </select>
-            </div>
-            {selectedType === "Driver" && <Input label="License Number" name="licenseNumber" required />}
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="ghost" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
-              <Button type="submit" variant="primary">Create User</Button>
-            </div>
-          </Form>
-        </Modal>
-      </div>
+      {/* Add User Modal */}
+      <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add New User">
+        <Form method="post" className="space-y-4">
+          <Input label="Username" name="username" required />
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="First Name" name="firstName" required />
+            <Input label="Last Name" name="lastName" required />
+          </div>
+          <div className="text-left">
+            <label className="text-sm font-medium mb-1 block">Account Type</label>
+            <select name="accountType" value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="w-full rounded-md border border-gray-200 p-2 text-sm bg-white dark:bg-gray-800">
+              <option value="Driver">Driver</option>
+              <option value="Sponsor">Sponsor</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          {selectedType === "Driver" && <Input label="License Number" name="licenseNumber" required />}
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="ghost" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="primary">Create User</Button>
+          </div>
+        </Form>
+      </Modal>
     </div>
   );
 }
 
+// --- HELPERS ---
+
 function StatCard({ title, value, color }: { title: string; value: number; color: string }) {
   return (
-    <div className="aspect-square flex flex-col justify-center items-center p-2 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-xl text-center">
-      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1 truncate w-full">{title}</div>
-      <div className={`text-3xl sm:text-4xl font-black leading-none ${color}`}>
-        {value.toLocaleString()}
+    <div className="aspect-square flex flex-col justify-center items-center p-1 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-lg text-center">
+      <div className="text-[10px] font-black text-gray-400 uppercase tracking-tight mb-0.5 truncate w-full">{title}</div>
+      <div className={`text-2xl sm:text-3xl lg:text-4xl font-black leading-none tracking-tighter ${color}`}>
+        {value}
       </div>
     </div>
   );
@@ -351,9 +345,9 @@ function StatCard({ title, value, color }: { title: string; value: number; color
 
 function AuditOption({ label, name, value }: { label: string, name: string, value: string }) {
   return (
-    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded cursor-pointer transition-colors text-left">
+    <label className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg border dark:border-gray-800 cursor-pointer transition-colors text-left">
       <input type="checkbox" name={name} value={value} className="h-4 w-4 text-indigo-600 border-gray-300 rounded" />
-      <span className="text-sm font-medium">{label}</span>
+      <span className="text-xs font-semibold">{label}</span>
     </label>
   );
 }
