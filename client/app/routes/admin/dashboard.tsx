@@ -1,52 +1,26 @@
-// IMPORTS
-import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
-import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
-// Change for API 
-import { getAllUsers, createUser } from "../../../../server/src/db.js"; 
+import { useNavigate, Link } from "react-router";
 
-//Load in ALL users
-export async function loader() {
-  try {
-    const users = await getAllUsers();
-    return {
-      users: Array.isArray(users) ? users : [],
-      error: null
-    };
-  } catch (error: any) {
-    return { users: [], error: `DB Error: ${error.message}` };
-  }
-}
-
-//Creating new user action, edit to ask for email, phone number, profile picture, password and bio
-//make picture, bio, and email optional, all other required, and password rule following
-export async function action({ request }: Route.ActionArgs) {
-  const formData = await request.formData();
-  try {
-    await createUser({
-      Username: formData.get("username") as string,
-      FirstName: formData.get("firstName") as string,
-      LastName: formData.get("lastName") as string,
-      UserType: formData.get("accountType") as string,
-      ActiveStatus: 1,
-      LicenseNumber: formData.get("licenseNumber") as string
-    });
-    return { success: true };
-  } catch (error: any) {
-    return { error: error.message };
-  }
-}
+const BASE_URL = 'http://localhost:5000';
 
 export default function AdminPortal() {
-  const { users, error } = useLoaderData<typeof loader>();
-  const actionData = useActionData();
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("1"); // "1" = Active, "0" = Inactive, "all" = All
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
-  const [selectedType, setSelectedType] = useState("Driver");
+  const [selectedType, setSelectedType] = useState("driver");
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    firstName: '',
+    lastName: '',
+    licenseNumber: '',
+    performanceStatus: 'good',
+    sponsorCompanyId: ''
+  });
   const navigate = useNavigate();
 
   //Counting users by type for statistics at top
@@ -57,8 +31,87 @@ export default function AdminPortal() {
   const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
 
   useEffect(() => {
-    if (actionData?.success) setIsAddUserOpen(false);
-  }, [actionData]);
+    fetchUsers();
+  }, [statusFilter]);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      // Build query string with status filter
+      const queryParams = new URLSearchParams();
+      if (statusFilter !== 'all') {
+        queryParams.append('activeStatus', statusFilter);
+      }
+      const queryString = queryParams.toString();
+      const url = `${BASE_URL}/api/admin/users${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setUsers(data.users || []);
+    } catch (error: any) {
+      console.error('Error fetching users:', error);
+      setError('Failed to fetch users. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setError(null);
+      const payload: any = {
+        username: formData.username,
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        userType: selectedType,
+        activeStatus: 1
+      };
+
+      // Add driver-specific fields
+      if (selectedType === 'driver') {
+        payload.licenseNumber = formData.licenseNumber;
+        payload.performanceStatus = formData.performanceStatus;
+      }
+
+      // Add sponsor-specific fields
+      if (selectedType === 'sponsor' && formData.sponsorCompanyId) {
+        payload.sponsorCompanyId = parseInt(formData.sponsorCompanyId);
+      }
+
+      const response = await fetch(`${BASE_URL}/api/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        setIsAddUserOpen(false);
+        setFormData({
+          username: '',
+          email: '',
+          firstName: '',
+          lastName: '',
+          licenseNumber: '',
+          performanceStatus: 'good',
+          sponsorCompanyId: ''
+        });
+        setSelectedType('driver');
+        fetchUsers();
+      } else {
+        const errData = await response.json();
+        setError(errData.error || 'Failed to create user');
+      }
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      setError('Failed to create user. Please try again.');
+    }
+  };
 
   //Searching for users via name or username
   const filteredUsers = users.filter((u: any) => {
@@ -81,263 +134,204 @@ export default function AdminPortal() {
     {
       key: "Avatar",
       header: "Avatar",
-      render: (user: any) => {
-        const imageSrc = user.ProfilePicture && user.ProfilePicture.includes("base64")
-          ? user.ProfilePicture 
-          : `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`;
-
-        return (
-          <img
-            src={imageSrc}
-            alt="avatar"
-            className="w-10 h-10 rounded-full object-cover border border-gray-100 dark:border-gray-800"
-          />
-        );
-      },
+      render: (user: any) => (
+        <img
+          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username || user.Username}`}
+          alt="avatar"
+          className="w-10 h-10 rounded-full"
+        />
+      ),
     },
     {
       key: "Name",
       header: "User",
       render: (user: any) => (
         <div className="flex flex-col text-left">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-900 dark:text-white">
-              {user.FirstName} {user.LastName}
-            </span>
-            {user.ActiveStatus === 0 && (
-              <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase border border-red-100">Inactive</span>
-            )}
-          </div>
-          <span className="text-xs text-gray-400 font-mono">{user.Username}</span>
+          <span className="font-medium text-gray-900 dark:text-white">
+            {user.firstName || user.FirstName} {user.lastName || user.LastName}
+          </span>
+          <span className="text-xs text-gray-500">{user.username || user.Username}</span>
         </div>
       ),
+    },
+    { 
+      key: "Username", 
+      header: "Username",
+      render: (user: any) => user.username || user.Username
     },
     {
       key: "UserType",
       header: "Account Type",
-      render: (user: any) => (
-        <Badge variant={user.UserType?.toLowerCase() === "admin" ? "danger" : user.UserType?.toLowerCase() === "sponsor" ? "info" : "success"}>
-          {user.UserType}
-        </Badge>
-      )
+      render: (user: any) => getAccountTypeBadge(user.accountType || user.UserType),
     },
     {
-      key: "Points",
-      header: "Points",
+      key: "Status",
+      header: "Status",
       render: (user: any) => {
-        if (user.UserType?.toLowerCase() !== "driver") return <span className="text-gray-300 pl-4">—</span>;
-        return (
-          <button 
-            onClick={() => navigate(`/admin/profile/${user.UserID}/points`)}
-            className="group flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 hover:border-indigo-400 transition-all"
-          >
-            <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">{user.TotalPoints ?? 0}</span>
-            <span className="text-[10px] uppercase tracking-tighter text-indigo-400 font-bold">Manage</span>
-          </button>
-        );
-      }
+        const status = user.activeStatus ?? user.ActiveStatus;
+        return status === 1 || status === "1" 
+          ? <Badge variant="success">Active</Badge> 
+          : <Badge variant="default">Inactive</Badge>;
+      },
     },
     {
-      key: "edit",
-      header: "", 
-      render: (user: any) => (
-        <div className="flex justify-end pr-4">
-          <Button size="sm" variant="secondary" onClick={() => navigate(`/admin/profile/${user.UserID}`)}>Edit</Button>
-        </div>
-      ),
+      key: "actions",
+      header: "Actions",
+      render: (user: any) => {
+        const userId = user.id || user.UserID;
+        const userType = user.accountType || user.UserType;
+        return (
+          <div className="flex gap-2">
+            {userType?.toLowerCase() === "driver" && (
+              <Button size="sm" variant="primary" className="bg-indigo-600" onClick={() => navigate(`/admin/profile/${userId}/points`)}>Points</Button>
+            )}
+            <Button size="sm" variant="secondary" onClick={() => navigate(`/admin/profile/${userId}`)}>Edit</Button>
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* Header Section */}
-        <div className="mb-8 border-b pb-6 dark:border-gray-800 flex justify-between items-end">
-          <div className="text-left">
-            <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Home</Link>
-            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">Admin Portal</h1>
-            <p className="text-gray-500 text-sm mt-1 font-medium italic">System administration and user oversight.</p>
-          </div>
+      <div className="container-padding section-spacing">
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-left">{error}</div>
+        )}
 
-          <button 
-            onClick={() => navigate(`/admin/profile/123456807`)}
-            className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
-          >
-            <div className="relative">
-              <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=Admin123456807`}
-                alt="Admin Avatar"
-                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
-              />
-              <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
-            </div>
-            <div className="text-left hidden sm:block">
-              <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">System Admin</p>
-              <p className="text-[10px] text-gray-400 font-mono mt-0.5 uppercase tracking-tighter">ID: 123456807</p>
-            </div>
-          </button>
+        <div className="mb-4">
+          <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
+        </div>
+        <div className="mb-8 text-left">
+          <h1 className="mb-2 text-2xl font-bold">Admin Portal</h1>
         </div>
 
-        {/* Main Dashboard Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Sidebar */}
-          <aside className="lg:col-span-3 space-y-6">
-            <div className="space-y-4">
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">Overview</h2>
-              <div className="grid grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2">
-                <StatCard title="Total" value={totalUsers} color="text-gray-900 dark:text-white" />
-                <StatCard title="Drivers" value={driverCount} color="text-green-600" />
-                <StatCard title="Sponsors" value={sponsorCount} color="text-blue-600" />
-                <StatCard title="Admins" value={adminCount} color="text-red-600" />
-                <StatCard title="Inactive" value={inactiveCount} color="text-gray-400" />
-              </div>
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="flex gap-4 flex-wrap items-center">
+            <div className="w-full sm:w-64">
+              <Input type="search" placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
-
-            <div className="space-y-3 pt-4 border-t dark:border-gray-800">
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">Analytics</h2>
-              <Button 
-                variant="secondary" 
-                onClick={() => setIsAuditModalOpen(true)} 
-                className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all shadow-sm"
+            <div>
+              <select 
+                value={statusFilter} 
+                onChange={(e) => setStatusFilter(e.target.value)} 
+                className="rounded-md border border-gray-300 dark:border-gray-700 p-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 h-10.5"
               >
-                Audit Reports
-              </Button>
-              <Button 
-                variant="secondary" 
-                onClick={() => navigate("/admin/invoices")} 
-                className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all shadow-sm"
-              >
-                Invoices
-              </Button>
-            </div>
-          </aside>
-
-          {/* Main Content */}
-          <main className="lg:col-span-9 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-              <div className="md:col-span-4">
-                <Input placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-              </div>
-              <div className="md:col-span-3">
-                <select 
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="All">All Types</option>
-                  <option value="driver">Drivers</option>
-                  <option value="sponsor">Sponsors</option>
-                  <option value="admin">Admins</option>
-                </select>
-              </div>
-              <div className="md:col-span-3">
-                <select 
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="All">All Statuses</option>
-                  <option value="Active">Active Only</option>
-                  <option value="Inactive">Inactive Only</option>
-                </select>
-              </div>
-              <div className="md:col-span-2">
-                <Button variant="primary" className="w-full h-10" onClick={() => setIsAddUserOpen(true)}>
-                  Add User
-                </Button>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl border dark:border-gray-800 overflow-hidden text-left">
-              <Table data={filteredUsers} columns={columns} />
-              {filteredUsers.length === 0 && (
-                <div className="p-8 text-center text-gray-500 italic">No users found matching your criteria.</div>
-              )}
-            </div>
-          </main>
-        </div>
-      </div>
-
-      {/* Audit Modal (Restored Robust Filtering) */}
-      <Modal isOpen={isAuditModalOpen} onClose={() => setIsAuditModalOpen(false)} title="Audit Report Configuration">
-        <Form method="get" action="/admin/audit-logs" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1 text-left">
-                <label className="text-xs font-bold text-gray-400 uppercase">Start Date</label>
-                <input type="date" name="startDate" className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 text-sm" />
-              </div>
-              <div className="space-y-1 text-left">
-                <label className="text-xs font-bold text-gray-400 uppercase">End Date</label>
-                <input type="date" name="endDate" className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 text-sm" />
-              </div>
-            </div>
-
-            <div className="space-y-1 text-left">
-              <label className="text-xs font-bold text-gray-400 uppercase">Specific User (Optional)</label>
-              <select name="targetUserId" className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 text-sm">
-                <option value="">All Users</option>
-                {users.map((u: any) => (
-                  <option key={u.UserID} value={u.UserID}>{u.FirstName} {u.LastName} ({u.Username})</option>
-                ))}
+                <option value="1">Active Users</option>
+                <option value="0">Inactive Users</option>
+                <option value="all">All Users</option>
               </select>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <p className="text-xs font-bold text-gray-400 uppercase text-left">Log Categories</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <AuditOption label="Password Changes" name="type" value="password_change" />
-                <AuditOption label="Login Activity" name="type" value="login" />
-                <AuditOption label="Point Adjustments" name="type" value="points" />
-                <AuditOption label="Profile Edits" name="type" value="profile_edit" />
-                <AuditOption label="System Config" name="type" value="system" />
-                <AuditOption label="Applications" name="type" value="applications" />
-              </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <StatCard title="Total Users" value={users.length} color="text-gray-900" />
+          <StatCard title="Drivers" value={users.filter((u: any) => (u.accountType || u.UserType)?.toLowerCase() === "driver").length} color="text-green-600" />
+          <StatCard title="Sponsors" value={users.filter((u: any) => (u.accountType || u.UserType)?.toLowerCase() === "sponsor").length} color="text-blue-600" />
+          <StatCard title="Admins" value={users.filter((u: any) => (u.accountType || u.UserType)?.toLowerCase() === "admin").length} color="text-red-600" />
+        </div>
+
+        <div className="card overflow-hidden">
+          {loading ? (
+            <div className="p-8 text-center text-gray-500">Loading users...</div>
+          ) : (
+            <Table 
+              data={users.filter((u: any) => {
+                const username = u.username || u.Username || '';
+                return username.toLowerCase().includes(searchQuery.toLowerCase());
+              })} 
+              columns={columns} 
+            />
+          )}
+        </div>
+
+        <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add New User">
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            <Input 
+              label="Username" 
+              name="username" 
+              value={formData.username}
+              onChange={(e) => setFormData({...formData, username: e.target.value})}
+              required 
+            />
+            <Input 
+              label="Email" 
+              name="email" 
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              required 
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <Input 
+                label="First Name" 
+                name="firstName" 
+                value={formData.firstName}
+                onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                required 
+              />
+              <Input 
+                label="Last Name" 
+                name="lastName" 
+                value={formData.lastName}
+                onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                required 
+              />
             </div>
-
-            <div className="flex justify-end gap-2 pt-6 border-t dark:border-gray-800">
-              <Button type="button" variant="ghost" onClick={() => setIsAuditModalOpen(false)}>Cancel</Button>
-              <Button type="submit" variant="primary">Generate</Button>
+            <div>
+              <label className="text-sm font-medium mb-1 block text-left">Account Type</label>
+              <select 
+                name="accountType" 
+                value={selectedType} 
+                onChange={(e) => setSelectedType(e.target.value)} 
+                className="w-full rounded-md border p-2 text-sm bg-white dark:bg-gray-800"
+              >
+                <option value="driver">Driver</option>
+                <option value="sponsor">Sponsor</option>
+                <option value="admin">Admin</option>
+              </select>
             </div>
-        </Form>
-      </Modal>
-
-      {/* Add User Modal */}
-      <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add New User">
-        <Form method="post" className="space-y-4">
-          <Input label="Username" name="username" required />
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="First Name" name="firstName" required />
-            <Input label="Last Name" name="lastName" required />
-          </div>
-          <div className="text-left">
-            <label className="text-sm font-medium mb-1 block">Account Type</label>
-            <select name="accountType" value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="w-full rounded-md border border-gray-200 p-2 text-sm bg-white dark:bg-gray-800">
-              <option value="Driver">Driver</option>
-              <option value="Sponsor">Sponsor</option>
-              <option value="Admin">Admin</option>
-            </select>
-          </div>
-          {selectedType === "Driver" && <Input label="License Number" name="licenseNumber" required />}
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="ghost" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="primary">Create User</Button>
-          </div>
-        </Form>
-      </Modal>
-    </div>
-  );
-}
-
-// --- HELPERS ---
-
-function StatCard({ title, value, color }: { title: string; value: number; color: string }) {
-  return (
-    <div className="aspect-square flex flex-col justify-center items-center p-1 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-lg text-center">
-      <div className="text-[10px] font-black text-gray-400 uppercase tracking-tight mb-0.5 truncate w-full">{title}</div>
-      <div className={`text-2xl sm:text-3xl lg:text-4xl font-black leading-none tracking-tighter ${color}`}>
-        {value}
+            {selectedType === "driver" && (
+              <>
+                <Input 
+                  label="License Number" 
+                  name="licenseNumber" 
+                  value={formData.licenseNumber}
+                  onChange={(e) => setFormData({...formData, licenseNumber: e.target.value})}
+                  required 
+                />
+                <div>
+                  <label className="text-sm font-medium mb-1 block text-left">Performance Status</label>
+                  <select 
+                    name="performanceStatus" 
+                    value={formData.performanceStatus} 
+                    onChange={(e) => setFormData({...formData, performanceStatus: e.target.value})} 
+                    className="w-full rounded-md border p-2 text-sm bg-white dark:bg-gray-800"
+                  >
+                    <option value="excellent">Excellent</option>
+                    <option value="good">Good</option>
+                    <option value="average">Average</option>
+                    <option value="poor">Poor</option>
+                  </select>
+                </div>
+              </>
+            )}
+            {selectedType === "sponsor" && (
+              <Input 
+                label="Sponsor Company ID" 
+                name="sponsorCompanyId" 
+                type="number"
+                value={formData.sponsorCompanyId}
+                onChange={(e) => setFormData({...formData, sponsorCompanyId: e.target.value})}
+                required 
+              />
+            )}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="ghost" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="primary">Create User</Button>
+            </div>
+          </form>
+        </Modal>
       </div>
     </div>
   );
