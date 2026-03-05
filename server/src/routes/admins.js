@@ -113,4 +113,27 @@ router.get('/users-with-points', async (req, res) => {
   }
 });
 
+// GET /api/admin/audit-reports
+router.get('/audit-reports', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT 
+        p.PointChange, 
+        p.ReasonForChange, 
+        p.TimeChanged, 
+        u.FirstName AS DriverFirstName,
+        u.LastName AS DriverLastName,
+        admin.FirstName AS AdminFirstName
+       FROM POINT_TRANSACTIONS p
+       JOIN DRIVERS d ON p.DriverID = d.LicenseNumber
+       JOIN USERS u ON d.UserID = u.UserID
+       JOIN USERS admin ON p.UserChanged = admin.UserID
+       ORDER BY p.TimeChanged DESC` // No WHERE clause = Shows All
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Audit Report Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 export default router;

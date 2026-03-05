@@ -4,20 +4,43 @@ import { useLoaderData } from "react-router";
 import { Table, Button, Badge } from "~/components";
 
 interface AuditLog {
-  LogID: number;
+  LogID?: number;
+  PointChange?: number;
   Username: string | null;
   ActionType: string;
   Status: string;
-  IPAddress: string;
+  IPAddress?: string;
+  ReasonForChange?: string;
   CreatedAt: string;
+  DriverName?: string;
 }
 
 export async function loader() {
   try {
-    const response = await fetch("http://localhost:5001/api/sponsors/audit-logs");
-    if (!response.ok) throw new Error("Failed to fetch");
-    const logs = await response.json();
-    return { logs };
+    const [securityRes, pointsRes] = await Promise.all([
+      fetch("http://localhost:5001/api/sponsors/audit-logs"),
+      fetch("http://localhost:5001/api/admin/audit-reports")
+    ]);
+
+    const securityData = await securityRes.json();
+    const pointsData = await pointsRes.json();
+
+    const formattedPoints = pointsData.map((p: any) => ({
+      CreatedAt: p.TimeChanged,
+      ActionType: "POINT_CHANGE",
+      Username: `${p.DriverFirstName} ${p.DriverLastName}`, 
+      Status: "SUCCESS",
+      PointChange: p.PointChange,
+      ReasonForChange: p.ReasonForChange,
+      AdminName: p.AdminFirstName
+    }));
+
+    // Combine and sort by newest first
+    const combinedLogs = [...securityData, ...formattedPoints].sort(
+      (a, b) => new Date(b.CreatedAt).getTime() - new Date(a.CreatedAt).getTime()
+    );
+
+    return { logs: combinedLogs };
   } catch (error) {
     console.error("Fetch error:", error);
     return { logs: [] };
@@ -61,6 +84,8 @@ export default function AuditLogs() {
         return <Badge variant="info">Login Attempt</Badge>;
       case "PASSWORD_CHANGE":
         return <Badge variant="warning">Password Change</Badge>;
+      case "POINT_CHANGE":
+        return <Badge variant="success">Point Assignment</Badge>;
       default:
         return <Badge variant="default">{eventType || "System Event"}</Badge>;
     }
@@ -87,6 +112,23 @@ export default function AuditLogs() {
           {log.Username || "Unknown / Non-existent User"}
         </span>
       ),
+    },
+    {
+      key: "Details",
+      header: "Details",
+      render: (log: AuditLog) => {
+        if (log.ActionType === "POINT_CHANGE") {
+          return (
+            <span className="text-sm">
+              <b className={log.PointChange! >= 0 ? "text-green-600" : "text-red-600"}>
+                {log.PointChange! >= 0 ? `+${log.PointChange}` : log.PointChange}
+              </b>
+                {" - "}{log.ReasonForChange}
+            </span>
+          );
+        }
+        return <span className="text-xs font-mono text-gray-500">{log.IPAddress}</span>;
+      },
     },
     {
       key: "Status",
