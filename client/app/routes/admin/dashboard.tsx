@@ -3,9 +3,10 @@ import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
-// IMPORTANT: In a real app, use an API route. 
+// Change for API 
 import { getAllUsers, createUser } from "../../../../server/src/db.js"; 
 
+//Load in ALL users
 export async function loader() {
   try {
     const users = await getAllUsers();
@@ -18,6 +19,8 @@ export async function loader() {
   }
 }
 
+//Creating new user action, edit to ask for email, phone number, profile picture, password and bio
+//make picture, bio, and email optional, all other required, and password rule following
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   try {
@@ -45,6 +48,7 @@ export default function AdminPortal() {
   const [selectedType, setSelectedType] = useState("Driver");
   const navigate = useNavigate();
 
+  //Counting users by type for statistics at top
   const totalUsers = users.length;
   const driverCount = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").length;
   const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor").length;
@@ -54,6 +58,7 @@ export default function AdminPortal() {
     if (actionData?.success) setIsAddUserOpen(false);
   }, [actionData]);
 
+  //Searching for users via name or username
   const filteredUsers = users.filter((u: any) => {
     const matchesSearch = 
       u.Username.toLowerCase().includes(searchQuery.toLowerCase()) ||

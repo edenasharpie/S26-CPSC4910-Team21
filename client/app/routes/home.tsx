@@ -19,6 +19,7 @@ const NAV_SECTIONS = [
   {
     label: "Sponsor",
     links: [
+      { to: "/sponsor/dashboard", label: "Dashboard" },
       { to: "/sponsor/catalogs", label: "Catalogs" },
     ],
   },
