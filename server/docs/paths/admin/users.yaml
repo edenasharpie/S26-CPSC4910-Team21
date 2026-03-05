@@ -1,0 +1,574 @@
+users:
+  get:
+    tags:
+      - accounts
+    summary: List all users
+    description: Retrieve a list of all user accounts in the system with pagination and optional filtering. Admin access required.
+    parameters:
+      - $ref: '../../schemas/common.yaml#/Parameters/Limit'
+      - $ref: '../../schemas/common.yaml#/Parameters/Offset'
+      - name: userType
+        in: query
+        description: Filter users by account type
+        required: false
+        schema:
+          type: string
+          enum:
+            - driver
+            - sponsor
+            - admin
+      - name: activeStatus
+        in: query
+        description: Filter users by active status
+        required: false
+        schema:
+          type: integer
+          enum:
+            - 0
+            - 1
+      - name: search
+        in: query
+        description: Search users by username, email, first name, or last name
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+    responses:
+      '200':
+        description: A list of user accounts with pagination information
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/account.yaml#/UserManagementList'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '422':
+        $ref: '../../schemas/common.yaml#/Responses/422Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+      '503':
+        $ref: '../../schemas/common.yaml#/Responses/503Error'
+  
+  post:
+    tags:
+      - accounts
+    summary: Create new user
+    description: Create a new user account. Admin access required.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - username
+              - email
+              - firstName
+              - lastName
+              - userType
+            properties:
+              username:
+                type: string
+                minLength: 3
+                maxLength: 25
+                example: johndoe123
+              email:
+                type: string
+                format: email
+                example: johndoe@example.com
+              phone:
+                type: string
+                pattern: '^\+?[1-9]\d{1,14}$'
+                example: +1234567890
+              password:
+                type: string
+                minLength: 8
+                maxLength: 32
+                format: password
+                description: If not provided, a default password will be set
+              firstName:
+                type: string
+                minLength: 1
+                maxLength: 50
+                example: John
+              middleName:
+                type: string
+                minLength: 1
+                maxLength: 50
+                example: Michael
+              lastName:
+                type: string
+                minLength: 1
+                maxLength: 50
+                example: Doe
+              pronouns:
+                type: string
+                minLength: 2
+                maxLength: 16
+                example: he/him
+              profilePicture:
+                type: string
+                format: uri
+                example: https://example.com/images/johndoe.jpg
+              bio:
+                type: string
+                maxLength: 500
+                example: Driver with 5 years of experience
+              userType:
+                type: string
+                enum:
+                  - driver
+                  - sponsor
+                  - admin
+                example: driver
+              activeStatus:
+                type: integer
+                enum:
+                  - 0
+                  - 1
+                default: 1
+                description: Active status (1 for active, 0 for inactive)
+              # Driver-specific fields (required if userType is 'driver')
+              licenseNumber:
+                type: string
+                maxLength: 45
+                description: Required for driver accounts
+                example: DL123456789
+              sponsorCompanyId:
+                type: integer
+                description: Sponsor company ID (optional for drivers, required for sponsors)
+                example: 1
+              performanceStatus:
+                type: string
+                enum:
+                  - excellent
+                  - good
+                  - average
+                  - poor
+                default: good
+                description: Required for driver accounts
+              alertPoints:
+                type: integer
+                enum:
+                  - 0
+                  - 1
+                default: 1
+                description: Enable notifications for point transactions (1=enabled, 0=disabled)
+              alertOrders:
+                type: integer
+                enum:
+                  - 0
+                  - 1
+                default: 1
+                description: Enable notifications for orders (1=enabled, 0=disabled)
+    responses:
+      '201':
+        description: User account created successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/account.yaml#/Account'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '422':
+        $ref: '../../schemas/common.yaml#/Responses/422Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+      '503':
+        $ref: '../../schemas/common.yaml#/Responses/503Error'
+
+usersById:
+  parameters:
+    - name: id
+      in: path
+      description: The unique identifier of the user account
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - accounts
+    summary: Get user by ID
+    description: Retrieve detailed information for a specific user account by its ID. Admin access required.
+    responses:
+      '200':
+        description: Details of the specified user account
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../../schemas/account.yaml#/DriverAccount'
+                - $ref: '../../schemas/account.yaml#/SponsorAccount'
+                - $ref: '../../schemas/account.yaml#/AdminAccount'
+              discriminator:
+                propertyName: accountType
+                mapping:
+                  driver: '../../schemas/account.yaml#/DriverAccount'
+                  sponsor: '../../schemas/account.yaml#/SponsorAccount'
+                  admin: '../../schemas/account.yaml#/AdminAccount'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '422':
+        $ref: '../../schemas/common.yaml#/Responses/422Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+      '503':
+        $ref: '../../schemas/common.yaml#/Responses/503Error'
+  
+  patch:
+    tags:
+      - accounts
+    summary: Update user profile
+    description: Update an existing user account profile by its ID. Admin access required.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../../schemas/account.yaml#/ProfileUpdateRequest'
+    responses:
+      '200':
+        description: User account updated successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/account.yaml#/Account'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '422':
+        $ref: '../../schemas/common.yaml#/Responses/422Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+      '503':
+        $ref: '../../schemas/common.yaml#/Responses/503Error'
+  
+  delete:
+    tags:
+      - accounts
+    summary: Delete user (soft delete)
+    description: Soft delete a user account by setting ActiveStatus to 0 (inactive). This preserves the user data for historical reports. Admin access required.
+    responses:
+      '204':
+        description: User account deactivated successfully
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '422':
+        $ref: '../../schemas/common.yaml#/Responses/422Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+      '503':
+        $ref: '../../schemas/common.yaml#/Responses/503Error'
+
+userPoints:
+  parameters:
+    - name: id
+      in: path
+      description: The unique identifier of the driver user account
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - points
+    summary: Get driver points and transaction history
+    description: Retrieve a driver's current point balance and complete transaction history. Admin access required. Only works for driver accounts.
+    responses:
+      '200':
+        description: Driver point information and transaction history
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                driver:
+                  type: object
+                  properties:
+                    UserID:
+                      type: integer
+                      description: User ID of the driver
+                      example: 5
+                    FirstName:
+                      type: string
+                      description: Driver's first name
+                      example: John
+                    LastName:
+                      type: string
+                      description: Driver's last name
+                      example: Doe
+                    PointBalance:
+                      type: integer
+                      description: Current point balance
+                      example: 1500
+                history:
+                  type: array
+                  description: List of all point transactions for this driver
+                  items:
+                    type: object
+                    properties:
+                      TransactionID:
+                        type: integer
+                        description: Unique transaction identifier
+                        example: 42
+                      DriverID:
+                        type: string
+                        description: Driver's license number (used as foreign key)
+                        example: DL123456789
+                      UserChanged:
+                        type: integer
+                        description: Admin user ID who made the change
+                        example: 1
+                      PointChange:
+                        type: integer
+                        description: Point change amount (positive or negative)
+                        example: 100
+                      ReasonForChange:
+                        type: string
+                        maxLength: 45
+                        description: Reason for the transaction
+                        example: Monthly bonus
+                      TimeChanged:
+                        type: string
+                        format: date-time
+                        description: Timestamp of the transaction
+                        example: '2026-03-04T14:30:00Z'
+      '404':
+        description: Driver not found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: Driver not found
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+      '503':
+        $ref: '../../schemas/common.yaml#/Responses/503Error'
+  
+  post:
+    tags:
+      - points
+    summary: Add point transaction
+    description: Add a new point transaction for a driver. This updates the driver's point balance automatically. Admin access required.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - pointChange
+              - reason
+            properties:
+              pointChange:
+                type: integer
+                description: Point change amount (positive for addition, negative for deduction)
+                example: 100
+              reason:
+                type: string
+                minLength: 1
+                maxLength: 45
+                description: Reason for the transaction (max 45 characters)
+                example: Monthly bonus
+              adminUserId:
+                type: integer
+                description: Admin user ID making the change (optional, defaults to 1)
+                example: 1
+    responses:
+      '201':
+        description: Point transaction added successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Point transaction added successfully
+                driver:
+                  type: object
+                  properties:
+                    UserID:
+                      type: integer
+                      example: 5
+                    FirstName:
+                      type: string
+                      example: John
+                    LastName:
+                      type: string
+                      example: Doe
+                    PointBalance:
+                      type: integer
+                      description: Updated point balance
+                      example: 1600
+                history:
+                  type: array
+                  description: Updated transaction history
+                  items:
+                    type: object
+      '400':
+        description: Bad request - missing fields or validation error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: Reason must be 45 characters or less
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+      '503':
+        $ref: '../../schemas/common.yaml#/Responses/503Error'
+
+userPointsTransaction:
+  parameters:
+    - name: id
+      in: path
+      description: The unique identifier of the driver user account
+      required: true
+      schema:
+        type: integer
+    - name: transactionId
+      in: path
+      description: The unique identifier of the point transaction to update
+      required: true
+      schema:
+        type: integer
+  patch:
+    tags:
+      - points
+    summary: Update point transaction
+    description: Update an existing point transaction. This recalculates the driver's point balance based on the difference. Admin access required.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - pointChange
+              - reason
+            properties:
+              pointChange:
+                type: integer
+                description: New point change amount (positive or negative)
+                example: 150
+              reason:
+                type: string
+                minLength: 1
+                maxLength: 45
+                description: Updated reason for the transaction (max 45 characters)
+                example: Monthly bonus (adjusted)
+              adminUserId:
+                type: integer
+                description: Admin user ID making the update (optional, defaults to 1)
+                example: 1
+    responses:
+      '200':
+        description: Point transaction updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Point transaction updated successfully
+                driver:
+                  type: object
+                  properties:
+                    UserID:
+                      type: integer
+                      example: 5
+                    FirstName:
+                      type: string
+                      example: John
+                    LastName:
+                      type: string
+                      example: Doe
+                    PointBalance:
+                      type: integer
+                      description: Updated point balance after recalculation
+                      example: 1650
+                history:
+                  type: array
+                  description: Updated transaction history
+                  items:
+                    type: object
+      '400':
+        description: Bad request - missing fields or validation error
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: Reason must be 45 characters or less
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        description: Transaction not found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: Transaction not found
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+      '503':
+        $ref: '../../schemas/common.yaml#/Responses/503Error'
