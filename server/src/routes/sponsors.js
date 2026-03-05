@@ -159,5 +159,48 @@ router.get('/security-report/:sponsorId', async (req, res) => {
   }
 });
 
+// POST /api/sponsors/deduct-points
+router.post('/deduct-points', async (req, res) => {
+    const { driverId, points, reason, sponsorId } = req.body;
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // Update Driver's balance 
+        const [updateResult] = await connection.execute(
+            "UPDATE DRIVERS SET PointBalance = PointBalance - ? WHERE UserID = ?",
+            [points, driverId]
+        );
+
+        if (updateResult.affectedRows === 0) {
+            throw new Error("Driver not found");
+        }
+
+        // Get Driver's LicenseNumber for transaction log
+        const [driver] = await connection.execute(
+            "SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?",
+            [driverId]
+        );
+
+        // Log transaction as negative value
+        await connection.execute(
+            `INSERT INTO POINT_TRANSACTIONS 
+            (DriverID, PointChange, ReasonForChange, TimeChanged, UserChanged) 
+            VALUES (?, ?, ?, NOW(), ?)`,
+            [driver[0].LicenseNumber, -Math.abs(points), reason, sponsorId]
+        );
+
+        await connection.commit();
+        res.json({ message: `Successfully deducted ${points} points.` });
+    } catch (error) {
+        await connection.rollback();
+        console.error("Deduction Error:", error);
+        res.status(500).json({ error: error.message || "Failed to deduct points" });
+    } finally {
+        connection.release();
+    }
+});
+
 //module.exports = router;
 export default router;

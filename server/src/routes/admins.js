@@ -203,4 +203,74 @@ router.post('/add-sponsor', async (req, res) => {
     }
 });
 
+// PUT /api/admin/reactivate-driver/:id
+router.put('/reactivate-driver/:id', async (req, res) => {
+    const driverId = req.params.id;
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // Update USERS table to set IsActive to 1 
+        const [result] = await connection.execute(
+            "UPDATE USERS SET IsActive = 1 WHERE UserID = ?",
+            [driverId]
+        );
+
+        if (result.affectedRows === 0) {
+            throw new Error("User not found");
+        }
+
+        // Log in the audit logs
+        await connection.execute(
+            "INSERT INTO AUDIT_LOGS (UserID, ActionType, Status, CreatedAt) VALUES (?, 'ACCOUNT_REACTIVATED', 'SUCCESS', NOW())",
+            [driverId]
+        );
+
+        await connection.commit();
+        res.json({ message: "Driver account has been reactivated successfully." });
+    } catch (error) {
+        await connection.rollback();
+        console.error("Reactivation Error:", error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        connection.release();
+    }
+});
+
+// PUT /api/admin/reactivate-sponsor/:id
+router.put('/reactivate-sponsor/:id', async (req, res) => {
+    const sponsorId = req.params.id;
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // Update USERS table
+        const [result] = await connection.execute(
+            "UPDATE USERS SET IsActive = 1 WHERE UserID = ? AND UserType = 'sponsor'",
+            [sponsorId]
+        );
+
+        if (result.affectedRows === 0) {
+            throw new Error("Sponsor not found or UserID is not a sponsor type.");
+        }
+
+        // Log event in Audit Log
+        await connection.execute(
+            "INSERT INTO AUDIT_LOGS (UserID, ActionType, Status, CreatedAt) VALUES (?, 'SPONSOR_REACTIVATED', 'SUCCESS', NOW())",
+            [sponsorId]
+        );
+
+        await connection.commit();
+        res.json({ message: "Sponsor access has been restored." });
+    } catch (error) {
+        await connection.rollback();
+        console.error("Sponsor Reactivation Error:", error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        connection.release();
+    }
+});
+
 export default router;
