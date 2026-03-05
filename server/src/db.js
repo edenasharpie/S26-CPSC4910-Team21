@@ -74,6 +74,28 @@ export async function getAllUsers() {
   return rows;
 } 
 
+export async function getDriversBySponsor(companyId) {
+  const [rows] = await pool.execute(`
+    SELECT 
+      u.*, 
+      d.PointBalance AS TotalPoints,
+      d.LicenseNumber,
+      d.SponsorCompanyID
+    FROM USERS u
+    JOIN DRIVERS d ON u.UserID = d.UserID
+    WHERE d.SponsorCompanyID = ? AND u.UserType = 'Driver'
+  `, [companyId]);
+  return rows;
+}
+
+export async function linkDriverToSponsor(userId, companyId) {
+  return await pool.execute(
+    `INSERT INTO DRIVER_SPONSOR_RELATION (DriverUserID, SponsorCompanyID, DateJoined) 
+     VALUES (?, ?, NOW())`,
+    [userId, companyId]
+  );
+}
+
 export async function createUser(userData) {
   const connection = await pool.getConnection();
   try {
