@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLoaderData } from 'react-router';
 import { Button, Card, Table, Modal, Input, Alert } from '~/components';
+import { createApiClient } from '~/utils/api';
+import { requireAuth } from '~/utils/session.server';
+import type { Route } from './+types/catalogs';
 
-const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
+export async function loader({ request }: Route.LoaderArgs) {
+  const user = requireAuth(request, ['admin']);
+  return { user };
+}
 
 interface CatalogItem {
   id: number;
@@ -37,8 +43,9 @@ interface StoreProduct {
 }
 
 export default function Catalogs() {
-  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
-  const api = useMemo(() => createApiClient({ id: 0, role: 'admin' }), []);
+  const { user } = useLoaderData<typeof loader>();
+  // Use the authenticated user's ID rather than a hardcoded stub
+  const api = useMemo(() => createApiClient({ id: user.UserID, role: 'admin' }), [user.UserID]);
 
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [selectedCatalog, setSelectedCatalog] = useState<number | null>(null);

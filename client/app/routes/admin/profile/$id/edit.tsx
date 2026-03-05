@@ -2,29 +2,36 @@ import { useState, useEffect } from "react";
 import { useLoaderData, Form, useActionData, Link, useNavigate, redirect } from "react-router"; 
 import type { Route } from "./+types/edit";
 import { Input, Button, Alert } from "~/components";
-import { getUserById, updateUser, deleteUser } from "../../../../../../server/src/db";
+import { requireAuth } from "~/utils/session.server";
 
-export async function loader({ params }: Route.LoaderArgs) {
-  const user = await getUserById(Number(params.id));
-  if (!user) throw new Response("User not found", { status: 404 });
+const API_URL = process.env.API_URL ?? 'http://localhost:5000';
+
+export async function loader({ request, params }: Route.LoaderArgs) {
+  requireAuth(request, ["admin"]);
+  const res = await fetch(`${API_URL}/api/admin/users/${params.id}`);
+  if (!res.ok) throw new Response("User not found", { status: 404 });
+  const user = await res.json();
   return { user };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
   const formData = await request.formData();
-  const userId = Number(params.id);
+  const userId = params.id;
   const intent = formData.get("intent");
 
   if (intent === "delete") {
     try {
-      await deleteUser(userId);
-      // Hard redirect to the dashboard after a successful delete
-      return redirect("/admin/dashboard"); 
+      const res = await fetch(`${API_URL}/api/admin/users/${userId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json();
+        return { error: body.error ?? 'Delete failed' };
+      }
+      return redirect("/admin/dashboard");
     } catch (error: any) {
       return { error: error.message };
     }
   }
-  
+
   const updates = {
     Username: formData.get("Username"),
     Email: formData.get("Email"),
@@ -41,7 +48,15 @@ export async function action({ request, params }: Route.ActionArgs) {
   };
 
   try {
-    await updateUser(userId, updates);
+    const res = await fetch(`${API_URL}/api/admin/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const body = await res.json();
+      return { error: body.error ?? 'Update failed' };
+    }
     return { success: true };
   } catch (error: any) {
     return { error: error.message };

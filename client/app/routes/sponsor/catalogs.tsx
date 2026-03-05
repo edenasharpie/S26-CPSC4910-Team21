@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLoaderData } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
 import { Modal } from '../../components/Modal';
 import { Input } from '../../components/Input';
 import { Alert } from '../../components/Alert';
+import { createApiClient } from '~/utils/api';
+import { requireAuth } from '~/utils/session.server';
+import type { Route } from './+types/catalogs';
 
-const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
+export async function loader({ request }: Route.LoaderArgs) {
+  const user = requireAuth(request, ['sponsor']);
+  return { user };
+}
 
 interface CatalogItem {
   id: number;
@@ -36,8 +42,8 @@ interface StoreProduct {
 }
 
 export default function SponsorCatalogs() {
-  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
-  const api = useMemo(() => createApiClient({ id: 1, role: 'sponsor' }), []);
+  const { user } = useLoaderData<typeof loader>();
+  const api = useMemo(() => createApiClient({ id: user.UserID, role: 'sponsor' }), [user.UserID]);
 
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [selectedCatalog, setSelectedCatalog] = useState<number | null>(null);

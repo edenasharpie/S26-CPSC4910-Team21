@@ -1,13 +1,17 @@
 import { useLoaderData, useNavigate, Link } from "react-router";
 import type { Route } from "./+types/invoices";
 import { Table, Button } from "~/components";
-import { getAllPointTransactions } from "../../../../server/src/db.js";
+import { requireAuth } from "~/utils/session.server";
 
-export async function loader() {
+const API_URL = process.env.API_URL ?? 'http://localhost:5000';
+
+export async function loader({ request }: Route.LoaderArgs) {
+  requireAuth(request, ["admin"]);
   try {
-    const transactions = await getAllPointTransactions();
-    return { 
-      transactions: Array.isArray(transactions) ? transactions : [] 
+    const res = await fetch(`${API_URL}/api/admin/point-transactions`);
+    const transactions = await res.json();
+    return {
+      transactions: Array.isArray(transactions) ? transactions : []
     };
   } catch (error) {
     return { transactions: [] };

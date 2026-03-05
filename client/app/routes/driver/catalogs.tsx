@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLoaderData } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
 import { Modal } from '../../components/Modal';
 import { Alert } from '../../components/Alert';
+import { createApiClient } from '~/utils/api';
+import { requireAuth } from '~/utils/session.server';
+import type { Route } from './+types/catalogs';
 
-const BASE_URL = 'http://localhost:5000'; // TODO: we should not have local addresses
+export async function loader({ request }: Route.LoaderArgs) {
+  const user = requireAuth(request, ['driver']);
+  return { user };
+}
 
 interface CatalogItem {
   id: number;
@@ -26,8 +32,8 @@ interface Catalog {
 }
 
 export default function DriverCatalogs() {
-  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
-  const api = useMemo(() => createApiClient({ id: 1, role: 'driver' }), []);
+  const { user } = useLoaderData<typeof loader>();
+  const api = useMemo(() => createApiClient({ id: user.UserID, role: 'driver' }), [user.UserID]);
 
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [selectedCatalog, setSelectedCatalog] = useState<number | null>(null);
@@ -36,9 +42,6 @@ export default function DriverCatalogs() {
   const [isItemDetailOpen, setIsItemDetailOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
-  // const userId = 1; — now encoded in the api client above
 
   useEffect(() => {
     fetchCatalogs();

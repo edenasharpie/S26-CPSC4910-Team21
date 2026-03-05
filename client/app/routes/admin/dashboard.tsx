@@ -2,9 +2,11 @@ import type { Route } from "./+types/admin";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal, Alert } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData } from "react-router";
+import { requireAuth } from "~/utils/session.server";
 //import { getAllUsers, createUser } from "../../../../server/src/db.js"; // IMPORT SERVER CODE IS NOT ALLOWED, IT WILL NOT WORK IN PROD. you need to use the api.
 
-export async function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
+  requireAuth(request, ["admin"]);
   try {
     const users = await getAllUsers();
     return { 
