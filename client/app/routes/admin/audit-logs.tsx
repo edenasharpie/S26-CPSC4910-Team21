@@ -2,6 +2,12 @@ import type { Route } from "./+types/audit-logs";
 import { useState } from "react";
 import { Link } from "react-router";
 import { Table, Input, Button, Badge, Alert } from "~/components";
+import { requireAuth } from "~/utils/session.server";
+
+export async function loader({ request }: Route.LoaderArgs) {
+  requireAuth(request, ["admin"]);
+  return {};
+}
 
 // TODO: replace with API calls
 const mockData = [

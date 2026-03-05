@@ -2,34 +2,55 @@ import { useState } from "react";
 import { useLoaderData, Form, useActionData, Link } from "react-router"; 
 import type { Route } from "./+types/points";
 import { Input, Button } from "~/components";
-import { getDriverPoints, getPointHistory, addPointTransaction, updatePointTransaction } from "../../../../../../server/src/db";
+import { requireAuth } from "~/utils/session.server";
 
-export async function loader({ params }: Route.LoaderArgs) {
-  const userId = Number(params.id);
-  const [driver, history] = await Promise.all([
-    getDriverPoints(userId),
-    getPointHistory(userId)
+const API_URL = process.env.API_URL ?? 'http://localhost:5000';
+
+export async function loader({ request, params }: Route.LoaderArgs) {
+  const sessionUser = requireAuth(request, ["admin"]);
+  const userId = params.id;
+  const [driverRes, historyRes] = await Promise.all([
+    fetch(`${API_URL}/api/admin/drivers/${userId}/points`),
+    fetch(`${API_URL}/api/admin/drivers/${userId}/point-history`),
   ]);
-  if (!driver) throw new Response("Driver not found", { status: 404 });
-  return { driver, history };
+  if (!driverRes.ok) throw new Response("Driver not found", { status: 404 });
+  const [driver, history] = await Promise.all([driverRes.json(), historyRes.json()]);
+  return { driver, history, adminUserId: sessionUser.UserID };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
+  const sessionUser = requireAuth(request, ["admin"]);
   const formData = await request.formData();
   const intent = formData.get("intent");
-  const driverUserId = Number(params.id);
-  const adminUserId = 1; // TODO: Replace with your actual logged-in UserID
+  const driverUserId = params.id;
+  const adminUserId = sessionUser.UserID;
 
   try {
     if (intent === "edit") {
-      const tId = Number(formData.get("transactionId"));
+      const tId = formData.get("transactionId") as string;
       const p = Number(formData.get("editPoints"));
       const r = formData.get("editReason") as string;
-      await updatePointTransaction(tId, p, r, adminUserId);
+      const res = await fetch(`${API_URL}/api/admin/point-transactions/${tId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPoints: p, newReason: r, adminUserId }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        return { error: body.error ?? 'Update failed' };
+      }
     } else {
       const p = Number(formData.get("pointChange"));
       const r = formData.get("reason") as string;
-      await addPointTransaction(driverUserId, adminUserId, p, r);
+      const res = await fetch(`${API_URL}/api/admin/drivers/${driverUserId}/point-transactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pointChange: p, reason: r, adminUserId }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        return { error: body.error ?? 'Transaction failed' };
+      }
     }
     return { success: true };
   } catch (error: any) {
