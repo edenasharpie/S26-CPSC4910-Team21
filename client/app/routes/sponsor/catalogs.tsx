@@ -62,7 +62,8 @@ export default function SponsorCatalogs() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [itemSource, setItemSource] = useState<'manual' | 'store'>('manual');
 
-  const userId = 1; // TODO: Placeholder - should come from auth context. Replace with actual user ID from authentication
+  // TODO (auth): Replace stub with authenticated user sourced from session/auth context
+  // const userId = 1; — now encoded in the api client above
 
   // Form states
   const [newItem, setNewItem] = useState({
