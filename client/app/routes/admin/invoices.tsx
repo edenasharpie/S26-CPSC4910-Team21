@@ -22,7 +22,6 @@ export default function InvoicesPage() {
   const { transactions } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  // Columns match your current Admin Portal style
   const columns = [
     { 
       key: "TimeChanged", 
@@ -59,22 +58,27 @@ export default function InvoicesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="container-padding section-spacing">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Updated Navigation Row to match Audit Logs style */}
         <div className="mb-4">
-          <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
-        </div>
-        <div className="mb-8 flex justify-between items-center">
-          <div className="text-left">
-            <h1 className="text-2xl font-bold mb-1">Point Invoices</h1>
-            <p className="text-sm text-gray-500">Historical record of all point adjustments</p>
-          </div>
-          <Button variant="secondary" onClick={() => navigate("/admin/dashboard")}>
-            Back to Portal
+          <Button 
+            variant="ghost" 
+            onClick={() => navigate("/admin/dashboard")} 
+            className="flex items-center gap-2"
+          >
+            ← Back to Dashboard
           </Button>
         </div>
+
+        <div className="flex justify-between items-center mb-8 text-left">
+          <div>
+            <h1 className="text-3xl font-bold">Point Invoices</h1>
+            <p className="text-gray-500">Historical record of all point adjustments</p>
+          </div>
+        </div>
         
-        <div className="card overflow-hidden bg-white dark:bg-gray-900 shadow-sm border dark:border-gray-800 rounded-lg">
+        <div className="card overflow-hidden bg-white dark:bg-gray-900 shadow-sm border dark:border-gray-800 rounded-xl">
           <Table data={transactions} columns={columns} />
         </div>
       </div>
