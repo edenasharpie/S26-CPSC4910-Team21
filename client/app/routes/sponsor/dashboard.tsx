@@ -1,14 +1,16 @@
-// --- IMPORTS ---
+// IMPORTS 
 import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
+// Change for API 
 import { getDriversBySponsor, createUser } from "../../../../server/src/db.js"; 
 
+//TODO: make variable for who is logged in
 const TARGET_SPONSOR_ID = "123456791";
 const TARGET_COMPANY_ID = 17;
 
-// --- LOADER ---
+// Load in drivers under a sponsor
 export async function loader() {
   try {
     const drivers = await getDriversBySponsor(TARGET_COMPANY_ID);
