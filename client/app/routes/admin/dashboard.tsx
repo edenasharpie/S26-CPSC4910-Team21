@@ -43,6 +43,7 @@ export default function AdminPortal() {
   const actionData = useActionData();
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState("Driver");
@@ -53,6 +54,7 @@ export default function AdminPortal() {
   const driverCount = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").length;
   const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor").length;
   const adminCount = users.filter((u: any) => u.UserType?.toLowerCase() === "admin").length;
+  const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
 
   useEffect(() => {
     if (actionData?.success) setIsAddUserOpen(false);
@@ -64,12 +66,20 @@ export default function AdminPortal() {
       u.Username.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.FirstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.LastName.toLowerCase().includes(searchQuery.toLowerCase());
+    
     const matchesType = typeFilter === "All" || u.UserType?.toLowerCase() === typeFilter.toLowerCase();
-    return matchesSearch && matchesType;
+    
+    const matchesStatus = 
+      statusFilter === "All" || 
+      (statusFilter === "Active" && u.ActiveStatus !== 0) || 
+      (statusFilter === "Inactive" && u.ActiveStatus === 0);
+
+    return matchesSearch && matchesType && matchesStatus;
   });
 
   const columns = [
     {
+      //TODO: Show and upload actual images rather than avatars, if user has no profilepicture, use a monogram logo instead of avatar
       key: "Avatar",
       header: "Avatar",
       render: (user: any) => {
@@ -95,9 +105,14 @@ export default function AdminPortal() {
       header: "User",
       render: (user: any) => (
         <div className="flex flex-col text-left">
-          <span className="font-medium text-gray-900 dark:text-white">
-            {user.FirstName} {user.LastName}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900 dark:text-white">
+              {user.FirstName} {user.LastName}
+            </span>
+            {user.ActiveStatus === 0 && (
+              <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase border border-red-100">Inactive</span>
+            )}
+          </div>
           <span className="text-xs text-gray-400 font-mono">{user.Username}</span>
         </div>
       ),
@@ -175,15 +190,18 @@ export default function AdminPortal() {
           {/* Sidebar: Statistics & Analytics */}
           <aside className="lg:col-span-3 space-y-6">
             <div className="space-y-4">
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Statistics</h2>
-              <StatCard title="Total Users" value={totalUsers} color="text-gray-900 dark:text-white" />
-              <StatCard title="Drivers" value={driverCount} color="text-green-600" />
-              <StatCard title="Sponsors" value={sponsorCount} color="text-blue-600" />
-              <StatCard title="Admins" value={adminCount} color="text-red-600" />
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">Statistics</h2>
+              <div className="grid grid-cols-2 gap-3">
+                <StatCard title="Total" value={totalUsers} color="text-gray-900 dark:text-white" />
+                <StatCard title="Drivers" value={driverCount} color="text-green-600" />
+                <StatCard title="Sponsors" value={sponsorCount} color="text-blue-600" />
+                <StatCard title="Admins" value={adminCount} color="text-red-600" />
+                <StatCard title="Inactive" value={inactiveCount} color="text-gray-400" />
+              </div>
             </div>
 
             <div className="space-y-3 pt-4 border-t dark:border-gray-800">
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Analytics</h2>
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">Analytics</h2>
               <Button 
                 variant="secondary" 
                 onClick={() => setIsAuditModalOpen(true)} 
@@ -203,16 +221,17 @@ export default function AdminPortal() {
 
           {/* Main Content: Search & Table */}
           <main className="lg:col-span-9 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-              <div className="md:col-span-6">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+              <div className="md:col-span-4">
                 <Input placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
 
               <div className="md:col-span-3">
+                <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block text-left">Account Type</label>
                 <select 
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium"
+                  className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
                 >
                   <option value="All">All Types</option>
                   <option value="driver">Drivers</option>
@@ -222,6 +241,19 @@ export default function AdminPortal() {
               </div>
 
               <div className="md:col-span-3">
+                <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block text-left">Status</label>
+                <select 
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Active">Active Only</option>
+                  <option value="Inactive">Inactive Only</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
                 <Button variant="primary" className="w-full h-10" onClick={() => setIsAddUserOpen(true)}>
                   Add User
                 </Button>
@@ -308,16 +340,18 @@ export default function AdminPortal() {
 
 function StatCard({ title, value, color }: { title: string; value: number; color: string }) {
   return (
-    <div className="p-5 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-xl text-left">
-      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{title}</div>
-      <div className={`text-2xl font-black ${color}`}>{value}</div>
+    <div className="aspect-square flex flex-col justify-center items-center p-2 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-xl text-center">
+      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1 truncate w-full">{title}</div>
+      <div className={`text-3xl sm:text-4xl font-black leading-none ${color}`}>
+        {value.toLocaleString()}
+      </div>
     </div>
   );
 }
 
 function AuditOption({ label, name, value }: { label: string, name: string, value: string }) {
   return (
-    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded cursor-pointer transition-colors">
+    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded cursor-pointer transition-colors text-left">
       <input type="checkbox" name={name} value={value} className="h-4 w-4 text-indigo-600 border-gray-300 rounded" />
       <span className="text-sm font-medium">{label}</span>
     </label>

@@ -19,6 +19,7 @@ export default [
 
   //INVOICES
   route("admin/invoices", "routes/admin/invoices.tsx"),
+  route("sponsor/invoices", "routes/sponsor/invoices.tsx"),
 
   //AUDIT LOGS
   route("admin/audit-logs", "routes/admin/audit-logs.tsx"),

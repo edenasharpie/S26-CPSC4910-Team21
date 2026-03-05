@@ -1,16 +1,14 @@
-// IMPORTS 
+// --- IMPORTS ---
 import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
-// Change for API 
 import { getDriversBySponsor, createUser } from "../../../../server/src/db.js"; 
 
-//TODO: make variable for who is logged in
 const TARGET_SPONSOR_ID = "123456791";
 const TARGET_COMPANY_ID = 17;
 
-// Load in drivers under a sponsor
+// --- LOADER ---
 export async function loader() {
   try {
     const drivers = await getDriversBySponsor(TARGET_COMPANY_ID);
@@ -32,9 +30,9 @@ export async function action({ request }: Route.ActionArgs) {
       FirstName: formData.get("firstName") as string,
       LastName: formData.get("lastName") as string,
       UserType: "Driver",
-      ActiveStatus: 1,
+      ActiveStatus: 1, 
       LicenseNumber: formData.get("licenseNumber") as string,
-      SponsorCompanyID: TARGET_COMPANY_ID // Passed directly to the driver record
+      SponsorCompanyID: TARGET_COMPANY_ID 
     });
     return { success: true };
   } catch (error: any) {
@@ -47,23 +45,33 @@ export default function SponsorPortal() {
   const { drivers, error } = useLoaderData<typeof loader>();
   const actionData = useActionData();
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // New state for filter
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const navigate = useNavigate();
 
-  const driverCount = drivers.length;
+  // --- STAT CALCULATIONS ---
+  const activeCount = drivers.filter((d: any) => d.ActiveStatus === 1).length;
+  const inactiveCount = drivers.filter((d: any) => d.ActiveStatus === 0).length;
 
   useEffect(() => {
     if (actionData?.success) setIsAddUserOpen(false);
   }, [actionData]);
 
+  // --- UPDATED FILTER LOGIC ---
   const filteredDrivers = drivers.filter((d: any) => {
     const search = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = 
       d.Username.toLowerCase().includes(search) ||
       d.FirstName.toLowerCase().includes(search) ||
-      d.LastName.toLowerCase().includes(search)
-    );
+      d.LastName.toLowerCase().includes(search);
+    
+    const matchesStatus = 
+      statusFilter === "all" || 
+      (statusFilter === "active" && d.ActiveStatus === 1) || 
+      (statusFilter === "inactive" && d.ActiveStatus === 0);
+
+    return matchesSearch && matchesStatus;
   });
 
   const columns = [
@@ -83,9 +91,14 @@ export default function SponsorPortal() {
       header: "Driver",
       render: (user: any) => (
         <div className="flex flex-col text-left">
-          <span className="font-medium text-gray-900 dark:text-white">
-            {user.FirstName} {user.LastName}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900 dark:text-white">
+              {user.FirstName} {user.LastName}
+            </span>
+            {user.ActiveStatus === 0 && (
+              <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase border border-red-100">Inactive</span>
+            )}
+          </div>
           <span className="text-xs text-gray-400 font-mono">{user.Username}</span>
         </div>
       ),
@@ -123,7 +136,7 @@ export default function SponsorPortal() {
           <div>
             <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Return to Home</Link>
             <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>
-            <p className="text-gray-500 text-sm mt-1 font-medium italic">Global Logistics</p>
+            <p className="text-gray-500 text-sm mt-1 font-medium italic">Global Logistics Administration</p>
           </div>
 
           <button 
@@ -153,7 +166,11 @@ export default function SponsorPortal() {
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Overview</h2>
               <div className="p-5 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-xl">
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Active Drivers</div>
-                <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{driverCount}</div>
+                <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{activeCount}</div>
+              </div>
+              <div className="p-5 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-xl">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Inactive Drivers</div>
+                <div className="text-3xl font-black text-gray-400 dark:text-gray-500">{inactiveCount}</div>
               </div>
             </div>
 
@@ -179,13 +196,27 @@ export default function SponsorPortal() {
           {/* Main Table Content */}
           <main className="lg:col-span-9 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-              <div className="md:col-span-8">
+              <div className="md:col-span-5">
                 <Input 
                     placeholder="Search name or username..." 
                     value={searchQuery} 
                     onChange={(e) => setSearchQuery(e.target.value)} 
                 />
               </div>
+              
+              {/* --- NEW STATUS FILTER --- */}
+              <div className="md:col-span-3">
+                <select 
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active Only</option>
+                  <option value="inactive">Inactive Only</option>
+                </select>
+              </div>
+
               <div className="md:col-span-4">
                 <Button variant="primary" className="w-full h-10 shadow-sm" onClick={() => setIsAddUserOpen(true)}>
                   Add New Driver
@@ -198,7 +229,7 @@ export default function SponsorPortal() {
             <div className="bg-white dark:bg-gray-900 shadow-sm rounded-xl border dark:border-gray-800 overflow-hidden">
               <Table data={filteredDrivers} columns={columns} />
               {filteredDrivers.length === 0 && (
-                <div className="p-12 text-center text-gray-400 italic">No drivers found for this company.</div>
+                <div className="p-12 text-center text-gray-400 italic">No drivers found matching your criteria.</div>
               )}
             </div>
           </main>
