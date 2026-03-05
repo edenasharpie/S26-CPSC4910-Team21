@@ -45,12 +45,13 @@ export default function SponsorPortal() {
   const { drivers, error } = useLoaderData<typeof loader>();
   const actionData = useActionData();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all"); // New state for filter
+  const [statusFilter, setStatusFilter] = useState("all");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const navigate = useNavigate();
 
   // --- STAT CALCULATIONS ---
+  const totalCount = drivers.length;
   const activeCount = drivers.filter((d: any) => d.ActiveStatus === 1).length;
   const inactiveCount = drivers.filter((d: any) => d.ActiveStatus === 0).length;
 
@@ -58,7 +59,6 @@ export default function SponsorPortal() {
     if (actionData?.success) setIsAddUserOpen(false);
   }, [actionData]);
 
-  // --- UPDATED FILTER LOGIC ---
   const filteredDrivers = drivers.filter((d: any) => {
     const search = searchQuery.toLowerCase();
     const matchesSearch = 
@@ -128,12 +128,12 @@ export default function SponsorPortal() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 text-left">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Header Section */}
         <div className="mb-8 border-b pb-6 dark:border-gray-800 flex justify-between items-end">
-          <div>
+          <div className="text-left">
             <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Return to Home</Link>
             <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>
             <p className="text-gray-500 text-sm mt-1 font-medium italic">Global Logistics Administration</p>
@@ -147,11 +147,11 @@ export default function SponsorPortal() {
               <img
                 src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${TARGET_SPONSOR_ID}`}
                 alt=""
-                className="w-10 h-10 rounded-full bg-gray-100"
+                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
               />
               <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
             </div>
-            <div className="hidden sm:block">
+            <div className="hidden sm:block text-left">
               <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">Sponsor Admin</p>
               <p className="text-[10px] text-gray-400 font-mono mt-0.5">ID: {TARGET_SPONSOR_ID}</p>
             </div>
@@ -163,19 +163,17 @@ export default function SponsorPortal() {
           {/* Sidebar */}
           <aside className="lg:col-span-3 space-y-6">
             <div className="space-y-4">
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Overview</h2>
-              <div className="p-5 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-xl">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Active Drivers</div>
-                <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{activeCount}</div>
-              </div>
-              <div className="p-5 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-xl">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Inactive Drivers</div>
-                <div className="text-3xl font-black text-gray-400 dark:text-gray-500">{inactiveCount}</div>
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">Overview</h2>
+              {/* Row of Square Stat Cards */}
+              <div className="grid grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2">
+                <StatCard title="Total" value={totalCount} color="text-gray-900 dark:text-white" />
+                <StatCard title="Active" value={activeCount} color="text-indigo-600" />
+                <StatCard title="Inactive" value={inactiveCount} color="text-gray-400" />
               </div>
             </div>
 
             <div className="space-y-3 pt-4 border-t dark:border-gray-800">
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Management</h2>
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">Analytics</h2>
               <Button 
                 variant="secondary" 
                 onClick={() => setIsAuditModalOpen(true)} 
@@ -204,7 +202,6 @@ export default function SponsorPortal() {
                 />
               </div>
               
-              {/* --- NEW STATUS FILTER --- */}
               <div className="md:col-span-3">
                 <select 
                   value={statusFilter}
@@ -250,6 +247,19 @@ export default function SponsorPortal() {
             </div>
           </Form>
         </Modal>
+        
+      </div>
+    </div>
+  );
+}
+
+// --- HELPER COMPONENTS ---
+function StatCard({ title, value, color }: { title: string; value: number; color: string }) {
+  return (
+    <div className="aspect-square flex flex-col justify-center items-center p-1 border dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm rounded-lg text-center">
+      <div className="text-[10px] font-black text-gray-400 uppercase tracking-tight mb-0.5 truncate w-full">{title}</div>
+      <div className={`text-2xl sm:text-3xl lg:text-4xl font-black leading-none tracking-tighter ${color}`}>
+        {value}
       </div>
     </div>
   );
