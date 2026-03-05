@@ -6,11 +6,13 @@ import aboutRoutes from './src/routes/about.js';
 import loginRoutes from './src/routes/login.js';
 import adminCatalogsRoutes from './src/routes/admin-catalogs.js';
 import adminUsersRoutes from './src/routes/admin-users.js';
+import adminReportsRoutes from './src/routes/admin-reports.js';
 //import userRoute from './src/routes/users.js';
 import sponsorRoute from './src/routes/sponsors.js';
 import storeRoutes from './src/routes/store.js';
 import driverCatalogsRoutes from './src/routes/driver-catalogs.js';
 import sponsorCatalogsRoutes from './src/routes/sponsor-catalogs.js';
+import sponsorReportsRoutes from './src/routes/sponsor-reports.js';
 
 dotenv.config({ path: '../../.fs-env' });
 
@@ -27,9 +29,11 @@ app.use('/api/auth', loginRoutes);
 app.use('/api/sponsors', sponsorRoute);
 app.use('/api/admin/store', storeRoutes); 
 app.use('/api/admin/catalogs', adminCatalogsRoutes);
-app.use('/api/admin', adminUsersRoutes);
+app.use('/api/admin/users', adminUsersRoutes);
+app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
+app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
 //app.use('/api/admin', adminRoute);     
 //app.use('/api/drivers', driverRoute);
 
