@@ -20,6 +20,7 @@ const NAV_SECTIONS = [
     label: "Sponsor",
     links: [
       { to: "/sponsor/catalogs", label: "Catalogs" },
+      { to: "/sponsor/reports", label: "Reports" },
     ],
   },
   {
@@ -29,6 +30,7 @@ const NAV_SECTIONS = [
       { to: "/admin/audit-logs", label: "Audit Logs" },
       { to: "/admin/catalogs", label: "Catalogs" },
       { to: "/admin/invoices", label: "Invoices" },
+      { to: "/admin/reports", label: "Reports" },
       { to: "/admin/profile/1", label: "Profile (id=1)" },
       { to: "/admin/profile/1/points", label: "Profile Points (id=1)" },
     ],
