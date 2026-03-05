@@ -32,13 +32,23 @@ const mockUsers: User[] = [
 // 3. LOADER (Fetches invoice data from Express server)
 export async function loader() {
   try {
-    const response = await fetch("http://localhost:5001/api/admins/invoices");
-    if (!response.ok) throw new Error("Failed to fetch invoices");
-    const invoices = await response.json();
-    return { invoices: invoices as Invoice[] };
+    // Fetch Invoices
+    const invoiceRes = await fetch("http://localhost:5001/api/admins/invoices");
+    if (!invoiceRes.ok) throw new Error("Failed to fetch invoices");
+    const invoices = await invoiceRes.json();
+
+    // Fetch Users
+    const userRes = await fetch("http://localhost:5001/api/admins/users-with-points");
+    if (!userRes.ok) throw new Error("Failed to fetch users");
+    const users = await userRes.json();
+
+    return { 
+      invoices: invoices as Invoice[], 
+      users: users as any[] 
+    };
   } catch (error) {
     console.error("Loader error:", error);
-    return { invoices: [] };
+    return { invoices: [], users: [] };
   }
 }
 
@@ -47,8 +57,56 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function AdminPortal() {
-  const { invoices } = useLoaderData<typeof loader>();
+  const { users, invoices } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+
+  const toggleUserStatus = async (userId: number, currentStauts: boolean) => {
+    try {
+      const response = await fetch(`http://localhost:5001/api/admins/toggle-status/USERS/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({isInactive: !currentStauts })
+      });
+
+      if (response.ok) {
+        navigate(".", { replace: true });
+      }
+    } catch (error) {
+      console.error("Failed to toggle status:", error);
+    }
+  };
+
+  const handleAddPoints = async (licenseNumber: string) => {
+    if (!licenseNumber) {
+      alert("Error: Driver has no license number associated.");
+      return;
+    }
+
+    const amount = prompt("How many points to add? (Use negative for deduction)");
+    if (!amount || isNaN(Number(amount))) return;
+
+    const reason = prompt("Reason for point change:");
+    if (!reason) return;
+
+    try {
+      const response = await fetch(`http://localhost:5001/api/admins/add-points/${licenseNumber}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          amount: Number(amount), 
+          reason,
+          adminId: 1 // NEED TO REPLACE WITH DIFFERENT ADMIN ID
+        })
+      });
+
+      if (response.ok) {
+        alert("Points updated!");
+        navigate(".", { replace: true });
+      }
+    } catch (error) {
+      console.error("Error adding points:", error);
+    }
+  };
 
   const [reportData, setReportData] = useState([]);
   const [reportFilter, setReportFilter] = useState({
@@ -77,6 +135,8 @@ export default function AdminPortal() {
     setIsFetchingReport(false); 
   }
   };
+
+
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -129,6 +189,39 @@ export default function AdminPortal() {
         <Badge variant={user.accountType === "Admin" ? "danger" : "info"}>{user.accountType}</Badge>
       ),
     },
+    { 
+    key: "PointBalance", 
+    header: "Points",
+    render: (user: any) => (
+      <span className="font-bold">
+        {user.accountType === "Driver" ? (user.PointBalance ?? 0) : "-"}
+      </span>
+    )
+  },
+  {
+    key: "actions",
+    header: "Actions",
+    render: (user: any) => (
+      <div className="flex gap-2">
+        {user.accountType === "Driver" && (
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            onClick={() => handleAddPoints(user.LicenseNumber)}
+          >
+            + Points
+          </Button>
+        )}
+        <Button 
+          variant={user.IsInactive ? "primary" : "danger"} 
+          size="sm"
+          onClick={() => toggleUserStatus(user.UserID, user.IsInactive)}
+        >
+          {user.IsInactive ? "Activate" : "Deactivate"}
+        </Button>
+      </div>
+    ),
+  },
   ];
 
   const totalPaid = invoices.filter(i => i.Status === "PAID").reduce((a, b) => a + parseFloat(b.Amount), 0);
@@ -200,7 +293,7 @@ export default function AdminPortal() {
           <h2 className="text-2xl font-semibold">User Management</h2>
           <Button onClick={() => setIsAddUserOpen(true)}>Add New User</Button>
         </div>
-        <Table data={mockUsers} columns={userColumns} />
+        <Table data={users} columns={userColumns} />
       </section>
 
       {/* MODAL */}

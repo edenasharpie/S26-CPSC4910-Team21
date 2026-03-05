@@ -6,6 +6,7 @@ export default [
   route("about", "routes/about.tsx"),
   route("admin-dashboard", "routes/admin-dashboard.tsx"),
   route("audit-logs", "routes/audit-logs.tsx"),
+  route("driver-dashboard/:id", "routes/driver-dashboard.tsx"),
   //route("profile", "routes/profile.tsx"),
   //route("change-password", "routes/change-password.tsx"),
   /* demo purposes only */

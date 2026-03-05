@@ -25,7 +25,7 @@ router.get('/invoices', async (req, res) => {
   }
 });
 
-// GET /ap/admins/driver-report/:driverId
+// GET /api/admins/driver-report/:driverId
 router.get('/driver-report/:driverId', async (req, res) => {
   const { driverId } = req.params;
   const { startDate, endDate } = req.query; 
@@ -54,6 +54,62 @@ router.get('/driver-report/:driverId', async (req, res) => {
   } catch (error) {
     console.error("Driver Report Error:", error);
     res.status(500).json({ error: "Failed to generate report" });
+  }
+});
+
+// GET /api/admins/add-points/:licenseNumber
+router.post('/add-points/:licenseNumber', async (req, res) => {
+  const { licenseNumber } = req.params;
+  const { amount, reason, adminId } = req.body;
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    await connection.execute(
+      "UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = ?",
+      [amount, licenseNumber]
+    );
+
+    await connection.execute(
+      `INSERT INTO POINT_TRANSACTIONS 
+       (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged) 
+       VALUES (?, ?, ?, ?, NOW())`,
+      [licenseNumber, adminId, amount, reason]
+    );
+
+    await connection.commit();
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// GET /api/admins/users-with-points
+router.get('/users-with-points', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        u.UserID, 
+        u.username, 
+        u.firstName, 
+        u.lastName, 
+        u.accountType,
+        u.IsInactive,
+        d.PointBalance,
+        d.LicenseNumber
+      FROM USERS u
+      LEFT JOIN DRIVERS d ON u.UserID = d.UserID
+    `;
+    
+    const [rows] = await pool.execute(query);
+    res.json(rows);
+  } catch (error) {
+    console.error("Database Error:", error);
+    res.status(500).json({ error: "Failed to fetch users with points" });
   }
 });
 

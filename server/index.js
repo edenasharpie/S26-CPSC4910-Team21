@@ -10,6 +10,7 @@ import catalogRoutes from './src/routes/catalogs.js';
 import userRoute from './src/routes/users.js';
 import sponsorRoute from './src/routes/sponsors.js';
 import adminRoute from './src/routes/admins.js';
+import driverRoute from './src/routes/drivers.js';
 import { authenticateUser } from './src/utils/auth.js';
 
 
@@ -31,7 +32,7 @@ app.use('/api/catalogs', catalogRoutes);
 app.use('/api/user', userRoute); 
 app.use('/api/sponsors', sponsorRoute); 
 app.use('/api/admins', adminRoute);     
-//app.use('/api/drivers', driverRoute);
+app.use('/api/drivers', driverRoute);
 
 app.post('/api/login', async (req, res) => {
   console.log("1. Postman reached the server"); // If you see this, CORS is fine
