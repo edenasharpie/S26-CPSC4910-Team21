@@ -18,7 +18,6 @@ export default function InvoicesPage() {
   const { transactions } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  // Columns match your current Admin Portal style
   const columns = [
     { 
       key: "TimeChanged", 
@@ -69,8 +68,15 @@ export default function InvoicesPage() {
             Back to Portal
           </Button>
         </div>
+
+        <div className="flex justify-between items-center mb-8 text-left">
+          <div>
+            <h1 className="text-3xl font-bold">Point Invoices</h1>
+            <p className="text-gray-500">Historical record of all point adjustments</p>
+          </div>
+        </div>
         
-        <div className="card overflow-hidden bg-white dark:bg-gray-900 shadow-sm border dark:border-gray-800 rounded-lg">
+        <div className="card overflow-hidden bg-white dark:bg-gray-900 shadow-sm border dark:border-gray-800 rounded-xl">
           <Table data={transactions} columns={columns} />
         </div>
       </div>
