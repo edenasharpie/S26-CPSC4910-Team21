@@ -33,10 +33,23 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// Use named exports for ESM compatibility
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle database client:', err);
+  if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+    console.log('Database connection was closed or reset. Pool will manage reconnection.');
+  } else {
+    throw err;
+  }
+});
+
 export const query = async (sql, params) => {
-  const [rows] = await pool.execute(sql, params);
-  return { rows };
+  try {
+    const [rows] = await pool.execute(sql, params);
+    return { rows };
+  } catch (error) {
+    console.error("Database Query Error:", error.message);
+    throw error;
+  }
 };
 
 export const getUserById = async (id) => {
@@ -51,7 +64,13 @@ export const getUserById = async (id) => {
 };
 
 export async function getAllUsers() {
-  const [rows] = await pool.execute('SELECT * FROM USERS');
+  const [rows] = await pool.execute(`
+    SELECT 
+      u.*, 
+      COALESCE(d.PointBalance, 0) AS TotalPoints 
+    FROM USERS u
+    LEFT JOIN DRIVERS d ON u.UserID = d.UserID
+  `);
   return rows;
 } 
 

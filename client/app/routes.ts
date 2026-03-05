@@ -7,7 +7,7 @@ export default [
   route("admin/invoices", "routes/admin/invoices.tsx"),
   route("about", "routes/about.tsx"),
   route("admin/dashboard", "routes/admin/dashboard.tsx"),
-  route("admin/audit-logs", "routes/admin/audit-logs.tsx"),
+  route("audit-logs", "routes/audit-logs.tsx"),
   //route("profile", "routes/profile.tsx"),
   //route("change-password", "routes/change-password.tsx"),
   route("admin/catalogs", "routes/admin/catalogs.tsx"),

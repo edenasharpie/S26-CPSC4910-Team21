@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLoaderData, Form, useActionData, Link } from "react-router"; 
 import type { Route } from "./+types/points";
 import { Input, Button } from "~/components";
 import { getDriverPoints, getPointHistory, addPointTransaction, updatePointTransaction } from "../../../../../../server/src/db";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from 'recharts';
 
 export async function loader({ params }: Route.LoaderArgs) {
   const userId = Number(params.id);
@@ -11,14 +12,14 @@ export async function loader({ params }: Route.LoaderArgs) {
     getPointHistory(userId)
   ]);
   if (!driver) throw new Response("Driver not found", { status: 404 });
-  return { driver, history };
+  return { driver, history: Array.isArray(history) ? history : [] };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
   const driverUserId = Number(params.id);
-  const adminUserId = 1; // Replace with your actual logged-in UserID
+  const adminUserId = 1; 
 
   try {
     if (intent === "edit") {
@@ -42,79 +43,190 @@ export default function PointsPage() {
   const actionData = useActionData();
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  return (
-    <div className="p-8 max-w-6xl mx-auto space-y-10 text-left">
-      <Link to="/admin/dashboard" className="text-sm font-medium text-blue-600">← Back</Link>
+  const chartData = useMemo(() => {
+    if (!history || history.length === 0) return [];
+    
+    let currentBalance = 0;
+    const sortedHistory = [...history].sort((a, b) => 
+      new Date(a.TimeChanged).getTime() - new Date(b.TimeChanged).getTime()
+    );
 
-      <div className="flex justify-between items-center border-b pb-6">
+    const points = sortedHistory.map((item, index) => {
+      currentBalance += Number(item.PointChange);
+      return {
+        x: index,
+        date: new Date(item.TimeChanged).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        balance: currentBalance,
+      };
+    });
+
+    // --- Linear Regression Calculation ---
+    const n = points.length;
+    if (n < 2) return points; // Need at least two points for a trendline
+
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    for (const p of points) {
+      sumX += p.x;
+      sumY += p.balance;
+      sumXY += p.x * p.balance;
+      sumX2 += p.x * p.x;
+    }
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    // Add trend value to each data point
+    return points.map(p => ({
+      ...p,
+      trend: parseFloat((slope * p.x + intercept).toFixed(2))
+    }));
+  }, [history]);
+
+  return (
+    <div className="p-8 max-w-[1600px] mx-auto space-y-10 text-left">
+      <Link to="/admin/dashboard" className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
+        ← Back to Admin Dashboard
+      </Link>
+
+      <div className="flex justify-between items-end border-b pb-8 border-gray-100">
         <div>
-          <h1 className="text-3xl font-bold">{driver.FirstName} {driver.LastName}</h1>
-          <p className="text-gray-400 text-xs font-mono uppercase">License: {driver.LicenseNumber}</p>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">
+            {driver.FirstName} {driver.LastName}
+          </h1>
+          <p className="text-gray-400 text-sm font-mono mt-2 bg-gray-50 px-3 py-1 rounded-md inline-block border text-left">
+            License: {driver.LicenseNumber}
+          </p>
         </div>
-        <div className="bg-indigo-50 px-8 py-3 rounded-2xl border border-indigo-100 text-center">
-          <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Total Balance</span>
+        <div className="bg-white px-10 py-4 rounded-3xl border-2 border-indigo-600 text-center shadow-lg shadow-indigo-50">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-400">Current Balance</span>
           <div className="text-5xl font-black text-indigo-700">{driver.PointBalance}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* New Transaction Form */}
-        <Form method="post" className="lg:col-span-1 bg-white p-6 rounded-2xl border shadow-sm space-y-4 h-fit">
-          <h2 className="font-bold text-lg">Add Points</h2>
-          <Input label="Change (+/-)" name="pointChange" type="number" required />
-          <Input label="Reason" name="reason" required />
-          <Button type="submit" variant="primary" className="w-full">Save New</Button>
-          {actionData?.error && <p className="text-red-500 text-xs font-bold">{actionData.error}</p>}
-        </Form>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* COL 1: Point Adjustment (Left) */}
+        <div className="lg:col-span-3 space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 sticky top-8">
+            <h2 className="font-bold text-lg text-gray-800 text-left">Adjust Points</h2>
+            <Form method="post" className="space-y-4">
+              <Input label="Point Adjustment" name="pointChange" type="number" placeholder="e.g. 50 or -20" required />
+              <Input label="Reasoning" name="reason" placeholder="Event name..." required />
+              <Button type="submit" variant="primary" className="w-full py-6 rounded-xl font-bold shadow-lg shadow-indigo-100">
+                Update Driver
+              </Button>
+              {actionData?.error && <p className="text-red-500 text-xs font-bold text-center bg-red-50 p-2 rounded">{actionData.error}</p>}
+            </Form>
+          </div>
+        </div>
 
-        {/* Audit Log Table */}
-        <div className="lg:col-span-3 overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="p-4 text-xs font-bold text-gray-400">Date</th>
-                <th className="p-4 text-xs font-bold text-gray-400">Points</th>
-                <th className="p-4 text-xs font-bold text-gray-400">Reason</th>
-                <th className="p-4 text-xs font-bold text-gray-400">Admin</th>
-                <th className="p-4 text-xs font-bold text-gray-400 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {history.map((row: any) => (
-                <tr key={row.TransactionID}>
-                  <td className="p-4 text-xs text-gray-500">{new Date(row.TimeChanged).toLocaleString()}</td>
-                  <td className="p-4">
-                    {editingId === row.TransactionID ? (
-                      <input name="editPoints" form={`form-${row.TransactionID}`} type="number" defaultValue={row.PointChange} className="border rounded px-2 w-20" />
-                    ) : (
-                      <span className={`font-bold ${row.PointChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {row.PointChange > 0 ? `+${row.PointChange}` : row.PointChange}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4">
-                    {editingId === row.TransactionID ? (
-                      <input name="editReason" form={`form-${row.TransactionID}`} defaultValue={row.ReasonForChange} className="border rounded px-2 w-full" />
-                    ) : (
-                      <span className="text-sm">{row.ReasonForChange}</span>
-                    )}
-                  </td>
-                  <td className="p-4 text-xs text-gray-400">{row.UserChanged}</td>
-                  <td className="p-4 text-right">
-                    <Form method="post" id={`form-${row.TransactionID}`} className="inline">
-                      <input type="hidden" name="intent" value="edit" />
-                      <input type="hidden" name="transactionId" value={row.TransactionID} />
-                      {editingId === row.TransactionID ? (
-                        <Button size="sm" type="submit" onClick={() => setTimeout(() => setEditingId(null), 100)}>Save</Button>
-                      ) : (
-                        <Button size="sm" variant="secondary" type="button" onClick={() => setEditingId(row.TransactionID)}>Edit</Button>
-                      )}
-                    </Form>
-                  </td>
+        {/* COL 2-3: History Table (Middle) */}
+        <div className="lg:col-span-6 space-y-4">
+          <h2 className="font-bold text-xl text-gray-800 px-2 text-left">Transaction History</h2>
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50/50 border-b border-gray-100">
+                  <th className="p-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-left">Date</th>
+                  <th className="p-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-left">Change</th>
+                  <th className="p-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-left">Reason</th>
+                  <th className="p-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Edit</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {history.map((row: any) => (
+                  <tr key={row.TransactionID} className="hover:bg-indigo-50/20 transition-colors group">
+                    <td className="p-4 text-xs text-gray-500 font-medium text-left">
+                      {new Date(row.TimeChanged).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                    </td>
+                    <td className="p-4 text-left">
+                      {editingId === row.TransactionID ? (
+                        <input name="editPoints" form={`form-${row.TransactionID}`} type="number" defaultValue={row.PointChange} className="border rounded-lg px-2 py-1 w-20 outline-none text-sm" />
+                      ) : (
+                        <span className={`font-bold text-sm ${row.PointChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {row.PointChange > 0 ? `+${row.PointChange}` : row.PointChange}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 text-left">
+                      {editingId === row.TransactionID ? (
+                        <input name="editReason" form={`form-${row.TransactionID}`} defaultValue={row.ReasonForChange} className="border rounded-lg px-2 py-1 w-full outline-none text-sm" />
+                      ) : (
+                        <span className="text-sm text-gray-700">{row.ReasonForChange}</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right">
+                      <Form method="post" id={`form-${row.TransactionID}`} className="inline">
+                        <input type="hidden" name="intent" value="edit" />
+                        <input type="hidden" name="transactionId" value={row.TransactionID} />
+                        {editingId === row.TransactionID ? (
+                          <Button size="sm" type="submit" onClick={() => setTimeout(() => setEditingId(null), 100)}>Save</Button>
+                        ) : (
+                          <button type="button" className="text-gray-300 hover:text-indigo-600" onClick={() => setEditingId(row.TransactionID)}>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          </button>
+                        )}
+                      </Form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* COL 4: Performance Chart with Trendline (Right) */}
+        <div className="lg:col-span-3 space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6 sticky top-8">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-lg text-gray-800 text-left">Performance</h2>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-0.5 bg-indigo-600"></span>
+                <span className="text-[9px] font-bold text-gray-400 uppercase">Actual</span>
+                <span className="w-3 h-0.5 bg-amber-400 border-t border-dashed border-amber-400"></span>
+                <span className="text-[9px] font-bold text-gray-400 uppercase">Trend</span>
+              </div>
+            </div>
+            <div className="h-64 w-full">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: -30, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
+                    <XAxis dataKey="date" hide />
+                    <YAxis stroke="#cbd5e1" fontSize={10} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '11px' }}
+                    />
+                    {/* Actual Balance Line */}
+                    <Line 
+                      type="stepAfter" 
+                      dataKey="balance" 
+                      stroke="#4f46e5" 
+                      strokeWidth={4} 
+                      dot={false}
+                      activeDot={{ r: 6, strokeWidth: 0, fill: '#4338ca' }}
+                    />
+                    {/* Linear Trendline */}
+                    <Line 
+                      type="monotone" 
+                      dataKey="trend" 
+                      stroke="#fbbf24" 
+                      strokeWidth={2} 
+                      strokeDasharray="5 5" 
+                      dot={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-100 rounded-2xl text-gray-300 text-[10px] text-center p-4">
+                  No data points yet
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 text-center uppercase tracking-[0.15em] font-bold">
+              Point Progression & Regression
+            </p>
+          </div>
         </div>
       </div>
     </div>
