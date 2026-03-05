@@ -273,6 +273,46 @@ ProfileUpdateRequest:
       description: Short biography of the user
       maxLength: 500
       example: Driver with 5 years of experience
+    activeStatus:
+      type: integer
+      description: Active status (1 for active, 0 for inactive)
+      enum:
+        - 0
+        - 1
+      example: 1
+    # Driver-specific fields
+    licenseNumber:
+      type: string
+      description: License number for driver accounts
+      maxLength: 45
+      example: DL123456789
+    sponsorCompanyId:
+      type: integer
+      description: Sponsor company ID for driver or sponsor accounts
+      example: 1
+    performanceStatus:
+      type: string
+      description: Performance status for driver accounts
+      enum:
+        - excellent
+        - good
+        - average
+        - poor
+      example: good
+    alertPoints:
+      type: integer
+      description: Enable notifications for point transactions (1=enabled, 0=disabled)
+      enum:
+        - 0
+        - 1
+      example: 1
+    alertOrders:
+      type: integer
+      description: Enable notifications for orders (1=enabled, 0=disabled)
+      enum:
+        - 0
+        - 1
+      example: 1
 
 AccountStatusRequest:
   type: object

@@ -71,6 +71,20 @@ paths:
   /admin/catalogs/{catalogId}/items/{itemId}/reviews/{reviewId}:
     $ref: './paths/admin/catalogs.yaml#/catalogItemReviewsById'
 
+  ### users - admin ###
+
+  /admin/users:
+    $ref: './paths/admin/users.yaml#/users'
+
+  /admin/users/{id}:
+    $ref: './paths/admin/users.yaml#/usersById'
+
+  /admin/users/{id}/points:
+    $ref: './paths/admin/users.yaml#/userPoints'
+
+  /admin/users/{id}/points/{transactionId}:
+    $ref: './paths/admin/users.yaml#/userPointsTransaction'
+
   ### catalogs - driver ###
 
   /driver/{userId}/catalogs:
