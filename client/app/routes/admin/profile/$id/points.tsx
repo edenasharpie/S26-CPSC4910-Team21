@@ -5,6 +5,7 @@ import { Input, Button } from "~/components";
 import { getDriverPoints, getPointHistory, addPointTransaction, updatePointTransaction } from "../../../../../../server/src/db";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from 'recharts';
 
+// Load in driver data and point history
 export async function loader({ params }: Route.LoaderArgs) {
   const userId = Number(params.id);
   const [driver, history] = await Promise.all([
@@ -15,11 +16,12 @@ export async function loader({ params }: Route.LoaderArgs) {
   return { driver, history: Array.isArray(history) ? history : [] };
 }
 
+// Handle adding or editing point transactions
 export async function action({ request, params }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
   const driverUserId = Number(params.id);
-  const adminUserId = 1; // TODO: Replace with your actual logged-in UserID
+  const adminUserId = 1; // TODO: Replace with actual logged-in UserID
 
   try {
     if (intent === "edit") {
@@ -43,6 +45,7 @@ export default function PointsPage() {
   const actionData = useActionData();
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  // Compute chart data and linear regression trendline
   const chartData = useMemo(() => {
     if (!history || history.length === 0) return [];
     
@@ -60,9 +63,8 @@ export default function PointsPage() {
       };
     });
 
-    // --- Linear Regression Calculation ---
     const n = points.length;
-    if (n < 2) return points; // Need at least two points for a trendline
+    if (n < 2) return points; 
 
     let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
     for (const p of points) {
@@ -75,7 +77,6 @@ export default function PointsPage() {
     const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
     const intercept = (sumY - slope * sumX) / n;
 
-    // Add trend value to each data point
     return points.map(p => ({
       ...p,
       trend: parseFloat((slope * p.x + intercept).toFixed(2))
@@ -88,6 +89,7 @@ export default function PointsPage() {
         ← Back to Admin Dashboard
       </Link>
 
+      {/* Profile Header */}
       <div className="flex justify-between items-end border-b pb-8 border-gray-100">
         <div>
           <h1 className="text-4xl font-black text-gray-900 tracking-tight">
@@ -105,22 +107,22 @@ export default function PointsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* COL 1: Point Adjustment (Left) */}
-        <div className="lg:col-span-3 space-y-6">
+        {/* Adjustment Column */}
+        <div className="lg:col-span-3">
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-5 sticky top-8">
             <h2 className="font-bold text-lg text-gray-800 text-left">Adjust Points</h2>
             <Form method="post" className="space-y-4">
               <Input label="Point Adjustment" name="pointChange" type="number" placeholder="e.g. 50 or -20" required />
               <Input label="Reasoning" name="reason" placeholder="Event name..." required />
-              <Button type="submit" variant="primary" className="w-full py-6 rounded-xl font-bold shadow-lg shadow-indigo-100">
-                Update Driver
+              <Button type="submit" variant="primary" className="w-full py-4 rounded-l font-bold shadow-lg shadow-indigo-100">
+                Publish
               </Button>
               {actionData?.error && <p className="text-red-500 text-xs font-bold text-center bg-red-50 p-2 rounded">{actionData.error}</p>}
             </Form>
           </div>
         </div>
 
-        {/* COL 2-3: History Table (Middle) */}
+        {/* History Column */}
         <div className="lg:col-span-6 space-y-4">
           <h2 className="font-bold text-xl text-gray-800 px-2 text-left">Transaction History</h2>
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -175,18 +177,25 @@ export default function PointsPage() {
           </div>
         </div>
 
-        {/* COL 4: Performance Chart with Trendline (Right) */}
-        <div className="lg:col-span-3 space-y-6">
+        {/* Performance Chart Column */}
+        <div className="lg:col-span-3">
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6 sticky top-8">
-            <div className="flex items-center justify-between">
+            <div className="space-y-3">
               <h2 className="font-bold text-lg text-gray-800 text-left">Performance</h2>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-0.5 bg-indigo-600"></span>
-                <span className="text-[9px] font-bold text-gray-400 uppercase">Actual</span>
-                <span className="w-3 h-0.5 bg-amber-400 border-t border-dashed border-amber-400"></span>
-                <span className="text-[9px] font-bold text-gray-400 uppercase">Trend</span>
+              
+              {/* LEGEND: Optimized for Sidebar Fit */}
+              <div className="grid grid-cols-2 gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="shrink-0 w-2 h-2 rounded-full bg-indigo-600"></span>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase truncate">Actual</span>
+                </div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="shrink-0 w-3 h-0.5 bg-amber-400 border-t border-dashed border-amber-600"></span>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase truncate">Trend</span>
+                </div>
               </div>
             </div>
+
             <div className="h-64 w-full">
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -197,7 +206,6 @@ export default function PointsPage() {
                     <Tooltip 
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '11px' }}
                     />
-                    {/* Actual Balance Line */}
                     <Line 
                       type="stepAfter" 
                       dataKey="balance" 
@@ -206,7 +214,6 @@ export default function PointsPage() {
                       dot={false}
                       activeDot={{ r: 6, strokeWidth: 0, fill: '#4338ca' }}
                     />
-                    {/* Linear Trendline */}
                     <Line 
                       type="monotone" 
                       dataKey="trend" 
@@ -224,7 +231,7 @@ export default function PointsPage() {
               )}
             </div>
             <p className="text-[10px] text-gray-400 text-center uppercase tracking-[0.15em] font-bold">
-              Point Progression & Regression
+              Balance History
             </p>
           </div>
         </div>
