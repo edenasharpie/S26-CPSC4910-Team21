@@ -136,4 +136,71 @@ router.get('/audit-reports', async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// POST api/admin/add-driver
+router.post('/add-driver', async (req, res) => {
+    const { firstName, lastName, email, password, licenseNumber } = req.body;
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // Insert into USERS table
+        const [userResult] = await connection.execute(
+            "INSERT INTO USERS (FirstName, LastName, Email, Password, UserType) VALUES (?, ?, ?, ?, 'driver')",
+            [firstName, lastName, email, password] // Note: Hash password in production!
+        );
+
+        const newUserId = userResult.insertId;
+
+        // Insert into DRIVERS table using the new UserID
+        await connection.execute(
+            "INSERT INTO DRIVERS (UserID, LicenseNumber, PointBalance) VALUES (?, ?, 0)",
+            [newUserId, licenseNumber]
+        );
+
+        await connection.commit();
+        res.status(201).json({ message: "Driver created successfully", userId: newUserId });
+    } catch (error) {
+        await connection.rollback();
+        console.error("Add Driver Error:", error);
+        res.status(500).json({ error: "Failed to create driver. License or Email might already exist." });
+    } finally {
+        connection.release();
+    }
+});
+
+// POST /api/admin/add-sponsor
+router.post('/add-sponsor', async (req, res) => {
+    const { firstName, lastName, email, password, companyID } = req.body;
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // Insert into USERS table with UserType 'sponsor'
+        const [userResult] = await connection.execute(
+            "INSERT INTO USERS (FirstName, LastName, Email, Password, UserType) VALUES (?, ?, ?, ?, 'sponsor')",
+            [firstName, lastName, email, password]
+        );
+
+        const newUserId = userResult.insertId;
+
+        // Insert into SPONSORS table
+        await connection.execute(
+            "INSERT INTO SPONSORS (UserID, CompanyID) VALUES (?, ?)",
+            [newUserId, companyID]
+        );
+
+        await connection.commit();
+        res.status(201).json({ message: "Sponsor created successfully", userId: newUserId });
+    } catch (error) {
+        await connection.rollback();
+        console.error("Add Sponsor Error:", error);
+        res.status(500).json({ error: "Failed to create sponsor. Email may already be in use." });
+    } finally {
+        connection.release();
+    }
+});
+
 export default router;
