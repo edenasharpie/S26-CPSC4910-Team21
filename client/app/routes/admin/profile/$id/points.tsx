@@ -63,6 +63,12 @@ export default function PointsPage() {
   const actionData = useActionData();
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  return (
+    <div className="p-8 max-w-6xl mx-auto space-y-10 text-left">
+      <div className="flex items-center gap-4">
+        <Link to="/admin/dashboard" className="text-sm font-medium text-blue-600">← Back</Link>
+        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">Home</Link>
+      </div>
   const chartData = useMemo(() => {
     if (!history || history.length === 0) return [];
     

@@ -3,9 +3,7 @@ import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData } from "react-router";
-// Ensure your getAllUsers() SQL includes: 
-// SELECT u.*, SUM(p.Points) as TotalPoints FROM Users u LEFT JOIN Points p ON u.UserID = p.UserID GROUP BY u.UserID
-import { getAllUsers, createUser } from "../../../../server/src/db.js";
+import { getAllUsers, createUser } from "../../../../server/src/db.js"; // IMPORT SERVER CODE IS NOT ALLOWED, IT WILL NOT WORK IN PROD. you need to use the api.
 
 //Loads all users for admin dashboard
 export async function loader() {
