@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
 // IMPORTANT: In a real app, use an API route. 
-// Keeping this as requested for your local environment.
 import { getAllUsers, createUser } from "../../../../server/src/db.js"; 
 
 export async function loader() {
@@ -69,7 +68,6 @@ export default function AdminPortal() {
       key: "Avatar",
       header: "Avatar",
       render: (user: any) => {
-        // Handle Base64 strings from DB or fallback to DiceBear
         const hasCustomPhoto = user.ProfilePicture && user.ProfilePicture.includes("base64");
         const imageSrc = hasCustomPhoto 
           ? user.ProfilePicture 
@@ -181,10 +179,18 @@ export default function AdminPortal() {
 
             <div className="space-y-3 pt-4 border-t dark:border-gray-800">
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Analytics</h2>
-              <Button variant="secondary" onClick={() => setIsAuditModalOpen(true)} className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200">
+              <Button 
+                variant="secondary" 
+                onClick={() => setIsAuditModalOpen(true)} 
+                className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all"
+              >
                 Audit Reports
               </Button>
-              <Button variant="secondary" onClick={() => navigate("/admin/invoices")} className="w-full py-6 text-lg font-bold">
+              <Button 
+                variant="secondary" 
+                onClick={() => navigate("/admin/invoices")} 
+                className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all"
+              >
                 Invoices
               </Button>
             </div>
@@ -228,17 +234,46 @@ export default function AdminPortal() {
           </main>
         </div>
 
-        {/* Modals remain the same */}
-        <Modal isOpen={isAuditModalOpen} onClose={() => setIsAuditModalOpen(false)} title="Audit Report Configuration">
-           <Form method="get" action="/audit-logs" className="space-y-4">
-             {/* ... form content ... */}
-             <div className="flex justify-end gap-2 pt-4">
-               <Button type="button" variant="ghost" onClick={() => setIsAuditModalOpen(false)}>Cancel</Button>
-               <Button type="submit" variant="primary">Generate</Button>
-             </div>
-           </Form>
+        {/* Audit Report Modal */}
+        <Modal 
+          isOpen={isAuditModalOpen} 
+          onClose={() => setIsAuditModalOpen(false)} 
+          title="Audit Report Configuration"
+        >
+          <Form method="get" action="/admin/audit-logs" className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 text-left">Select Log Types:</p>
+              <AuditOption label="Password Changes" name="type" value="password_change" />
+              <AuditOption label="Login Attempts" name="type" value="login" />
+              <AuditOption label="Point Transactions" name="type" value="points" />
+              <AuditOption label="Driver Applications" name="type" value="applications" />
+            </div>
+
+            <div className="pt-4 border-t dark:border-gray-800">
+              <label className="block text-sm font-medium mb-1 text-left">Filter by Sponsor</label>
+              <select name="sponsorId" className="w-full rounded-md border border-gray-200 p-2 text-sm bg-white dark:bg-gray-800">
+                <option value="all">All Sponsors</option>
+                <option value="1">Global Logistics</option>
+                <option value="2">Swift Trucking</option>
+              </select>
+            </div>
+
+            <div className="pt-2">
+              <label className="block text-sm font-medium mb-1 text-left">Date Range</label>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" name="start" className="p-2 text-xs border rounded bg-white dark:bg-gray-800 dark:border-gray-700" />
+                <input type="date" name="end" className="p-2 text-xs border rounded bg-white dark:bg-gray-800 dark:border-gray-700" />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-6 border-t dark:border-gray-800">
+              <Button type="button" variant="ghost" onClick={() => setIsAuditModalOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="primary">Generate Report</Button>
+            </div>
+          </Form>
         </Modal>
 
+        {/* Add User Modal */}
         <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Add New User">
           <Form method="post" className="space-y-4">
             <Input label="Username" name="username" required />
@@ -246,9 +281,9 @@ export default function AdminPortal() {
               <Input label="First Name" name="firstName" required />
               <Input label="Last Name" name="lastName" required />
             </div>
-            <div>
+            <div className="text-left">
               <label className="text-sm font-medium mb-1 block">Account Type</label>
-              <select name="accountType" value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="w-full rounded-md border p-2 text-sm bg-white dark:bg-gray-800">
+              <select name="accountType" value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="w-full rounded-md border border-gray-200 p-2 text-sm bg-white dark:bg-gray-800">
                 <option value="Driver">Driver</option>
                 <option value="Sponsor">Sponsor</option>
                 <option value="Admin">Admin</option>
@@ -272,5 +307,14 @@ function StatCard({ title, value, color }: { title: string; value: number; color
       <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{title}</div>
       <div className={`text-2xl font-black ${color}`}>{value}</div>
     </div>
+  );
+}
+
+function AuditOption({ label, name, value }: { label: string, name: string, value: string }) {
+  return (
+    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded cursor-pointer transition-colors">
+      <input type="checkbox" name={name} value={value} className="h-4 w-4 text-indigo-600 border-gray-300 rounded" />
+      <span className="text-sm font-medium">{label}</span>
+    </label>
   );
 }
