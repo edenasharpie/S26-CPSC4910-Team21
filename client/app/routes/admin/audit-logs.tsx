@@ -2,7 +2,7 @@ import type { Route } from "./+types/audit-logs";
 import { useState } from "react";
 import { useLoaderData, Form, Link, useNavigate } from "react-router"; // Added Link and useNavigate
 import { Table, Button, Badge, Input, Modal } from "~/components";
-import { pool } from "../../../server/src/db.js";
+import { pool } from "../../../../server/src/db.js";
 
 // --- Server-Side Loader ---
 export async function loader({ request }: Route.LoaderArgs) {
@@ -92,10 +92,13 @@ export default function AuditDashboard() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8">
       <div className="max-w-7xl mx-auto">
         {/* Navigation Row */}
-        <div className="mb-4">
-          <Button variant="ghost" onClick={() => navigate("/admin/dashboard")} className="flex items-center gap-2">
-            ← Back to Dashboard
-          </Button>
+        <div className="mb-4 text-left">
+          <Link 
+            to="/admin/dashboard" 
+            className="text-sm font-medium text-blue-600 hover:underline mb-2 block"
+          >
+            ← Return to Admin Dashboard
+          </Link>
         </div>
 
         <div className="flex justify-between items-center mb-8 text-left">
