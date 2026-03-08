@@ -2,7 +2,7 @@ import express from 'express';
 
 const router = express.Router();
 
-//const { getProfile, changePasswordWithHistory } = require('../../api/user.ts');
+import { getProfile, changePasswordWithHistory } from '../../api/user.ts';
 
 
 /**
@@ -43,4 +43,6 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
+// TODO: not sure which one of these (or if any) we should have here
+//module.exports = router;
 export default router;
