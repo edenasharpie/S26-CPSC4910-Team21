@@ -23,6 +23,7 @@ app.set('pool', pool);
 app.use(cors());
 app.use(express.json());
 
+// TODO: Make sure that all client files are using a consistent API route scheme and that both the client and server schemes match.
 app.use('/api/about', aboutRoutes);
 app.use('/api/auth', loginRoutes);
 //app.use('/api/user', userRoute); 
