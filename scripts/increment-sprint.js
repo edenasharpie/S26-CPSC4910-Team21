@@ -9,6 +9,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const envPath = join(__dirname, '../../.fs-env');
 
+// load environment variables
+dotenv.config({ path: envPath });
+
 // create database connection
 const pool = mysql.createPool({
   host: process.env.DB_HOST,

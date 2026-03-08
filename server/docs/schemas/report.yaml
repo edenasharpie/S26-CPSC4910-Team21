@@ -41,3 +41,209 @@ DriverApplicationReport:
       type: string
       description: The driver license number the report is filtered by (admin reports only)
       example: "DL123456789"
+    detailedRecords:
+      type: array
+      description: Detailed application records (included when includeDetails=true)
+      items:
+        type: object
+        properties:
+          ApplicationID:
+            type: integer
+          DriverID:
+            type: string
+          SponsorCompanyID:
+            type: integer
+          ApplicationStatus:
+            type: string
+            enum: [pending, accepted, rejected]
+          TimeSubmitted:
+            type: string
+            format: date-time
+          TimeStatusChanged:
+            type: string
+            format: date-time
+
+PointTransactionsReport:
+  type: object
+  required:
+    - totalTransactions
+    - totalPointsAdded
+    - totalPointsDeducted
+    - netPointChange
+
+  properties:
+    totalTransactions:
+      type: integer
+      description: Total number of point transactions
+      example: 150
+    totalPointsAdded:
+      type: integer
+      description: Total points added across all transactions
+      example: 5000
+    totalPointsDeducted:
+      type: integer
+      description: Total points deducted across all transactions
+      example: 2000
+    netPointChange:
+      type: integer
+      description: Net change in points (added minus deducted)
+      example: 3000
+    dateRangeStart:
+      type: string
+      format: date-time
+      description: Start date of the report period (if filtered by date)
+      example: "2026-01-01T00:00:00Z"
+    dateRangeEnd:
+      type: string
+      format: date-time
+      description: End date of the report period (if filtered by date)
+      example: "2026-02-26T23:59:59Z"
+    driverId:
+      type: string
+      description: The driver license number the report is filtered by
+      example: "DL123456789"
+    reasonForChange:
+      type: string
+      description: The reason for change filter applied
+      example: "Purchase completion"
+    detailedRecords:
+      type: array
+      description: Detailed transaction records (included when includeDetails=true)
+      items:
+        type: object
+        properties:
+          TransactionID:
+            type: integer
+          DriverID:
+            type: string
+          UserChanged:
+            type: integer
+          PointChange:
+            type: integer
+          ReasonForChange:
+            type: string
+          TimeChanged:
+            type: string
+            format: date-time
+
+OrdersReport:
+  type: object
+  required:
+    - totalOrders
+    - totalPointsSpent
+    - totalDollarsSpent
+    - confirmedCount
+    - shippedCount
+    - deliveredCount
+    - cancelledCount
+
+  properties:
+    totalOrders:
+      type: integer
+      description: Total number of orders
+      example: 82
+    totalPointsSpent:
+      type: integer
+      description: Total points spent across all orders
+      example: 15000
+    totalDollarsSpent:
+      type: number
+      format: double
+      description: Total dollars spent across all orders
+      example: 1250.50
+    confirmedCount:
+      type: integer
+      description: Number of confirmed orders
+      example: 20
+    shippedCount:
+      type: integer
+      description: Number of shipped orders
+      example: 35
+    deliveredCount:
+      type: integer
+      description: Number of delivered orders
+      example: 25
+    cancelledCount:
+      type: integer
+      description: Number of cancelled orders
+      example: 2
+    dateRangeStart:
+      type: string
+      format: date-time
+      description: Start date of the report period (if filtered by date)
+      example: "2026-01-01T00:00:00Z"
+    dateRangeEnd:
+      type: string
+      format: date-time
+      description: End date of the report period (if filtered by date)
+      example: "2026-02-26T23:59:59Z"
+    driverId:
+      type: string
+      description: The driver license number the report is filtered by
+      example: "DL123456789"
+    sponsorCompanyId:
+      type: integer
+      description: The sponsor company ID the report is filtered by
+      example: 5
+    orderStatus:
+      type: string
+      description: The order status filter applied
+      enum: [confirmed, shipped, delivered, cancelled]
+      example: "delivered"
+    detailedRecords:
+      type: array
+      description: Detailed order records (included when includeDetails=true)
+      items:
+        type: object
+        properties:
+          OrderID:
+            type: integer
+          DriverID:
+            type: string
+          SponsorCompanyID:
+            type: integer
+          OrderDate:
+            type: string
+            format: date-time
+          OrderPointsSpent:
+            type: integer
+          OrderDollarsSpent:
+            type: number
+            format: double
+          OrderStatus:
+            type: string
+            enum: [confirmed, shipped, delivered, cancelled]
+
+ReportTypeList:
+  type: object
+  required:
+    - types
+  properties:
+    types:
+      type: array
+      items:
+        type: object
+        required:
+          - id
+          - name
+          - description
+          - allowedFilters
+        properties:
+          id:
+            type: string
+            description: Unique identifier for the report type
+            example: "driver-applications"
+          name:
+            type: string
+            description: Display name for the report type
+            example: "Driver Applications"
+          description:
+            type: string
+            description: Description of what the report contains
+            example: "Report on driver application submissions and status"
+          allowedFilters:
+            type: array
+            items:
+              type: string
+            description: List of allowed filter parameters for this report type
+            example: ["status", "startDate", "endDate", "sponsorCompanyId", "driverId"]

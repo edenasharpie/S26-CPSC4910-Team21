@@ -1,3 +1,196 @@
+types:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the sponsor
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - reports
+    summary: Get available report types for sponsor
+    description: Returns a list of all report types available to sponsor users, including their IDs, names, descriptions, and allowed filters.
+    responses:
+      '200':
+        description: Report types retrieved successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/report.yaml#/ReportTypeList'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        description: User is not a sponsor
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Access forbidden: User is not a sponsor"
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+reportByType:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the sponsor
+      required: true
+      schema:
+        type: integer
+    - name: reportType
+      in: path
+      required: true
+      description: Type of report to generate
+      schema:
+        type: string
+        enum: [driver-applications, point-transactions, orders]
+        example: "driver-applications"
+  get:
+    tags:
+      - reports
+    summary: Generate a report by type for sponsor
+    description: Generate a report based on the specified report type with optional filters. The report is automatically filtered to only include data for the sponsor's company. Supports driver-applications, point-transactions, and orders report types.
+    parameters:
+      - name: startDate
+        in: query
+        description: Filter records on or after this date
+        schema:
+          type: string
+          format: date-time
+          example: "2026-01-01T00:00:00Z"
+      - name: endDate
+        in: query
+        description: Filter records on or before this date
+        schema:
+          type: string
+          format: date-time
+          example: "2026-02-26T23:59:59Z"
+      - name: includeDetails
+        in: query
+        description: Include detailed records in the response
+        schema:
+          type: boolean
+          example: true
+      - name: status
+        in: query
+        description: Filter by application status (driver-applications only)
+        schema:
+          type: string
+          enum: [pending, accepted, rejected]
+      - name: orderStatus
+        in: query
+        description: Filter by order status (orders only)
+        schema:
+          type: string
+          enum: [confirmed, shipped, delivered, cancelled]
+    responses:
+      '200':
+        description: Report generated successfully
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../../schemas/report.yaml#/DriverApplicationReport'
+                - $ref: '../../schemas/report.yaml#/PointTransactionsReport'
+                - $ref: '../../schemas/report.yaml#/OrdersReport'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        description: User is not a sponsor
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Access forbidden: User is not a sponsor"
+      '404':
+        description: Invalid report type or user not found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Invalid report type: unknown-report"
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+export:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the sponsor
+      required: true
+      schema:
+        type: integer
+  post:
+    tags:
+      - reports
+    summary: Export report to PDF for sponsor
+    description: Generate and download a PDF file for a report. Requires the report type and report data to be provided in the request body.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - reportType
+              - reportData
+            properties:
+              reportType:
+                type: string
+                enum: [driver-applications, point-transactions, orders]
+                description: Type of report to export
+                example: "driver-applications"
+              reportData:
+                type: object
+                description: The report data to include in the PDF (should match the report schema)
+                example:
+                  totalApplications: 45
+                  pendingCount: 12
+                  acceptedCount: 28
+                  rejectedCount: 5
+    responses:
+      '200':
+        description: PDF generated successfully
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        description: User is not a sponsor
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Access forbidden: User is not a sponsor"
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
 driverApplications:
   parameters:
     - name: userId
@@ -9,8 +202,11 @@ driverApplications:
   get:
     tags:
       - reports
-    summary: Generate driver application report
-    description: Generate a report of driver application statistics for the sponsor's company. Returns aggregated counts of applications by status. The report is automatically filtered to only include applications for the sponsor's company. Sponsor access required.
+    summary: Generate driver application report (deprecated)
+    description: |
+      **DEPRECATED**: Use GET /sponsor/:userId/reports/driver-applications instead.
+      Generate a report of driver application statistics for the sponsor's company. Returns aggregated counts of applications by status. The report is automatically filtered to only include applications for the sponsor's company. Sponsor access required.
+    deprecated: true
     parameters:
       - name: status
         in: query

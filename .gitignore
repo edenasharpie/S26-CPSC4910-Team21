@@ -1,8 +1,7 @@
 build/
-.github/*.md
-.github/*.pdf
-.github/*.csv
 .github/.gitignore
+.github/*.md
+.github/*.csv
 .DS_Store
 .fs-env
 setup-dev-server.sh
