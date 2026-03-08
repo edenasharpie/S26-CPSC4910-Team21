@@ -2,7 +2,59 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router"; 
 import { Input, Button } from "~/components";
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = process.env.API_URL ?? 'http://localhost:5000';
+
+export async function loader({ request, params }: Route.LoaderArgs) {
+  const sessionUser = requireAuth(request, ["admin"]);
+  const userId = params.id;
+  const [driverRes, historyRes] = await Promise.all([
+    fetch(`${BASE_URL}/api/admin/drivers/${userId}/points`),
+    fetch(`${BASE_URL}/api/admin/drivers/${userId}/point-history`),
+  ]);
+  if (!driverRes.ok) throw new Response("Driver not found", { status: 404 });
+  const [driver, history] = await Promise.all([driverRes.json(), historyRes.json()]);
+  return { driver, history, adminUserId: sessionUser.UserID };
+}
+
+export async function action({ request, params }: Route.ActionArgs) {
+  const sessionUser = requireAuth(request, ["admin"]);
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+  const driverUserId = params.id;
+  const adminUserId = sessionUser.UserID;
+
+  try {
+    if (intent === "edit") {
+      const tId = formData.get("transactionId") as string;
+      const p = Number(formData.get("editPoints"));
+      const r = formData.get("editReason") as string;
+      const res = await fetch(`${BASE_URL}/api/admin/point-transactions/${tId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPoints: p, newReason: r, adminUserId }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        return { error: body.error ?? 'Update failed' };
+      }
+    } else {
+      const p = Number(formData.get("pointChange"));
+      const r = formData.get("reason") as string;
+      const res = await fetch(`${BASE_URL}/api/admin/drivers/${driverUserId}/point-transactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pointChange: p, reason: r, adminUserId }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        return { error: body.error ?? 'Transaction failed' };
+      }
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
 
 export default function PointsPage() {
   const { id } = useParams();

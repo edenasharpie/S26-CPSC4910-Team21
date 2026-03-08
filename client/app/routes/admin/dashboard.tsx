@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { Table, Input, Button, Badge, Modal } from "~/components";
-import { useNavigate, Link } from "react-router";
+import { Table, Input, Button, Badge, Modal, Alert } from "~/components";
+import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
+import { requireAuth } from "~/utils/session.server";
+//import { getAllUsers, createUser } from "../../../../server/src/db.js"; // IMPORT SERVER CODE IS NOT ALLOWED, IT WILL NOT WORK IN PROD. you need to use the api.
 
 const BASE_URL = 'http://localhost:5000';
 
@@ -23,12 +25,88 @@ export default function AdminPortal() {
   });
   const navigate = useNavigate();
 
-  //Counting users by type for statistics at top
-  const totalUsers = users.length;
-  const driverCount = users.filter((u: any) => u.UserType?.toLowerCase() === "driver" && u.ActiveStatus !== 0).length;
-  const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor" && u.ActiveStatus !== 0).length;
-  const adminCount = users.filter((u: any) => u.UserType?.toLowerCase() === "admin" && u.ActiveStatus !== 0).length;
-  const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
+  useEffect(() => {
+    fetchUsers();
+  }, [statusFilter]);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      // Build query string with status filter
+      const queryParams = new URLSearchParams();
+      if (statusFilter !== 'all') {
+        queryParams.append('activeStatus', statusFilter);
+      }
+      const queryString = queryParams.toString();
+      const url = `${BASE_URL}/api/admin/users${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setUsers(data.users || []);
+    } catch (error: any) {
+      console.error('Error fetching users:', error);
+      setError('Failed to fetch users. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setError(null);
+      const payload: any = {
+        username: formData.username,
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        userType: selectedType,
+        activeStatus: 1
+      };
+
+      // Add driver-specific fields
+      if (selectedType === 'driver') {
+        payload.licenseNumber = formData.licenseNumber;
+        payload.performanceStatus = formData.performanceStatus;
+      }
+
+      // Add sponsor-specific fields
+      if (selectedType === 'sponsor' && formData.sponsorCompanyId) {
+        payload.sponsorCompanyId = parseInt(formData.sponsorCompanyId);
+      }
+
+      const response = await fetch(`${BASE_URL}/api/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        setIsAddUserOpen(false);
+        setFormData({
+          username: '',
+          email: '',
+          firstName: '',
+          lastName: '',
+          licenseNumber: '',
+          performanceStatus: 'good',
+          sponsorCompanyId: ''
+        });
+        setSelectedType('driver');
+        fetchUsers();
+      } else {
+        const errData = await response.json();
+        setError(errData.error || 'Failed to create user');
+      }
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      setError('Failed to create user. Please try again.');
+    }
+  };
 
   useEffect(() => {
     fetchUsers();

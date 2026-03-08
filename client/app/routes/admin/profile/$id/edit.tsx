@@ -1,8 +1,67 @@
 import { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router"; 
-import { Input, Button } from "~/components";
+import { useParams, useLoaderData, Form, useActionData, Link, useNavigate, redirect } from "react-router"; 
+import type { Route } from "./+types/edit";
+import { Input, Button, Alert } from "~/components";
+import { requireAuth } from "~/utils/session.server";
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = process.env.API_URL ?? 'http://localhost:5000';
+
+export async function loader({ request, params }: Route.LoaderArgs) {
+  requireAuth(request, ["admin"]);
+  const res = await fetch(`${BASE_URL}/api/admin/users/${params.id}`);
+  if (!res.ok) throw new Response("User not found", { status: 404 });
+  const user = await res.json();
+  return { user };
+}
+
+export async function action({ request, params }: Route.ActionArgs) {
+  const formData = await request.formData();
+  const userId = params.id;
+  const intent = formData.get("intent");
+
+  if (intent === "delete") {
+    try {
+      const res = await fetch(`${BASE_URL}/api/admin/users/${userId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json();
+        return { error: body.error ?? 'Delete failed' };
+      }
+      return redirect("/admin/dashboard");
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  }
+
+  const updates = {
+    Username: formData.get("Username"),
+    Email: formData.get("Email"),
+    Phone: formData.get("Phone"),
+    PassHash: formData.get("PassHash"),
+    FirstName: formData.get("FirstName"),
+    MiddleName: formData.get("MiddleName"),
+    LastName: formData.get("LastName"),
+    Pronouns: formData.get("Pronouns"),
+    ProfilePicture: formData.get("ProfilePicture"),
+    Bio: formData.get("Bio"),
+    UserType: formData.get("UserType"),
+    ActiveStatus: formData.get("ActiveStatus") === "1" ? 1 : 0,
+  };
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/admin/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) {
+      const body = await res.json();
+      return { error: body.error ?? 'Update failed' };
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+}
 
 export default function EditUserProfile() {
   const { id } = useParams();
