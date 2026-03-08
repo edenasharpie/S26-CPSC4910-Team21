@@ -423,3 +423,230 @@ function AuditOption({ label, name, value }: { label: string, name: string, valu
     </label>
   );
 }
+
+// KScannel's admin-dashboard.tsx file:
+// TODO: MERGE THIS IN BY DIFF
+
+//import type { Route } from "./+types/admin-dashboard";
+//import { useState } from "react";
+//import { useLoaderData, useNavigate } from "react-router";
+//import { Table, Input, Button, Badge, Modal, Card } from "~/components";
+
+//// TODO: replace api requests to localhost with an actual variable, or use api.ts
+
+//// 1. DATA TYPES
+//interface Invoice {
+//  InvoiceID: number;
+//  Amount: string;
+//  Status: string;
+//  DueDate: string;
+//  CreatedAt: string;
+//  SponsorName: string;
+//  OrganizationName: string;
+//}
+
+//interface User {
+//  id: number;
+//  username: string;
+//  firstName: string;
+//  lastName: string;
+//  accountType: string;
+//  profilePicture?: string;
+//}
+
+//const mockUsers: User[] = [
+//  { id: 1, username: "johndoe", firstName: "John", lastName: "Doe", accountType: "Driver" },
+//  { id: 2, username: "janesmith", firstName: "Jane", lastName: "Smith", accountType: "Sponsor" },
+//  { id: 3, username: "bobwilson", firstName: "Bob", lastName: "Wilson", accountType: "Admin" },
+//];
+
+//// 3. LOADER (Fetches invoice data from Express server)
+//export async function loader() {
+//  try {
+//    const response = await fetch("http://localhost:5001/api/admins/invoices");
+//    if (!response.ok) throw new Error("Failed to fetch invoices");
+//    const invoices = await response.json();
+//    return { invoices: invoices as Invoice[] };
+//  } catch (error) {
+//    console.error("Loader error:", error);
+//    return { invoices: [] };
+//  }
+//}
+
+//export function meta({}: Route.MetaArgs) {
+//  return [{ title: "Admin Portal | FleetScore" }];
+//}
+
+//export default function AdminPortal() {
+//  const { invoices } = useLoaderData<typeof loader>();
+//  const navigate = useNavigate();
+
+//  const [reportData, setReportData] = useState([]);
+//  const [reportFilter, setReportFilter] = useState({
+//    driverId: "",
+//    startDate: "",
+//    endDate: ""
+//  });
+//  const [isFetchingReport, setIsFetchingReport] = useState(false);
+
+//  const fetchReport = async (e: React.MouseEvent) => {
+//    const { driverId, startDate, endDate } = reportFilter;
+//    if (!driverId || !startDate || !endDate) {
+//       alert("Please select a driver and date range");
+//       return;
+//    }
+  
+//    setIsFetchingReport(true);
+
+//    try {
+//    const res = await fetch(`http://localhost:5001/api/admins/driver-report/${driverId}?startDate=${startDate}&endDate=${endDate}`);
+//    const data = await res.json();
+//    setReportData(data);
+//  } catch (error) {
+//    console.error("Report fetch error:", error);
+//  } finally {
+//    setIsFetchingReport(false); 
+//  }
+//  };
+
+//  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+//  const [isSubmitting, setIsSubmitting] = useState(false);
+//  const [searchQuery, setSearchQuery] = useState("");
+//  const [form, setForm] = useState({
+//    username: "",
+//    firstName: "",
+//    lastName: "",
+//    accountType: "Driver" as "Admin" | "Driver" | "Sponsor",
+//  });
+
+//  const invoiceColumns = [
+//    {
+//      key: "SponsorName",
+//      header: "Sponsor",
+//      render: (inv: Invoice) => (
+//        <div>
+//          <div className="font-bold">{inv.SponsorName}</div>
+//          <div className="text-xs text-gray-500">{inv.OrganizationName}</div>
+//        </div>
+//      ),
+//    },
+//    {
+//      key: "Amount",
+//      header: "Amount",
+//      render: (inv: Invoice) => <span>${parseFloat(inv.Amount).toFixed(2)}</span>,
+//    },
+//    {
+//      key: "Status",
+//      header: "Status",
+//      render: (inv: Invoice) => (
+//        <Badge variant={inv.Status === "PAID" ? "success" : "warning"}>{inv.Status}</Badge>
+//      ),
+//    },
+//    {
+//      key: "CreatedAt",
+//      header: "Date Issued",
+//      render: (inv: Invoice) => new Date(inv.CreatedAt).toLocaleDateString(),
+//    },
+//  ];
+
+//  const userColumns = [
+//    { key: "username", header: "Username" },
+//    { key: "firstName", header: "First Name" },
+//    { key: "lastName", header: "Last Name" },
+//    {
+//      key: "accountType",
+//      header: "Role",
+//      render: (user: User) => (
+//        <Badge variant={user.accountType === "Admin" ? "danger" : "info"}>{user.accountType}</Badge>
+//      ),
+//    },
+//  ];
+
+//  const totalPaid = invoices.filter(i => i.Status === "PAID").reduce((a, b) => a + parseFloat(b.Amount), 0);
+//  const totalOwed = invoices.filter(i => i.Status !== "PAID").reduce((a, b) => a + parseFloat(b.Amount), 0);
+
+//  return (
+//    <div className="min-h-screen bg-gray-50 p-8 dark:bg-gray-950">
+//      <h1 className="text-4xl font-bold mb-8">Admin Dashboard</h1>
+
+//      {/* SECTION: INVOICES */}
+//      <section className="mb-12">
+//        <h2 className="text-2xl font-semibold mb-4">Global Invoice Oversight</h2>
+//        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+//          <Card className="p-6 border-l-4 border-green-500">
+//            <div className="text-gray-500 text-sm">TOTAL REVENUE (PAID)</div>
+//            <div className="text-3xl font-bold text-green-600">${totalPaid.toFixed(2)}</div>
+//          </Card>
+//          <Card className="p-6 border-l-4 border-amber-500">
+//            <div className="text-gray-500 text-sm">TOTAL OUTSTANDING</div>
+//            <div className="text-3xl font-bold text-amber-600">${totalOwed.toFixed(2)}</div>
+//          </Card>
+//        </div>
+//        <Table data={invoices} columns={invoiceColumns} />
+//      </section>
+
+//      <hr className="my-10" />
+
+//      <section className="mb-12 p-6 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200">
+//        <h2 className="text-2xl font-semibold mb-4">Driver Fee Reporting</h2>
+//        <div className="flex flex-wrap items-end gap-4 mb-6">
+//          <div className="flex-1 min-w-[200px]">
+//             <label className="block text-sm font-medium mb-1">Driver ID</label>
+//             <Input 
+//               placeholder="Enter User ID" 
+//               value={reportFilter.driverId}
+//               onChange={(e) => setReportFilter({...reportFilter, driverId: e.target.value})} 
+//             />
+//          </div>
+//          <Input 
+//            type="date" 
+//            label="Start Date" 
+//            onChange={(e) => setReportFilter({...reportFilter, startDate: e.target.value})} 
+//          />
+//          <Input 
+//            type="date" 
+//            label="End Date" 
+//            onChange={(e) => setReportFilter({...reportFilter, endDate: e.target.value})} 
+//          />
+//          <Button onClick={fetchReport}>Generate Report</Button>
+//        </div>
+
+//        {reportData.length > 0 ? (
+//          <div>
+//            <Table data={reportData} columns={invoiceColumns} />
+//            <div className="mt-4 p-4 bg-green-50 text-green-800 font-bold rounded-lg border border-green-200">
+//              Total Fee for Period: ${reportData.reduce((sum: number, inv: any) => sum + parseFloat(inv.Amount), 0).toFixed(2)}
+//            </div>
+//          </div>
+//        ) : (
+//          <p className="text-gray-500 italic">No report generated yet. Select a driver and date range.</p>
+//        )}
+//      </section>
+
+//      <hr className="my-10" />
+
+//      {/* SECTION: USERS */}
+//      <section>
+//        <div className="flex justify-between items-center mb-6">
+//          <h2 className="text-2xl font-semibold">User Management</h2>
+//          <Button onClick={() => setIsAddUserOpen(true)}>Add New User</Button>
+//        </div>
+//        <Table data={mockUsers} columns={userColumns} />
+//      </section>
+
+//      {/* MODAL */}
+//      <Modal 
+//        isOpen={isAddUserOpen} 
+//        onClose={() => setIsAddUserOpen(false)} 
+//        title="Create User"
+//      >
+//        <div className="space-y-4 p-4">
+//          <Input label="Username" value={form.username} onChange={(e) => setForm({...form, username: e.target.value})} />
+//          <Input label="First Name" value={form.firstName} onChange={(e) => setForm({...form, firstName: e.target.value})} />
+//          <Input label="Last Name" value={form.lastName} onChange={(e) => setForm({...form, lastName: e.target.value})} />
+//          <Button className="w-full" onClick={() => alert("Saving user...")}>Save User</Button>
+//        </div>
+//      </Modal>
+//    </div>
+//  );
+//}
