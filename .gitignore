@@ -1,5 +1,7 @@
 build/
-copilot-instructions.md
+.github/.gitignore
+.github/*.md
+.github/*.csv
 .DS_Store
 .fs-env
 setup-dev-server.sh
