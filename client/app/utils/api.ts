@@ -1,3 +1,7 @@
+// i think this file can be useful if used by the other files ofc, but many of the files are using their own variables
+// along the lines of API_URL / BASE_URL to send api calls by themselves. I think we need it standardized the qay we're
+// supposed to access the url and call the api.
+
 // =============================================================================
 // api.ts – Standardised API client for FleetScore
 //
