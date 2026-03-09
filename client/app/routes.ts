@@ -32,4 +32,6 @@ export default [
   route("sponsor/reports", "routes/sponsor/reports.tsx"),
   /* demo purposes only */
   route("components-demo", "routes/components-demo.tsx")
+  
+  
 ] satisfies RouteConfig;

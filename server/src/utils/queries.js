@@ -741,3 +741,41 @@ export async function getOrdersReport(filters = {}) {
     throw error;
   }
 }
+
+/**
+ * Get audit log entries from the EVENTS table.
+ * @param {string[]} filters - Optional array of EventType values to filter by
+ *                             (e.g. ['LoginAttempt', 'PasswordChange']).
+ *                             Pass an empty array to return all event types.
+ * @returns {Promise<Object[]>} Array of event rows joined with username.
+ */
+export async function getAuditLogs(filters = []) {
+  const connection = await pool.getConnection();
+  try {
+    let query = `
+      SELECT
+        e.EventID,
+        e.UserID,
+        u.Username,
+        e.Timestamp,
+        e.EventType,
+        e.Properties
+      FROM EVENTS e
+      LEFT JOIN USERS u ON e.UserID = u.UserID
+    `;
+    const params = [];
+
+    if (filters.length > 0) {
+      const placeholders = filters.map(() => '?').join(', ');
+      query += ` WHERE e.EventType IN (${placeholders})`;
+      params.push(...filters);
+    }
+
+    query += ' ORDER BY e.Timestamp DESC LIMIT 500';
+
+    const [rows] = await connection.execute(query, params);
+    return rows;
+  } finally {
+    connection.release();
+  }
+}

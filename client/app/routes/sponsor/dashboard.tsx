@@ -3,15 +3,15 @@ import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
-import { getDriversBySponsor, createUser } from "../../../../server/src/db.js"; 
+//import { getDriversBySponsor, createUser } from "../../../../server/src/db.js"; // TODO: WE CANNOT HAVE THIS PATTERN IN OUR CODE
 
-const TARGET_SPONSOR_ID = "123456791";
+const TARGET_SPONSOR_ID = "123456791"; // TODO: get these two lines data from server (via api with auth)
 const TARGET_COMPANY_ID = 17;
 
 // --- LOADER ---
 export async function loader() {
   try {
-    const drivers = await getDriversBySponsor(TARGET_COMPANY_ID);
+    const drivers = await getDriversBySponsor(TARGET_COMPANY_ID); // TODO: REPLACE WITH API
     return {
       drivers: Array.isArray(drivers) ? drivers : [],
       error: null
@@ -25,7 +25,7 @@ export async function loader() {
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   try {
-    await createUser({
+    await createUser({ // TODO: REPLACE WITH API
       Username: formData.get("username") as string,
       FirstName: formData.get("firstName") as string,
       LastName: formData.get("lastName") as string,
