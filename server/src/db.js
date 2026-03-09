@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-// Fix: Load environment variables correctly
+// Error checking for .fs-env connection and db connection
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const envPath = join(__dirname, '../../../.fs-env');
@@ -22,6 +22,7 @@ console.log('--- DB Config Check ---');
 console.log('Host from env:', process.env.DB_HOST);
 console.log('User from env:', process.env.DB_USER);
 
+//Conection pool to SQL
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'MISSING_HOST',
   user: process.env.DB_USER,
@@ -33,12 +34,27 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// Use named exports for ESM compatibility
+//Error handling for the connection pool
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle database client:', err);
+  if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+    console.log('Database connection was closed or reset. Pool will manage reconnection.');
+  } else {
+    throw err;
+  }
+});
+
 export const query = async (sql, params) => {
-  const [rows] = await pool.execute(sql, params);
-  return { rows };
+  try {
+    const [rows] = await pool.execute(sql, params);
+    return { rows };
+  } catch (error) {
+    console.error("Database Query Error:", error.message);
+    throw error;
+  }
 };
 
+//Getting specific user by ID 
 export const getUserById = async (id) => {
   const [rows] = await pool.execute(
     `SELECT *, 
@@ -50,11 +66,35 @@ export const getUserById = async (id) => {
   return rows[0];
 };
 
+//Getting all users
 export async function getAllUsers() {
-  const [rows] = await pool.execute('SELECT * FROM USERS');
+  const [rows] = await pool.execute(`
+    SELECT 
+      u.*, 
+      COALESCE(d.PointBalance, 0) AS TotalPoints 
+    FROM USERS u
+    LEFT JOIN DRIVERS d ON u.UserID = d.UserID
+  `);
   return rows;
 } 
 
+//Getting drivers by sponsor comapny
+export async function getDriversBySponsor(companyId) {
+  const [rows] = await pool.execute(`
+    SELECT 
+      u.*, 
+      d.PointBalance AS TotalPoints,
+      d.LicenseNumber,
+      d.SponsorCompanyID
+    FROM USERS u
+    JOIN DRIVERS d ON u.UserID = d.UserID
+    WHERE d.SponsorCompanyID = ? AND u.UserType = 'Driver'
+  `, [companyId]);
+  return rows;
+}
+
+//Creating new user action, edit to ask for email, phone number, profile picture, password and bio
+//make picture, bio, and email optional, all other required, and password rule following
 export async function createUser(userData) {
   const connection = await pool.getConnection();
   try {
@@ -71,24 +111,20 @@ export async function createUser(userData) {
     console.log("Created UserID:", newUserId);
     console.log("UserType received:", userData.UserType);
 
-    // 2️⃣ Normalize UserType check (prevents casing issues)
     if (userData.UserType?.toLowerCase() === "admin") {
 
       await connection.execute(
         `INSERT INTO ADMINS (UserID) VALUES (?)`,
         [newUserId]
       );
-
-      console.log(`✅ Admin record successfully created for UserID: ${newUserId}`);
     }
 
-    // 3. COMMIT is what makes it show up in Workbench
     await connection.commit(); 
     return { success: true };
 
+    //Error checking
   } catch (error) {
     await connection.rollback();
-    // This will tell us if there's a specific constraint error
     console.error("DATABASE ERROR:", error.sqlMessage || error.message);
     throw error;
   } finally {
@@ -96,6 +132,7 @@ export async function createUser(userData) {
   }
 }
 
+//Update user in the DB 
 export async function updateUser(id, updates) {
   const { 
     Username, Email, Phone, PassHash, 
@@ -117,7 +154,8 @@ export async function updateUser(id, updates) {
   return result;
 }
 
-// Added the delete function for your "Delete User" button logic
+// Delete user from the db
+//TODO: make so that it is not truely dleted just marked as inactive and removed from other areas and views
 export async function deleteUser(id) {
   const [result] = await pool.execute('DELETE FROM USERS WHERE UserID = ?', [id]);
   return result;
@@ -135,12 +173,12 @@ export async function getDriverPoints(userId) {
   return rows[0];
 }
 
+//Point changing
 export async function addPointTransaction(driverUserId, adminUserId, pointChange, reason) {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    // 1. Fetch the LicenseNumber using the Driver's UserID
     const [driverRows] = await connection.execute(
       'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?',
       [driverUserId]
@@ -152,16 +190,12 @@ export async function addPointTransaction(driverUserId, adminUserId, pointChange
       throw new Error("Driver License Number not found. Transaction aborted.");
     }
 
-    // 2. Insert into POINT_TRANSACTIONS (plural)
-    // DriverID must be the LicenseNumber
-    // UserChanged must be a valid UserID from the USERS table
     await connection.execute(
       `INSERT INTO POINT_TRANSACTIONS (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged) 
        VALUES (?, ?, ?, ?, NOW())`,
       [licenseNumber, adminUserId, pointChange, reason]
     );
 
-    // 3. Update the DRIVERS table balance
     await connection.execute(
       `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE UserID = ?`,
       [pointChange, driverUserId]
@@ -176,6 +210,7 @@ export async function addPointTransaction(driverUserId, adminUserId, pointChange
   }
 }
 
+//Retrieve all point changes for the user
 export async function getPointHistory(userId) {
   const [rows] = await pool.execute(
     `SELECT pt.* FROM POINT_TRANSACTIONS pt
@@ -187,12 +222,12 @@ export async function getPointHistory(userId) {
   return rows;
 }
 
+//Change previous point transactions
 export async function updatePointTransaction(transactionId, newPoints, newReason, adminUserId) {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    // 1. Get the old points and the DriverID (LicenseNumber) from the transaction
     const [oldRow] = await connection.execute(
       'SELECT PointChange, DriverID FROM POINT_TRANSACTIONS WHERE TransactionID = ?',
       [transactionId]
@@ -201,13 +236,9 @@ export async function updatePointTransaction(transactionId, newPoints, newReason
     if (oldRow.length === 0) throw new Error("Transaction not found");
     
     const oldPoints = oldRow[0].PointChange;
-    const licenseNumber = oldRow[0].DriverID; // Maps to LicenseNumber
-    
-    // 2. Calculate the difference (e.g., if old was 10 and new is 15, we add 5 to the total)
+    const licenseNumber = oldRow[0].DriverID; 
     const pointDifference = newPoints - oldPoints;
 
-    // 3. Update the POINT_TRANSACTIONS table (plural)
-    // Set UserChanged to the admin's UserID
     await connection.execute(
       `UPDATE POINT_TRANSACTIONS 
        SET PointChange = ?, ReasonForChange = ?, UserChanged = ?, TimeChanged = NOW() 
@@ -215,8 +246,6 @@ export async function updatePointTransaction(transactionId, newPoints, newReason
       [newPoints, newReason, adminUserId, transactionId]
     );
 
-    // 4. Update the DRIVERS table balance by applying the difference
-    // This finds the driver via LicenseNumber to match the transaction's DriverID
     await connection.execute(
       `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = ?`,
       [pointDifference, licenseNumber]
@@ -231,6 +260,7 @@ export async function updatePointTransaction(transactionId, newPoints, newReason
   }
 }
 
+//Retrieving all point transactions for the admin audit log
 export async function getAllPointTransactions() {
   const [rows] = await pool.execute(`
     SELECT 
@@ -251,7 +281,7 @@ export async function getAllPointTransactions() {
   return rows;
 }
 
-export { pool }; // Only one export { pool } at the bottom
+export { pool }; 
 
 // ---------------------------------------------------------------------------
 // Auth helpers
