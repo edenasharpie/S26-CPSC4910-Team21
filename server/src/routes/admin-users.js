@@ -1,10 +1,22 @@
-import express from 'express';
-import { pool, getDriverPoints, getPointHistory, addPointTransaction, updatePointTransaction } from '../db.js';
+import { Router } from 'express';
+import { pool } from '../db.js';
+import {
+  getUserById,
+  updateUser,
+  getDriverPoints,
+  getPointHistory,
+  addPointTransaction,
+  updatePointTransaction,
+  getAllPointTransactions,
+} from '../db.js';
+import { hashPassword } from '../utils/auth.js';
 
-const router = express.Router();
+const router = Router();
 
-// GET /users - List all users with pagination and filtering
-router.get('/', async (request, response) => {
+// ---------------------------------------------------------------------------
+// GET /api/admin/users — list all users with optional pagination + filtering
+// ---------------------------------------------------------------------------
+router.get('/users', async (request, response) => {
   let connection;
   try {
     connection = await pool.getConnection();
@@ -17,30 +29,31 @@ router.get('/', async (request, response) => {
 
     // Build dynamic query with filters
     let query = `
-      SELECT 
-        u.UserID as id,
-        u.Username as username,
-        u.Email as email,
-        u.Phone as phone,
-        u.FirstName as firstName,
-        u.MiddleName as middleName,
-        u.LastName as lastName,
-        u.Pronouns as pronouns,
-        u.ProfilePicture as profilePicture,
-        u.Bio as bio,
-        u.UserType as accountType,
-        u.ActiveStatus as activeStatus,
-        DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') as lastLogin,
-        DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') as lastPasswordChange,
+      SELECT
+        u.UserID,
+        u.Username,
+        u.Email,
+        u.Phone,
+        u.FirstName,
+        u.MiddleName,
+        u.LastName,
+        u.Pronouns,
+        u.ProfilePicture,
+        u.Bio,
+        u.UserType,
+        u.ActiveStatus,
+        DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
+        DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange,
         CASE
-          WHEN u.UserType = 'driver' THEN COALESCE(sc.CompanyName, 'Unassigned')
-          WHEN u.UserType = 'sponsor' THEN COALESCE(sc.CompanyName, 'N/A')
-          WHEN u.UserType = 'admin' THEN 'System'
-        END as associatedEntity
+          WHEN u.UserType = 'driver'  THEN COALESCE(sc.CompanyName, 'Unassigned')
+          WHEN u.UserType = 'sponsor' THEN COALESCE(sc2.CompanyName, 'N/A')
+          WHEN u.UserType = 'admin'   THEN 'System'
+        END AS AssociatedEntity
       FROM USERS u
-      LEFT JOIN DRIVERS d ON u.UserID = d.UserID
-      LEFT JOIN SPONSORS s ON u.UserID = s.UserID
-      LEFT JOIN SPONSOR_COMPANIES sc ON d.SponsorCompanyID = sc.SponsorCompanyID OR s.SponsorCompanyID = sc.SponsorCompanyID
+      LEFT JOIN DRIVERS d    ON u.UserID = d.UserID
+      LEFT JOIN SPONSORS s   ON u.UserID = s.UserID
+      LEFT JOIN SPONSOR_COMPANIES sc  ON d.SponsorCompanyID = sc.SponsorCompanyID
+      LEFT JOIN SPONSOR_COMPANIES sc2 ON s.SponsorCompanyID = sc2.SponsorCompanyID
       WHERE 1=1
     `;
 
@@ -106,8 +119,8 @@ router.get('/', async (request, response) => {
   }
 });
 
-// GET /users/:id - Get single user by ID
-router.get('/:id', async (request, response) => {
+// GET /api/admin/users/:id
+router.get('/users/:id', async (request, response) => {
   let connection;
   try {
     connection = await pool.getConnection();
@@ -115,40 +128,34 @@ router.get('/:id', async (request, response) => {
     const { id } = request.params;
 
     const query = `
-      SELECT 
-        u.UserID as id,
-        u.Username as username,
-        u.Email as email,
-        u.Phone as phone,
-        u.FirstName as firstName,
-        u.MiddleName as middleName,
-        u.LastName as lastName,
-        u.Pronouns as pronouns,
-        u.ProfilePicture as profilePicture,
-        u.Bio as bio,
-        u.UserType as accountType,
-        u.ActiveStatus as activeStatus,
-        DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') as lastLogin,
-        DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') as lastPasswordChange,
-        u.Permissions as permissions,
+      SELECT
+        u.UserID,
+        u.Username,
+        u.Email,
+        u.Phone,
+        u.FirstName,
+        u.MiddleName,
+        u.LastName,
+        u.Pronouns,
+        u.ProfilePicture,
+        u.Bio,
+        u.UserType,
+        u.ActiveStatus,
+        u.Permissions,
+        DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
+        DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange,
+        CASE WHEN u.UserType = 'driver'  THEN d.PointBalance  ELSE NULL END AS PointBalance,
         CASE
-          WHEN u.UserType = 'driver' THEN d.PointBalance
+          WHEN u.UserType = 'driver'  THEN sc.CompanyName
+          WHEN u.UserType = 'sponsor' THEN sc2.CompanyName
           ELSE NULL
-        END as pointBalance,
-        CASE
-          WHEN u.UserType = 'driver' THEN sc.CompanyName
-          WHEN u.UserType = 'sponsor' THEN sc.CompanyName
-          ELSE NULL
-        END as companyName,
-        CASE
-          WHEN u.UserType = 'sponsor' THEN sco.PointDollarValue
-          ELSE NULL
-        END as pointDollarValue
+        END AS CompanyName,
+        CASE WHEN u.UserType = 'sponsor' THEN sc2.PointDollarValue ELSE NULL END AS PointDollarValue
       FROM USERS u
-      LEFT JOIN DRIVERS d ON u.UserID = d.UserID
-      LEFT JOIN SPONSORS sp ON u.UserID = sp.UserID
-      LEFT JOIN SPONSOR_COMPANIES sc ON d.SponsorCompanyID = sc.SponsorCompanyID
-      LEFT JOIN SPONSOR_COMPANIES sco ON sp.SponsorCompanyID = sco.SponsorCompanyID
+      LEFT JOIN DRIVERS d    ON u.UserID = d.UserID
+      LEFT JOIN SPONSORS sp  ON u.UserID = sp.UserID
+      LEFT JOIN SPONSOR_COMPANIES sc  ON d.SponsorCompanyID  = sc.SponsorCompanyID
+      LEFT JOIN SPONSOR_COMPANIES sc2 ON sp.SponsorCompanyID = sc2.SponsorCompanyID
       WHERE u.UserID = ?
     `;
 
@@ -169,8 +176,8 @@ router.get('/:id', async (request, response) => {
   }
 });
 
-// POST /users - Create new user
-router.post('/', async (request, response) => {
+// POST /api/admin/users — create new user
+router.post('/users', async (request, response) => {
   let connection;
   try {
     connection = await pool.getConnection();
@@ -246,14 +253,14 @@ router.post('/', async (request, response) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)
     `;
 
-    const defaultPassword = password || 'ChangeMe123!'; // Default password if none provided
+    const passHash = await hashPassword(password || 'ChangeMe123!');
     const defaultPermissions = JSON.stringify({});
     
     const result = await connection.query(insertQuery, [
       username,
       email,
       phone || null,
-      defaultPassword, // TODO: should be hashed
+      passHash,
       firstName,
       middleName || null,
       lastName,
@@ -297,23 +304,13 @@ router.post('/', async (request, response) => {
 
     // Fetch and return the newly created user
     const newUserQuery = `
-      SELECT 
-        UserID as id,
-        Username as username,
-        Email as email,
-        Phone as phone,
-        FirstName as firstName,
-        MiddleName as middleName,
-        LastName as lastName,
-        Pronouns as pronouns,
-        ProfilePicture as profilePicture,
-        Bio as bio,
-        UserType as accountType,
-        ActiveStatus as activeStatus,
-        DATE_FORMAT(LastLogin, '%Y-%m-%d %H:%i:%s') as lastLogin,
-        DATE_FORMAT(LastPasswordChange, '%Y-%m-%d %H:%i:%s') as lastPasswordChange
-      FROM USERS
-      WHERE UserID = ?
+      SELECT
+        UserID, Username, Email, Phone,
+        FirstName, MiddleName, LastName, Pronouns,
+        ProfilePicture, Bio, UserType, ActiveStatus,
+        DATE_FORMAT(LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
+        DATE_FORMAT(LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange
+      FROM USERS WHERE UserID = ?
     `;
 
     const newUserResult = await connection.query(newUserQuery, [newUserId]);
@@ -332,8 +329,8 @@ router.post('/', async (request, response) => {
   }
 });
 
-// PATCH /users/:id - Update user profile
-router.patch('/:id', async (request, response) => {
+// PATCH /api/admin/users/:id — partial update
+router.patch('/users/:id', async (request, response) => {
   let connection;
   try {
     connection = await pool.getConnection();
@@ -473,23 +470,13 @@ router.patch('/:id', async (request, response) => {
 
     // Fetch updated user
     const userQuery = `
-      SELECT 
-        UserID as id,
-        Username as username,
-        Email as email,
-        Phone as phone,
-        FirstName as firstName,
-        MiddleName as middleName,
-        LastName as lastName,
-        Pronouns as pronouns,
-        ProfilePicture as profilePicture,
-        Bio as bio,
-        UserType as accountType,
-        ActiveStatus as activeStatus,
-        DATE_FORMAT(LastLogin, '%Y-%m-%d %H:%i:%s') as lastLogin,
-        DATE_FORMAT(LastPasswordChange, '%Y-%m-%d %H:%i:%s') as lastPasswordChange
-      FROM USERS
-      WHERE UserID = ?
+      SELECT
+        UserID, Username, Email, Phone,
+        FirstName, MiddleName, LastName, Pronouns,
+        ProfilePicture, Bio, UserType, ActiveStatus,
+        DATE_FORMAT(LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
+        DATE_FORMAT(LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange
+      FROM USERS WHERE UserID = ?
     `;
 
     const result = await connection.query(userQuery, [id]);
@@ -509,8 +496,8 @@ router.patch('/:id', async (request, response) => {
   }
 });
 
-// DELETE /users/:id - Soft delete user (set ActiveStatus = 0)
-router.delete('/:id', async (request, response) => {
+// DELETE /api/admin/users/:id — soft delete (ActiveStatus = 0)
+router.delete('/users/:id', async (request, response) => {
   let connection;
   try {
     connection = await pool.getConnection();
@@ -550,116 +537,82 @@ router.delete('/:id', async (request, response) => {
   }
 });
 
-// GET /users/:id/points - Get driver points and transaction history
-router.get('/:id/points', async (request, response) => {
+// ---------------------------------------------------------------------------
+// PUT /api/admin/users/:id — full field update (used by edit.tsx)
+// ---------------------------------------------------------------------------
+router.put('/users/:id', async (request, response) => {
   try {
-    const { id } = request.params;
-    const userId = parseInt(id);
-
-    // Fetch driver points and transaction history in parallel
-    const [driver, history] = await Promise.all([
-      getDriverPoints(userId),
-      getPointHistory(userId)
-    ]);
-
-    if (!driver) {
-      return response.status(404).json({ error: 'Driver not found' });
-    }
-
-    response.json({
-      driver,
-      history
-    });
-  } catch (error) {
-    console.error('Error fetching driver points:', error);
-    response.status(500).json({ error: 'Internal Server Error' });
+    const result = await updateUser(Number(request.params.id), request.body);
+    return response.json({ success: true, result });
+  } catch (err) {
+    console.error('PUT /admin/users/:id error:', err);
+    return response.status(500).json({ error: err.message });
   }
 });
 
-// POST /users/:id/points - Add point transaction
-router.post('/:id/points', async (request, response) => {
+// ---------------------------------------------------------------------------
+// GET /api/admin/point-transactions
+// ---------------------------------------------------------------------------
+router.get('/point-transactions', async (req, res) => {
   try {
-    const { id } = request.params;
-    const driverUserId = parseInt(id);
-    const { pointChange, reason, adminUserId } = request.body;
-
-    // Validate required fields
-    if (pointChange === undefined || !reason) {
-      return response.status(400).json({ 
-        error: 'Missing required fields: pointChange, reason' 
-      });
-    }
-
-    // Validate reason length (database limit is 45 chars)
-    if (reason.length > 45) {
-      return response.status(400).json({ 
-        error: 'Reason must be 45 characters or less' 
-      });
-    }
-
-    // TODO: Get adminUserId from session/auth instead of request body
-    const adminId = adminUserId || 1; // Default to 1 for now
-
-    await addPointTransaction(driverUserId, adminId, pointChange, reason);
-
-    // Fetch updated driver info and history
-    const [driver, history] = await Promise.all([
-      getDriverPoints(driverUserId),
-      getPointHistory(driverUserId)
-    ]);
-
-    response.status(201).json({
-      message: 'Point transaction added successfully',
-      driver,
-      history
-    });
-  } catch (error) {
-    console.error('Error adding point transaction:', error);
-    response.status(500).json({ error: error.message || 'Internal Server Error' });
+    const transactions = await getAllPointTransactions();
+    return res.json(transactions);
+  } catch (err) {
+    console.error('GET /admin/point-transactions error:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
-// PATCH /users/:id/points/:transactionId - Update point transaction
-router.patch('/:id/points/:transactionId', async (request, response) => {
+// PUT /api/admin/point-transactions/:transactionId
+// Body: { newPoints, newReason, adminUserId }
+router.put('/point-transactions/:transactionId', async (req, res) => {
+  const { newPoints, newReason, adminUserId } = req.body ?? {};
   try {
-    const { id, transactionId } = request.params;
-    const driverUserId = parseInt(id);
-    const transId = parseInt(transactionId);
-    const { pointChange, reason, adminUserId } = request.body;
+    await updatePointTransaction(Number(req.params.transactionId), newPoints, newReason, adminUserId);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('PUT /admin/point-transactions/:transactionId error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
-    // Validate required fields
-    if (pointChange === undefined || !reason) {
-      return response.status(400).json({ 
-        error: 'Missing required fields: pointChange, reason' 
-      });
-    }
+// ---------------------------------------------------------------------------
+// Per-driver points
+// ---------------------------------------------------------------------------
 
-    // Validate reason length (database limit is 45 chars)
-    if (reason.length > 45) {
-      return response.status(400).json({ 
-        error: 'Reason must be 45 characters or less' 
-      });
-    }
+// GET /api/admin/drivers/:driverUserId/points
+router.get('/drivers/:driverUserId/points', async (req, res) => {
+  try {
+    const driver = await getDriverPoints(Number(req.params.driverUserId));
+    if (!driver) return res.status(404).json({ error: 'Driver not found' });
+    return res.json(driver);
+  } catch (err) {
+    console.error('GET /admin/drivers/:driverUserId/points error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
 
-    // TODO: Get adminUserId from session/auth instead of request body
-    const adminId = adminUserId || 1; // Default to 1 for now
+// GET /api/admin/drivers/:driverUserId/point-history
+router.get('/drivers/:driverUserId/point-history', async (req, res) => {
+  try {
+    const history = await getPointHistory(Number(req.params.driverUserId));
+    return res.json(history);
+  } catch (err) {
+    console.error('GET /admin/drivers/:driverUserId/point-history error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
 
-    await updatePointTransaction(transId, pointChange, reason, adminId);
-
-    // Fetch updated driver info and history
-    const [driver, history] = await Promise.all([
-      getDriverPoints(driverUserId),
-      getPointHistory(driverUserId)
-    ]);
-
-    response.json({
-      message: 'Point transaction updated successfully',
-      driver,
-      history
-    });
-  } catch (error) {
-    console.error('Error updating point transaction:', error);
-    response.status(500).json({ error: error.message || 'Internal Server Error' });
+// POST /api/admin/drivers/:driverUserId/point-transactions
+// Body: { pointChange, reason, adminUserId }
+router.post('/drivers/:driverUserId/point-transactions', async (req, res) => {
+  const { pointChange, reason, adminUserId } = req.body ?? {};
+  try {
+    await addPointTransaction(Number(req.params.driverUserId), adminUserId, pointChange, reason);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('POST /admin/drivers/:driverUserId/point-transactions error:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 

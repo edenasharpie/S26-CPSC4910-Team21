@@ -283,3 +283,54 @@ export async function getAllPointTransactions() {
 
 export { pool }; 
 
+// ---------------------------------------------------------------------------
+// Auth helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Look up a user by their username.
+ * @param {string} username
+ * @returns {Promise<Object|null>}
+ */
+export async function getUserByUsername(username) {
+  const [rows] = await pool.execute(
+    'SELECT * FROM USERS WHERE Username = ?',
+    [username]
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
+/**
+ * Look up a user by their email address.
+ * @param {string} email
+ * @returns {Promise<Object|null>}
+ */
+export async function getUserByEmail(email) {
+  const [rows] = await pool.execute(
+    'SELECT * FROM USERS WHERE Email = ?',
+    [email]
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
+/**
+ * Append a LoginAttempt row to the EVENTS audit log.
+ * EVENTS.UserID is NOT NULL — null userId maps to sentinel 0.
+ *
+ * @param {number|null} userId
+ * @param {boolean} success
+ * @param {'username_not_found'|'failed'|'success'|'failed_too_many_attempts'} result
+ * @param {string} ipAddress
+ */
+export async function logLoginAttempt(userId, success, result, ipAddress) {
+  try {
+    await pool.execute(
+      'INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties) VALUES (?, NOW(), ?, ?)',
+      [userId ?? 0, 'LoginAttempt', JSON.stringify({ success, result, ipAddress })]
+    );
+  } catch (err) {
+    // Non-fatal — never crash the login flow because of a logging failure
+    console.error('Error logging login attempt to EVENTS:', err);
+  }
+}
+

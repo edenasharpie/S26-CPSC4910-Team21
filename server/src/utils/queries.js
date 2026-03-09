@@ -396,3 +396,386 @@ export async function userExists(userId) {
     throw error;
   }
 }
+
+/**
+ * Get driver application report with aggregated counts by status
+ * @param {Object} filters - Filter options
+ * @param {string} [filters.status] - Filter by application status (pending, accepted, rejected)
+ * @param {string} [filters.startDate] - Filter applications on or after this date (ISO 8601)
+ * @param {string} [filters.endDate] - Filter applications on or before this date (ISO 8601)
+ * @param {number} [filters.sponsorCompanyId] - Filter by sponsor company ID
+ * @param {string} [filters.driverId] - Filter by driver license number
+ * @returns {Promise<Object>} Promise with report data including counts and filter metadata
+ */
+export async function getDriverApplicationReport(filters = {}) {
+  try {
+    const connection = await pool.getConnection();
+    
+    try {
+      // Build dynamic WHERE clause
+      let whereClause = 'WHERE 1=1';
+      const params = [];
+
+      if (filters.status) {
+        whereClause += ' AND ApplicationStatus = ?';
+        params.push(filters.status);
+      }
+
+      if (filters.startDate) {
+        whereClause += ' AND TimeSubmitted >= ?';
+        params.push(filters.startDate);
+      }
+
+      if (filters.endDate) {
+        whereClause += ' AND TimeSubmitted <= ?';
+        params.push(filters.endDate);
+      }
+
+      if (filters.sponsorCompanyId) {
+        whereClause += ' AND SponsorCompanyID = ?';
+        params.push(filters.sponsorCompanyId);
+      }
+
+      if (filters.driverId) {
+        whereClause += ' AND DriverID = ?';
+        params.push(filters.driverId);
+      }
+
+      // Query to get counts grouped by status
+      const query = `
+        SELECT 
+          ApplicationStatus,
+          COUNT(*) as count
+        FROM DRIVER_APPLICATIONS
+        ${whereClause}
+        GROUP BY ApplicationStatus
+      `;
+
+      const [rows] = await connection.query(query, params);
+
+      // Initialize counts
+      const report = {
+        totalApplications: 0,
+        pendingCount: 0,
+        acceptedCount: 0,
+        rejectedCount: 0
+      };
+
+      // Populate counts from query results
+      rows.forEach(row => {
+        const count = parseInt(row.count);
+        report.totalApplications += count;
+        
+        if (row.ApplicationStatus === 'pending') {
+          report.pendingCount = count;
+        } else if (row.ApplicationStatus === 'accepted') {
+          report.acceptedCount = count;
+        } else if (row.ApplicationStatus === 'rejected') {
+          report.rejectedCount = count;
+        }
+      });
+
+      // Add filter metadata to response
+      if (filters.startDate) {
+        report.dateRangeStart = filters.startDate;
+      }
+      if (filters.endDate) {
+        report.dateRangeEnd = filters.endDate;
+      }
+      if (filters.sponsorCompanyId) {
+        report.sponsorCompanyId = filters.sponsorCompanyId;
+      }
+      if (filters.driverId) {
+        report.driverId = filters.driverId;
+      }
+
+      // Include detailed records if requested
+      if (filters.includeDetails) {
+        const detailsQuery = `
+          SELECT 
+            ApplicationID,
+            DriverID,
+            SponsorCompanyID,
+            ApplicationStatus,
+            TimeSubmitted,
+            TimeStatusChanged
+          FROM DRIVER_APPLICATIONS
+          ${whereClause}
+          ORDER BY TimeSubmitted DESC
+        `;
+        
+        const [detailRows] = await connection.query(detailsQuery, params);
+        report.detailedRecords = detailRows;
+      }
+
+      return report;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error generating driver application report:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get point transactions report with aggregated statistics
+ * @param {Object} filters - Filter options
+ * @param {string} [filters.startDate] - Filter transactions on or after this date (ISO 8601)
+ * @param {string} [filters.endDate] - Filter transactions on or before this date (ISO 8601)
+ * @param {string} [filters.driverId] - Filter by driver license number
+ * @param {string} [filters.reasonForChange] - Filter by reason for change
+ * @param {boolean} [filters.includeDetails] - Include detailed transaction records
+ * @returns {Promise<Object>} Promise with report data including statistics and optional details
+ */
+export async function getPointTransactionsReport(filters = {}) {
+  try {
+    const connection = await pool.getConnection();
+    
+    try {
+      // Build dynamic WHERE clause
+      let whereClause = 'WHERE 1=1';
+      const params = [];
+
+      if (filters.startDate) {
+        whereClause += ' AND TimeChanged >= ?';
+        params.push(filters.startDate);
+      }
+
+      if (filters.endDate) {
+        whereClause += ' AND TimeChanged <= ?';
+        params.push(filters.endDate);
+      }
+
+      if (filters.driverId) {
+        whereClause += ' AND DriverID = ?';
+        params.push(filters.driverId);
+      }
+
+      if (filters.reasonForChange) {
+        whereClause += ' AND ReasonForChange = ?';
+        params.push(filters.reasonForChange);
+      }
+
+      // Query to get aggregated statistics
+      const statsQuery = `
+        SELECT 
+          COUNT(*) as totalTransactions,
+          SUM(CASE WHEN PointChange > 0 THEN PointChange ELSE 0 END) as totalPointsAdded,
+          SUM(CASE WHEN PointChange < 0 THEN ABS(PointChange) ELSE 0 END) as totalPointsDeducted,
+          SUM(PointChange) as netPointChange
+        FROM POINT_TRANSACTIONS
+        ${whereClause}
+      `;
+
+      const [statsRows] = await connection.query(statsQuery, params);
+      const stats = statsRows[0];
+
+      // Initialize report
+      const report = {
+        totalTransactions: parseInt(stats.totalTransactions) || 0,
+        totalPointsAdded: parseInt(stats.totalPointsAdded) || 0,
+        totalPointsDeducted: parseInt(stats.totalPointsDeducted) || 0,
+        netPointChange: parseInt(stats.netPointChange) || 0
+      };
+
+      // Add filter metadata to response
+      if (filters.startDate) {
+        report.dateRangeStart = filters.startDate;
+      }
+      if (filters.endDate) {
+        report.dateRangeEnd = filters.endDate;
+      }
+      if (filters.driverId) {
+        report.driverId = filters.driverId;
+      }
+      if (filters.reasonForChange) {
+        report.reasonForChange = filters.reasonForChange;
+      }
+
+      // Include detailed records if requested
+      if (filters.includeDetails) {
+        const detailsQuery = `
+          SELECT 
+            TransactionID,
+            DriverID,
+            UserChanged,
+            PointChange,
+            ReasonForChange,
+            TimeChanged
+          FROM POINT_TRANSACTIONS
+          ${whereClause}
+          ORDER BY TimeChanged DESC
+        `;
+        
+        const [detailRows] = await connection.query(detailsQuery, params);
+        report.detailedRecords = detailRows;
+      }
+
+      return report;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error generating point transactions report:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get orders report with aggregated statistics
+ * @param {Object} filters - Filter options
+ * @param {string} [filters.startDate] - Filter orders on or after this date (ISO 8601)
+ * @param {string} [filters.endDate] - Filter orders on or before this date (ISO 8601)
+ * @param {string} [filters.driverId] - Filter by driver license number
+ * @param {number} [filters.sponsorCompanyId] - Filter by sponsor company ID
+ * @param {string} [filters.orderStatus] - Filter by order status (confirmed, shipped, delivered, cancelled)
+ * @param {boolean} [filters.includeDetails] - Include detailed order records
+ * @returns {Promise<Object>} Promise with report data including statistics and optional details
+ */
+export async function getOrdersReport(filters = {}) {
+  try {
+    const connection = await pool.getConnection();
+    
+    try {
+      // Build dynamic WHERE clause
+      let whereClause = 'WHERE 1=1';
+      const params = [];
+
+      if (filters.startDate) {
+        whereClause += ' AND OrderDate >= ?';
+        params.push(filters.startDate);
+      }
+
+      if (filters.endDate) {
+        whereClause += ' AND OrderDate <= ?';
+        params.push(filters.endDate);
+      }
+
+      if (filters.driverId) {
+        whereClause += ' AND DriverID = ?';
+        params.push(filters.driverId);
+      }
+
+      if (filters.sponsorCompanyId) {
+        whereClause += ' AND SponsorCompanyID = ?';
+        params.push(filters.sponsorCompanyId);
+      }
+
+      if (filters.orderStatus) {
+        whereClause += ' AND OrderStatus = ?';
+        params.push(filters.orderStatus);
+      }
+
+      // Query to get aggregated statistics
+      const statsQuery = `
+        SELECT 
+          COUNT(*) as totalOrders,
+          SUM(OrderPointsSpent) as totalPointsSpent,
+          SUM(OrderDollarsSpent) as totalDollarsSpent,
+          SUM(CASE WHEN OrderStatus = 'confirmed' THEN 1 ELSE 0 END) as confirmedCount,
+          SUM(CASE WHEN OrderStatus = 'shipped' THEN 1 ELSE 0 END) as shippedCount,
+          SUM(CASE WHEN OrderStatus = 'delivered' THEN 1 ELSE 0 END) as deliveredCount,
+          SUM(CASE WHEN OrderStatus = 'cancelled' THEN 1 ELSE 0 END) as cancelledCount
+        FROM ORDERS
+        ${whereClause}
+      `;
+
+      const [statsRows] = await connection.query(statsQuery, params);
+      const stats = statsRows[0];
+
+      // Initialize report
+      const report = {
+        totalOrders: parseInt(stats.totalOrders) || 0,
+        totalPointsSpent: parseInt(stats.totalPointsSpent) || 0,
+        totalDollarsSpent: parseFloat(stats.totalDollarsSpent) || 0,
+        confirmedCount: parseInt(stats.confirmedCount) || 0,
+        shippedCount: parseInt(stats.shippedCount) || 0,
+        deliveredCount: parseInt(stats.deliveredCount) || 0,
+        cancelledCount: parseInt(stats.cancelledCount) || 0
+      };
+
+      // Add filter metadata to response
+      if (filters.startDate) {
+        report.dateRangeStart = filters.startDate;
+      }
+      if (filters.endDate) {
+        report.dateRangeEnd = filters.endDate;
+      }
+      if (filters.driverId) {
+        report.driverId = filters.driverId;
+      }
+      if (filters.sponsorCompanyId) {
+        report.sponsorCompanyId = filters.sponsorCompanyId;
+      }
+      if (filters.orderStatus) {
+        report.orderStatus = filters.orderStatus;
+      }
+
+      // Include detailed records if requested
+      if (filters.includeDetails) {
+        const detailsQuery = `
+          SELECT 
+            OrderID,
+            DriverID,
+            SponsorCompanyID,
+            OrderDate,
+            OrderPointsSpent,
+            OrderDollarsSpent,
+            OrderStatus
+          FROM ORDERS
+          ${whereClause}
+          ORDER BY OrderDate DESC
+        `;
+        
+        const [detailRows] = await connection.query(detailsQuery, params);
+        report.detailedRecords = detailRows;
+      }
+
+      return report;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error generating orders report:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get audit log entries from the EVENTS table.
+ * @param {string[]} filters - Optional array of EventType values to filter by
+ *                             (e.g. ['LoginAttempt', 'PasswordChange']).
+ *                             Pass an empty array to return all event types.
+ * @returns {Promise<Object[]>} Array of event rows joined with username.
+ */
+export async function getAuditLogs(filters = []) {
+  const connection = await pool.getConnection();
+  try {
+    let query = `
+      SELECT
+        e.EventID,
+        e.UserID,
+        u.Username,
+        e.Timestamp,
+        e.EventType,
+        e.Properties
+      FROM EVENTS e
+      LEFT JOIN USERS u ON e.UserID = u.UserID
+    `;
+    const params = [];
+
+    if (filters.length > 0) {
+      const placeholders = filters.map(() => '?').join(', ');
+      query += ` WHERE e.EventType IN (${placeholders})`;
+      params.push(...filters);
+    }
+
+    query += ' ORDER BY e.Timestamp DESC LIMIT 500';
+
+    const [rows] = await connection.execute(query, params);
+    return rows;
+  } finally {
+    connection.release();
+  }
+}

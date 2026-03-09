@@ -1,8 +1,9 @@
-import type { Route } from "./+types/home";
 import { Link } from "react-router";
+import type { Route } from "./+types/home";
 import { Card } from "~/components";
+import { Button } from "~/components/Button";
 
-export function meta({}: Route.MetaArgs) {
+export function meta(_: Route.MetaArgs) {
   return [
     { title: "FleetScore" },
     { name: "description", content: "FleetScore Homepage" },
@@ -21,6 +22,7 @@ const NAV_SECTIONS = [
     links: [
       { to: "/sponsor/dashboard", label: "Dashboard" },
       { to: "/sponsor/catalogs", label: "Catalogs" },
+      { to: "/sponsor/reports", label: "Reports" },
     ],
   },
   {
@@ -30,6 +32,7 @@ const NAV_SECTIONS = [
       { to: "/admin/audit-logs", label: "Audit Logs" },
       { to: "/admin/catalogs", label: "Catalogs" },
       { to: "/admin/invoices", label: "Invoices" },
+      { to: "/admin/reports", label: "Reports" },
       { to: "/admin/profile/1", label: "Profile (id=1)" },
       { to: "/admin/profile/1/points", label: "Profile Points (id=1)" },
     ],
@@ -49,13 +52,13 @@ export default function Home() {
       <div className="container-padding section-spacing">
         <div className="max-w-4xl mx-auto space-y-8">
           {/* Title Hero */}
-          <div className="text-center space-y-3">
+          <div className="text-center space-y-4">
             <h1 className="text-3xl sm:text-4xl font-bold">
               Welcome to FleetScore!
             </h1>
-            {/*<p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-              {"<subtitle/description>"}
-            </p>*/}
+            <Link to="/login">
+              <Button variant="primary" size="lg">Sign In</Button>
+            </Link>
           </div>
 
           {/* Debug Navigation */}

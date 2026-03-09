@@ -115,4 +115,63 @@ router.patch('/:companyId/description', async (req, res) => {
   }
 });
 
+// TODO: I accepted this change but commented out for now. This function is probably good and useful; just needs a checkup
+// to check for inconsistencies witht ht erest of the code
+//// GET /api/sponsors/audit-logs
+//// Fetches the security audit history for the system
+//router.get('/audit-logs', async (req, res) => {
+//  try {
+//    const [rows] = await pool.execute(`
+//      SELECT 
+//        a.LogID, 
+//        u.Username, 
+//        a.ActionType, 
+//        a.Status, 
+//        a.IPAddress, 
+//        a.CreatedAt 
+//      FROM AUDIT_LOGS a
+//      LEFT JOIN USERS u ON a.UserID = u.UserID
+//      ORDER BY a.CreatedAt DESC 
+//      LIMIT 50
+//    `);
+    
+//    res.json(rows);
+//  } catch (error) {
+//    console.error("Error fetching audit logs:", error);
+//    res.status(500).json({ error: "Failed to fetch security report" });
+//  }
+//});
+
+//// GET password changes based on sponsorId
+//router.get('/security-report/:sponsorId', async (req, res) => {
+//  const { sponsorId } = req.params;
+//  const { startDate, endDate } = req.query;
+
+//  try {
+//    const query = `
+//      SELECT 
+//        u.Username,
+//        u.FirstName,
+//        u.LastName,
+//        al.ActionType,
+//        al.CreatedAt AS EventDate,
+//        al.IPAddress
+//      FROM AUDIT_LOGS al
+//      JOIN USERS u ON al.UserID = u.UserID
+//      JOIN SPONSORS s ON u.UserID = s.UserID
+//      WHERE s.SponsorCompanyID = ? 
+//        AND al.ActionType = 'PASSWORD_CHANGE'
+//        AND al.CreatedAt BETWEEN ? AND ?
+//      ORDER BY al.CreatedAt DESC
+//    `;
+    
+//    const [rows] = await pool.execute(query, [sponsorId, startDate, endDate]);
+//    res.json(rows);
+//  } catch (error) {
+//    console.error("Security Report Error:", error);
+//    res.status(500).json({ error: "Failed to fetch security logs" });
+//  }
+//});
+
+//module.exports = router;
 export default router;

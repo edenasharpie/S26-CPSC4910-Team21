@@ -1,9 +1,197 @@
+types:
+  get:
+    tags:
+      - reports
+    summary: Get available report types
+    description: Returns a list of all report types available to admin users, including their IDs, names, descriptions, and allowed filters.
+    responses:
+      '200':
+        description: Report types retrieved successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/report.yaml#/ReportTypeList'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        description: User is not an admin
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Access forbidden: Admin access required"
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+reportByType:
+  get:
+    tags:
+      - reports
+    summary: Generate a report by type
+    description: Generate a report based on the specified report type with optional filters. Supports driver-applications, point-transactions, and orders report types.
+    parameters:
+      - name: reportType
+        in: path
+        required: true
+        description: Type of report to generate
+        schema:
+          type: string
+          enum: [driver-applications, point-transactions, orders]
+          example: "driver-applications"
+      - name: startDate
+        in: query
+        description: Filter records on or after this date
+        schema:
+          type: string
+          format: date-time
+          example: "2026-01-01T00:00:00Z"
+      - name: endDate
+        in: query
+        description: Filter records on or before this date
+        schema:
+          type: string
+          format: date-time
+          example: "2026-02-26T23:59:59Z"
+      - name: includeDetails
+        in: query
+        description: Include detailed records in the response
+        schema:
+          type: boolean
+          example: true
+      - name: status
+        in: query
+        description: Filter by application status (driver-applications only)
+        schema:
+          type: string
+          enum: [pending, accepted, rejected]
+      - name: orderStatus
+        in: query
+        description: Filter by order status (orders only)
+        schema:
+          type: string
+          enum: [confirmed, shipped, delivered, cancelled]
+      - name: driverId
+        in: query
+        description: Filter by driver license number
+        schema:
+          type: string
+          example: "DL123456789"
+      - name: sponsorCompanyId
+        in: query
+        description: Filter by sponsor company ID
+        schema:
+          type: integer
+          example: 5
+      - name: reasonForChange
+        in: query
+        description: Filter by reason for change (point-transactions only)
+        schema:
+          type: string
+          example: "Purchase completion"
+      
+    responses:
+      '200':
+        description: Report generated successfully
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../../schemas/report.yaml#/DriverApplicationReport'
+                - $ref: '../../schemas/report.yaml#/PointTransactionsReport'
+                - $ref: '../../schemas/report.yaml#/OrdersReport'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        description: User is not an admin
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Access forbidden: Admin access required"
+      '404':
+        description: Invalid report type
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Invalid report type: unknown-report"
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+export:
+  post:
+    tags:
+      - reports
+    summary: Export report to PDF
+    description: Generate and download a PDF file for a report. Requires the report type and report data to be provided in the request body.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - reportType
+              - reportData
+            properties:
+              reportType:
+                type: string
+                enum: [driver-applications, point-transactions, orders]
+                description: Type of report to export
+                example: "driver-applications"
+              reportData:
+                type: object
+                description: The report data to include in the PDF (should match the report schema)
+                example:
+                  totalApplications: 45
+                  pendingCount: 12
+                  acceptedCount: 28
+                  rejectedCount: 5
+    responses:
+      '200':
+        description: PDF generated successfully
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        description: User is not an admin
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Access forbidden: Admin access required"
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
 driverApplications:
   get:
     tags:
       - reports
-    summary: Get driver applications report
-    description: Generate a report of driver application statistics. Returns aggregated counts of applications by status. Admin access required. Can filter by sponsor company, driver, status, and date range.
+    summary: Get driver applications report (deprecated)
+    description: |
+      **DEPRECATED**: Use GET /admin/reports/driver-applications instead.
+      Generate a report of driver application statistics. Returns aggregated counts of applications by status. Admin access required. Can filter by sponsor company, driver, status, and date range.
+    deprecated: true
     parameters:
       - name: status
         in: query

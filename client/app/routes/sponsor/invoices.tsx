@@ -1,11 +1,14 @@
 import { useLoaderData, useNavigate, Link } from "react-router";
 import type { Route } from "./+types/invoices";
 import { Table, Button, Badge } from "~/components";
-import { getAllPointTransactions } from "../../../../server/src/db.js";
+//import { getAllPointTransactions } from "../../../../server/src/db.js"; // TODO: WE CANNOT HAVE THIS PATTERN IN OUR CODE
+
+// also, TODO: this page still lists that it connect to the Admin Dashboard
+// and has variables in it named relating to admin functionality, not sponsors.
 
 export async function loader() {
   try {
-    const transactions = await getAllPointTransactions();
+    const transactions = await getAllPointTransactions(); // TODO: REPLACE WITH API
     return { 
       transactions: Array.isArray(transactions) ? transactions : [] 
     };
