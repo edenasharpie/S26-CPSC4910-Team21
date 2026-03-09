@@ -1,7 +1,7 @@
 import { useLoaderData, useNavigate, Link } from "react-router";
 import type { Route } from "./+types/invoices";
-import { Table, Button, Badge } from "~/components";
-import { getAllPointTransactions } from "../../../../server/src/db.js";
+import { Table, Button } from "~/components";
+import { requireAuth } from "~/utils/session.server";
 
 const API_URL = process.env.API_URL ?? 'http://localhost:5000';
 
