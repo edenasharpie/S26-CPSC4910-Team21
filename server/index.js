@@ -3,7 +3,6 @@ dotenv.config({ path: '../../.fs-env' });
 
 import express from 'express';
 import cors from 'cors';
-//import dotenv from 'dotenv';
 import { pool } from './src/db.js';
 import aboutRoutes from './src/routes/about.js';
 import loginRoutes from './src/routes/login.js';

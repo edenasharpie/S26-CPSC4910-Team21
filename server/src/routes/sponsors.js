@@ -16,6 +16,27 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/sponsors/user/:userId - Get sponsor company for a given sponsor user
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const [rows] = await pool.execute(
+      `SELECT sc.SponsorCompanyID as sponsorCompanyId,
+              sc.CompanyName      as companyName,
+              sc.PointDollarValue as pointDollarValue
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?`,
+      [userId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Sponsor company not found for this user' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching sponsor company for user:', error);
+    res.status(500).json({ error: 'Failed to fetch sponsor company' });
+  }
+});
+
 // Get drivers based off performance
 router.get('/my-drivers/:companyId', async (req, res) => {
   try {
@@ -126,7 +147,7 @@ router.patch('/:companyId/description', async (req, res) => {
 });
 
 // TODO: I accepted this change but commented out for now. This function is probably good and useful; just needs a checkup
-// to check for inconsistencies witht ht erest of the code
+// to check for inconsistencies witht the rest of the code
 //// GET /api/sponsors/audit-logs
 //// Fetches the security audit history for the system
 //router.get('/audit-logs', async (req, res) => {

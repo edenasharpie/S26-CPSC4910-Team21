@@ -31,6 +31,7 @@ jobs:
           DB_USER=${{ secrets.DB_USER }}
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           DB_NAME=${{ secrets.DEV_DB_NAME }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
           DB_PORT=3306
           PORT=5000
           EOF
