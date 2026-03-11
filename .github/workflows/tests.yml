@@ -26,7 +26,7 @@ jobs:
       - name: Create environment file
         working-directory: ./server
         run: |
-          cat > .env << EOF
+          cat > ../../.fs-env << EOF
           DB_HOST=${{ secrets.DB_HOST }}
           DB_USER=${{ secrets.DB_USER }}
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
