@@ -1,4 +1,5 @@
 import express from 'express';
+import { validatePasswordComplexity } from '../utils/auth.js';
 
 const router = express.Router();
 
@@ -26,7 +27,13 @@ router.get('/profile/:id', async (req, res) => {
  */
 router.post('/change-password', async (req, res) => {
   const { userId, newPassword } = req.body;
-  const pool = req.app.get('pool'); 
+  const pool = req.app.get('pool');
+
+  // Validate password complexity (story 4287)
+  const complexity = validatePasswordComplexity(newPassword);
+  if (!complexity.valid) {
+    return res.status(400).json({ message: complexity.error });
+  }
 
   try {
     const result = await changePasswordWithHistory(pool, userId, newPassword);

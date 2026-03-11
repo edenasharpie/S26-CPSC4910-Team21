@@ -20,12 +20,22 @@ router.get('/', async (req, res) => {
 router.get('/my-drivers/:companyId', async (req, res) => {
   try {
     const { companyId } = req.params;
-    const drivers = await dbQueries.getDriversByCompany(companyId);
+    const [drivers] = await pool.execute(
+      `SELECT
+         u.UserID, u.FirstName, u.LastName, u.Username,
+         d.PerformanceStatus, d.PointBalance, u.ActiveStatus
+       FROM USERS u
+       JOIN DRIVERS d ON u.UserID = d.UserID
+       WHERE d.SponsorCompanyID = ?
+       ORDER BY d.PerformanceStatus ASC`,
+      [companyId]
+    );
     res.json(drivers);
   } catch (error) {
+    console.error('Error fetching drivers for review:', error);
     res.status(500).json({ error: 'Failed to fetch drivers for review' });
   }
-}); 
+});
 
 /**
  * PATCH /api/sponsors/:companyId/description

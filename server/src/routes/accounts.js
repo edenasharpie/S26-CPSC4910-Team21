@@ -1,12 +1,12 @@
-const express = require('express');
-const router = express.Router();
+import express from 'express';
+import { getAllUsersWithApps } from '../utils/queries.js';
 
-const dbQueries = require('../utils/queries'); 
+const router = express.Router();
 
 // GET /api/accounts/admin-list
 router.get('/admin-list', async (req, res) => {
   try {
-    const users = await dbQueries.getAllUsersWithApps();
+    const users = await getAllUsersWithApps();
 
     res.status(200).json(users);
     
@@ -19,6 +19,5 @@ router.get('/admin-list', async (req, res) => {
   }
 });
 
-//module.exports = router;
-
+//export default router;
 export default router;
