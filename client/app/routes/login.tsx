@@ -92,8 +92,8 @@ export default function LoginPage() {
   const isSubmitting = navigation.state !== "idle";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 px-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 px-4 py-12">
+      <div className="w-full max-w-96 mx-auto">
         {/* Branding */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white tracking-tight">
@@ -152,6 +152,17 @@ export default function LoginPage() {
             </Button>
           </Form>
         </div>
+
+        {/* Sign-up prompt — driver self-registration only */}
+        <p className="text-center text-sm text-white/70 mt-6">
+          New driver?{" "}
+          <Link
+            to="/register"
+            className="text-white font-medium hover:text-white/90 underline underline-offset-2"
+          >
+            Create an account
+          </Link>
+        </p>
       </div>
     </div>
   );
