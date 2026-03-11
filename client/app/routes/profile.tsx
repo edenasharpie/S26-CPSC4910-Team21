@@ -1,6 +1,6 @@
 // app/routes/profile.tsx
 import { useState, useEffect } from "react";
-import { useLoaderData, useActionData, Form, useSubmit } from "react-router";
+import { useLoaderData, useActionData, Form, useSubmit, Link } from "react-router";
 import type { Route } from "./+types/profile";
 import { Table, Input, Button, Badge, Alert } from "~/components";
 //import { getUserById } from "../../../server/database/db";
@@ -78,6 +78,12 @@ export default function ProfilePage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
+      <Link
+        to="/"
+        className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6 block"
+      >
+        ← Home
+      </Link>
       <h1 className="text-3xl font-bold mb-8 text-gray-800 dark:text-white">
         My Profile & Settings
       </h1>

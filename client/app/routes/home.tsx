@@ -22,6 +22,7 @@ const NAV_SECTIONS = [
     links: [
       { to: "/sponsor/dashboard", label: "Dashboard" },
       { to: "/sponsor/catalogs", label: "Catalogs" },
+      { to: "/sponsor/invoices", label: "Invoices" },
       { to: "/sponsor/reports", label: "Reports" },
     ],
   },
@@ -41,6 +42,7 @@ const NAV_SECTIONS = [
     label: "General",
     links: [
       { to: "/about", label: "About" },
+      { to: "/profile", label: "Profile" },
       { to: "/components-demo", label: "Components Demo" },
     ],
   },
