@@ -1,8 +1,8 @@
 import express from 'express';
+import { validatePasswordComplexity } from '../utils/auth.js';
+import { changePasswordWithHistory, getUserById } from '../utils/queries.js';
 
 const router = express.Router();
-
-import { getProfile, changePasswordWithHistory } from '../../api/user.ts';
 
 
 /**
@@ -10,14 +10,14 @@ import { getProfile, changePasswordWithHistory } from '../../api/user.ts';
  */
 router.get('/profile/:id', async (req, res) => {
   try {
-    const pool = req.app.get('pool'); 
-    
-    const result = await getProfile(pool, req.params.id);
-    
-    res.status(result.status).json(result.data || { error: result.error });
+    const user = await getUserById(Number(req.params.id));
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    // Omit sensitive fields before returning
+    const { PassHash, ...safeUser } = user;
+    res.status(200).json(safeUser);
   } catch (error) {
-    console.error("Profile Route Error:", error);
-    res.status(500).json({ message: "Server error" });
+    console.error('Profile Route Error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -26,10 +26,16 @@ router.get('/profile/:id', async (req, res) => {
  */
 router.post('/change-password', async (req, res) => {
   const { userId, newPassword } = req.body;
-  const pool = req.app.get('pool'); 
+  const pool = req.app.get('pool');
+
+  // Validate password complexity (story 4287)
+  const complexity = validatePasswordComplexity(newPassword);
+  if (!complexity.valid) {
+    return res.status(400).json({ message: complexity.error });
+  }
 
   try {
-    const result = await changePasswordWithHistory(pool, userId, newPassword);
+    const result = await changePasswordWithHistory(userId, newPassword);
 
     if (result.success) {
       return res.status(200).json({ message: "Password updated successfully!" });

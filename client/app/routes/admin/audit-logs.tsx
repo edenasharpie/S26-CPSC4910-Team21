@@ -165,6 +165,12 @@ export default function AuditLogs() {
         {/* Navigation */}
         <div className="mb-4">
           <Link
+            to="/"
+            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline block mb-2"
+          >
+            ← Home
+          </Link>
+          <Link
             to="/admin/dashboard"
             className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline block mb-2"
           >

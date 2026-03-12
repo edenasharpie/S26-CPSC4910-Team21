@@ -222,6 +222,11 @@ export default function AdminPortal() {
               System administration and user oversight.
             </p>
           </div>
+          <Form method="post" action="/logout">
+            <Button variant="secondary" size="sm" type="submit">
+              Sign out
+            </Button>
+          </Form>
         </div>
 
         {error && (

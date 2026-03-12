@@ -1,5 +1,8 @@
-import { data, redirect, Form, useActionData } from "react-router";
+import { data, redirect, Form, useActionData, useNavigation, Link } from "react-router";
 import type { Route } from "./+types/login";
+import { Button } from "~/components/Button";
+import { Input } from "~/components/Input";
+import { Alert } from "~/components/Alert";
 import {
   getSession,
   signToken,
@@ -64,74 +67,82 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function LoginPage() {
   const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   const error = actionData?.error;
+  const isSubmitting = navigation.state !== "idle";
 
   return (
-    /* FORCE WIDE: We use min-w-screen and w-full here. 
-      If it's still narrow, check your tailwind.config.ts or global.css 
-    */
-    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
-      <div className="w-full max-w-[450px] space-y-8">
-        
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 px-4 py-12">
+      <div className="w-full max-w-96 mx-auto">
         {/* Branding */}
-        <div className="text-center">
-          <h1 className="text-5xl font-black tracking-tight text-gray-900 dark:text-white mb-2">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white tracking-tight">
             FleetScore
           </h1>
-          <p className="text-base text-gray-500 dark:text-gray-400 font-medium">
+          <p className="text-white/70 text-sm mt-2">
             Sign in to your account
           </p>
         </div>
 
-        {/* Using a standard div instead of Card to ensure styles apply */}
-        <div className="bg-white dark:bg-gray-900 p-10 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800">
-          <Form method="post" className="space-y-6">
-            
-            {error && (
-              <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold border border-red-100 mb-4 text-center">
-                {error}
-              </div>
-            )}
+        {/* Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 space-y-5">
+          {/* Error banner */}
+          {error && (
+            <Alert variant="error" message={error} dismissible={false} />
+          )}
 
-            <div className="space-y-2">
-              <label htmlFor="username" className="block text-xs font-bold uppercase tracking-widest text-gray-400 ml-1">
-                Username
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                required
-                placeholder="Enter your username"
-                className="w-full px-5 py-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
-              />
-            </div>
+          <Form method="post" className="space-y-5">
+            <Input
+              id="username"
+              name="username"
+              type="text"
+              label="Username"
+              autoComplete="username"
+              required
+              placeholder="Enter your username"
+            />
 
-            <div className="space-y-2">
-              <label htmlFor="password" className="block text-xs font-bold uppercase tracking-widest text-gray-400 ml-1">
-                Password
-              </label>
-              <input
+            <div className="space-y-1">
+              <Input
                 id="password"
                 name="password"
                 type="password"
+                label="Password"
+                autoComplete="current-password"
                 required
                 placeholder="••••••••"
                 className="w-full px-5 py-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
               />
+              <div className="text-right pt-0.5">
+                <Link
+                  to="/change-password"
+                  className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
 
-            <button 
-              type="submit" 
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-5 rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none transition-all transform active:scale-[0.98]"
+            <Button
+              type="submit"
+              className="w-full mt-1"
+              isLoading={isSubmitting}
+              disabled={isSubmitting}
             >
-              Sign In
-            </button>
+              Sign in
+            </Button>
           </Form>
         </div>
 
-        <p className="text-center text-gray-400 text-xs font-bold tracking-widest uppercase">
-          © 2026 FleetScore Logistics
+        {/* Sign-up prompt — driver self-registration only */}
+        <p className="text-center text-sm text-white/70 mt-6">
+          New driver?{" "}
+          <Link
+            to="/register"
+            className="text-white font-medium hover:text-white/90 underline underline-offset-2"
+          >
+            Create an account
+          </Link>
         </p>
       </div>
     </div>
