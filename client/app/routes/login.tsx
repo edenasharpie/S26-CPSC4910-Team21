@@ -10,7 +10,6 @@ import {
   ROLE_HOME,
 } from "~/utils/session.server";
 
-// Keep your logic exactly as is
 const API_URL = process.env.API_URL ?? 'http://localhost:5000';
 
 export function meta(_: Route.MetaArgs) {
@@ -72,20 +71,22 @@ export default function LoginPage() {
   const isSubmitting = navigation.state !== "idle";
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 px-4 py-12">
+    /* Updated Background: Baby Blue (Soft and bright) */
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-blue-50 bg-gradient-to-b from-blue-50 to-blue-100/50 px-4 py-12">
       <div className="w-full max-w-96 mx-auto">
-        {/* Branding */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white tracking-tight">
+        
+        {/* Branding - Darker Slate text for high contrast on Baby Blue */}
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">
             FleetScore
           </h1>
-          <p className="text-white/70 text-sm mt-2">
+          <p className="text-slate-500 text-sm mt-2 font-medium">
             Sign in to your account
           </p>
         </div>
 
         {/* Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 space-y-5">
+        <div className="bg-white rounded-3xl shadow-xl shadow-blue-200/50 p-8 space-y-5 border border-white">
           {/* Error banner */}
           {error && (
             <Alert variant="error" message={error} dismissible={false} />
@@ -111,12 +112,12 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 required
                 placeholder="••••••••"
-                className="w-full px-5 py-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
+                className="w-full px-5 py-4 rounded-2xl border border-gray-200 bg-gray-50 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
               />
               <div className="text-right pt-0.5">
                 <Link
                   to="/change-password"
-                  className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+                  className="text-sm font-semibold text-blue-600 hover:text-blue-700"
                 >
                   Forgot password?
                 </Link>
@@ -125,7 +126,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full mt-1"
+              className="w-full mt-1 font-bold py-4 shadow-lg shadow-blue-100"
               isLoading={isSubmitting}
               disabled={isSubmitting}
             >
@@ -134,12 +135,12 @@ export default function LoginPage() {
           </Form>
         </div>
 
-        {/* Sign-up prompt — driver self-registration only */}
-        <p className="text-center text-sm text-white/70 mt-6">
+        {/* Footer */}
+        <p className="text-center text-sm text-slate-500 mt-8 font-medium">
           New driver?{" "}
           <Link
             to="/register"
-            className="text-white font-medium hover:text-white/90 underline underline-offset-2"
+            className="text-blue-600 font-bold hover:text-blue-700 underline underline-offset-4"
           >
             Create an account
           </Link>
