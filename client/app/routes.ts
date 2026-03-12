@@ -1,4 +1,4 @@
-import { type RouteConfig, index, route } from "@react-router/dev/routes";
+import { type RouteConfig, index, route, layout } from "@react-router/dev/routes";
 
 export default [
   index("routes/home.tsx"),
@@ -12,6 +12,10 @@ export default [
   route("audit-logs", "routes/audit-logs.tsx"),
   route("driver-dashboard/:id", "routes/driver-dashboard.tsx"),
   route("sponsor/deduct-points", "routes/sponsor/deduct-points.tsx"),
+  route("sponsor/driver-purchases", "routes/sponsor/driver-purchases.tsx"),
+  route("sponsor/manage-users", "routes/sponsor/manage-users.tsx"),
+  route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
+  
   //route("profile", "routes/profile.tsx"),
   //route("change-password", "routes/change-password.tsx"),
   /* demo purposes only */

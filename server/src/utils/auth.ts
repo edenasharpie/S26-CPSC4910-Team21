@@ -104,4 +104,3 @@ export async function authenticateUser(
         return { success: false, message: "Internal server error", status: 500 };
     }
 }
-

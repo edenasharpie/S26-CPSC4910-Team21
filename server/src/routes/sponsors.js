@@ -202,5 +202,131 @@ router.post('/deduct-points', async (req, res) => {
     }
 });
 
+// GET /api/sponsors/driver-purchases/:companyId
+router.get('/driver-purchases/:companyId', async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const [history] = await pool.execute(`
+            SELECT 
+                t.TransactionID,
+                t.PointChange,
+                t.ReasonForChange,
+                t.TimeChanged,
+                u.FirstName,
+                u.LastName
+            FROM POINT_TRANSACTIONS t
+            JOIN DRIVERS d ON t.DriverID = d.UserID
+            JOIN USERS u ON d.UserID = u.UserID
+            WHERE d.CompanyID = ?
+            ORDER BY t.TimeChanged DESC
+        `, [companyId]);
+
+        res.json(history);
+   } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Sponsor/manage-users
+router.get('/affiliated-users', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT UserID, FirstName, LastName, Email, Bio 
+       FROM USERS 
+       WHERE UserType = 'sponsor'`
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Sponsor Route Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Sponso/manage-users.$userId
+router.get('/user/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [rows] = await pool.execute(
+            `SELECT UserID, FirstName, LastName, Email, Bio 
+             FROM USERS 
+             WHERE UserID = ?`, 
+            [id]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        res.json(rows[0]); // Return just the single user object
+    } catch (error) {
+        console.error("DB Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// Function to change a user's fields and store within the database
+router.put('/user/:id', async (req, res) => {
+    const { id } = req.params;
+    const { firstName, lastName, email } = req.body;
+
+    // --- DEBUG LOGS ---
+    console.log("PUT request received for ID:", id);
+    console.log("Body received:", req.body); 
+    // ------------------
+
+    try {
+        const [result] = await pool.execute(
+            `UPDATE USERS 
+             SET FirstName = ?, LastName = ?, Email = ? 
+             WHERE UserID = ?`,
+            [firstName, lastName, email, id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        console.log("DB Result:", result);
+        res.json({ message: "User updated successfully" });
+    } catch (error) {
+        console.error("Update Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// GET to fetch all comments
+router.get('/review/:reviewId/comments', async (req, res) => {
+  const { reviewId } = req.params;
+  try {
+    const [rows] = await pool.execute(
+      `SELECT c.*, u.FirstName, u.LastName 
+       FROM COMMENTS c
+       JOIN USERS u ON c.UserID = u.UserID
+       WHERE c.ReviewID = ?
+       ORDER BY c.CreatedAt ASC`, // ASC shows the conversation flow
+      [reviewId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST to comment or reply
+router.post('/comments', async (req, res) => {
+  const { reviewId, userId, parentCommentId, text } = req.body;
+  try {
+    await pool.execute(
+      `INSERT INTO COMMENTS (ReviewID, UserID, ParentCommentID, CommentText) 
+       VALUES (?, ?, ?, ?)`,
+      [reviewId, userId, parentCommentId || null, text]
+    );
+    res.json({ message: "Comment posted!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 //module.exports = router;
 export default router;

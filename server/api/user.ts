@@ -1,5 +1,5 @@
 // server/api/user.ts
-import { verifyPassword, hashPassword } from '../src/utils/auth';
+import { verifyPassword, hashPassword, authenticateUser } from '../src/utils/auth.ts';
 import { Pool, RowDataPacket } from 'mysql2/promise';
 
 /** * 1. TYPE DEFINITIONS
