@@ -295,38 +295,5 @@ router.put('/user/:id', async (req, res) => {
     }
 });
 
-// GET to fetch all comments
-router.get('/review/:reviewId/comments', async (req, res) => {
-  const { reviewId } = req.params;
-  try {
-    const [rows] = await pool.execute(
-      `SELECT c.*, u.FirstName, u.LastName 
-       FROM COMMENTS c
-       JOIN USERS u ON c.UserID = u.UserID
-       WHERE c.ReviewID = ?
-       ORDER BY c.CreatedAt ASC`, // ASC shows the conversation flow
-      [reviewId]
-    );
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST to comment or reply
-router.post('/comments', async (req, res) => {
-  const { reviewId, userId, parentCommentId, text } = req.body;
-  try {
-    await pool.execute(
-      `INSERT INTO COMMENTS (ReviewID, UserID, ParentCommentID, CommentText) 
-       VALUES (?, ?, ?, ?)`,
-      [reviewId, userId, parentCommentId || null, text]
-    );
-    res.json({ message: "Comment posted!" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 //module.exports = router;
 export default router;
