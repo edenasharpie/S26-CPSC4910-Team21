@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { recordAuditEntry } from './audit.ts';
 
 const ALGORITHM = 'aes-256-cbc';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY 
