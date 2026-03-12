@@ -140,7 +140,7 @@ export default function SponsorCatalogs() {
   const handleSearchStore = async () => {
     try {
       setSearchLoading(true);
-      const response = await api.fetchApi(`/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
+      const response = await api.fetchApi(`/admin/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
@@ -461,8 +461,8 @@ export default function SponsorCatalogs() {
                   {searchResults.map((product) => (
                     <div
                       key={product.id}
-                      className={`p-3 flex gap-3 cursor-pointer hover:bg-gray-50 border-b ${
-                        selectedStoreProduct?.id === product.id ? 'bg-blue-50' : ''
+                      className={`p-3 flex gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 border-b ${
+                        selectedStoreProduct?.id === product.id ? 'bg-blue-50 dark:bg-blue-900' : ''
                       }`}
                       onClick={() => handleSelectStoreProduct(product)}
                     >
@@ -473,8 +473,8 @@ export default function SponsorCatalogs() {
                       />
                       <div className="flex-1">
                         <h4 className="font-medium">{product.title}</h4>
-                        <p className="text-sm text-gray-600 truncate">{product.description}</p>
-                        <p className="text-sm text-gray-500">${product.price}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{product.description}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">${product.price}</p>
                       </div>
                     </div>
                   ))}
