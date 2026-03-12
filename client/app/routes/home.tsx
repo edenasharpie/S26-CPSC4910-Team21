@@ -1,7 +1,13 @@
-import { Link } from "react-router";
+import { Link, Form, useLoaderData } from "react-router";
 import type { Route } from "./+types/home";
 import { Card } from "~/components";
 import { Button } from "~/components/Button";
+import { getSession } from "~/utils/session.server";
+
+export function loader({ request }: Route.LoaderArgs) {
+  const user = getSession(request);
+  return { user };
+}
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -49,6 +55,8 @@ const NAV_SECTIONS = [
 ];
 
 export default function Home() {
+  const { user } = useLoaderData<typeof loader>();
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container-padding section-spacing">
@@ -58,9 +66,19 @@ export default function Home() {
             <h1 className="text-3xl sm:text-4xl font-bold">
               Welcome to FleetScore!
             </h1>
-            <Link to="/login">
-              <Button variant="primary" size="lg">Sign In</Button>
-            </Link>
+            {user ? (
+              <Form method="post" action="/logout" className="inline-flex flex-col items-center gap-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Signed in as <span className="font-semibold text-gray-700 dark:text-gray-200">{user.Username}</span>
+                  {" "}({user.UserType})
+                </p>
+                <Button variant="secondary" size="lg" type="submit">Sign Out</Button>
+              </Form>
+            ) : (
+              <Link to="/login">
+                <Button variant="primary" size="lg">Sign In</Button>
+              </Link>
+            )}
           </div>
 
           {/* Debug Navigation */}

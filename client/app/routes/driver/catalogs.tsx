@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLoaderData } from 'react-router';
+import { Link, useLoaderData, Form } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
@@ -148,6 +148,9 @@ export default function DriverCatalogs() {
       <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Available Catalogs</h1>
+        <Form method="post" action="/logout">
+          <Button variant="secondary" size="sm" type="submit">Sign out</Button>
+        </Form>
       </div>
 
       {/* Error Display */}
