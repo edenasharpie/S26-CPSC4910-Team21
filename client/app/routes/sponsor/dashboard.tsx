@@ -164,10 +164,14 @@ export default function SponsorPortal() {
             <p className="text-gray-500 text-sm mt-1 font-medium italic">{companyName}</p>
           </div>
 
-          <button 
-            onClick={() => navigate(`/sponsor/profile/${user.UserID}`)}
-            className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
-          >
+          <div className="flex items-center gap-3">
+            <Form method="post" action="/logout">
+              <Button variant="secondary" size="sm" type="submit">Sign out</Button>
+            </Form>
+            <button 
+              onClick={() => navigate(`/sponsor/profile/${user.UserID}`)}
+              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
+            >
             <div className="relative">
               <img
                 src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`}
@@ -180,7 +184,8 @@ export default function SponsorPortal() {
               <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{user.Username}</p>
               <p className="text-[10px] text-gray-400 font-mono mt-0.5">{companyName}</p>
             </div>
-          </button>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

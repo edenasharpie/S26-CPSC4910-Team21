@@ -5,12 +5,13 @@ import {
   getSponsorCompanyId, 
   userExists,
   getCatalogsBySponsorCompany,
+  getAllCatalogs,
   verifyCatalogOwnership 
 } from '../utils/queries.js';
 
 const router = express.Router({ mergeParams: true });
 
-// Middleware to validate user and get sponsor company ID
+// Middleware to validate user and get sponsor company ID or allow admin access
 async function validateSponsorAndGetCompanyId(req, res, next) {
   try {
     const userId = parseInt(req.params.userId);
@@ -19,23 +20,49 @@ async function validateSponsorAndGetCompanyId(req, res, next) {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
-    // Check if user exists
+    // Check if user exists and get their type
     const exists = await userExists(userId);
     if (!exists) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get sponsor's company ID
-    const sponsorCompanyId = await getSponsorCompanyId(userId);
-    if (!sponsorCompanyId) {
-      return res.status(403).json({ 
-        error: 'Access forbidden: User is not a sponsor' 
-      });
+    // Get user type from database
+    const connection = await pool.getConnection();
+    try {
+      const [userRows] = await connection.query(
+        'SELECT UserType FROM USERS WHERE UserID = ?',
+        [userId]
+      );
+      
+      const userType = userRows[0]?.UserType;
+      
+      if (userType === 'admin') {
+        // Admins can view all catalogs
+        req.isAdmin = true;
+        req.sponsorCompanyId = null;
+        console.log(`Admin user ${userId} accessing sponsor catalogs`);
+        return next();
+      } else if (userType === 'sponsor') {
+        // Get sponsor's company ID
+        const sponsorCompanyId = await getSponsorCompanyId(userId);
+        if (!sponsorCompanyId) {
+          return res.status(403).json({ 
+            error: 'Access forbidden: Sponsor account is not associated with a company' 
+          });
+        }
+        req.isAdmin = false;
+        req.sponsorCompanyId = sponsorCompanyId;
+        console.log(`Sponsor user ${userId} accessing catalogs for company ${sponsorCompanyId}`);
+        return next();
+      } else {
+        // Drivers and other user types cannot access this route
+        return res.status(403).json({ 
+          error: 'Access forbidden: Only sponsors and admins can access catalogs' 
+        });
+      }
+    } finally {
+      connection.release();
     }
-
-    // Attach to request for use in route handlers
-    req.sponsorCompanyId = sponsorCompanyId;
-    next();
   } catch (error) {
     console.error('Error validating sponsor:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -51,11 +78,18 @@ router.get('/', async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = parseInt(req.query.offset) || 0;
 
-    const catalogs = await getCatalogsBySponsorCompany(
-      req.sponsorCompanyId,
-      limit,
-      offset
-    );
+    let catalogs;
+    if (req.isAdmin) {
+      // Admins see all catalogs across all sponsor companies
+      catalogs = await getAllCatalogs(limit, offset);
+    } else {
+      // Sponsors see only their company's catalogs
+      catalogs = await getCatalogsBySponsorCompany(
+        req.sponsorCompanyId,
+        limit,
+        offset
+      );
+    }
 
     res.json(catalogs);
   } catch (error) {

@@ -65,7 +65,9 @@ router.get('/users', async (request, response) => {
       params.push(userType);
     }
 
-    if (activeStatus !== undefined) {
+    // Only apply activeStatus filter if it's a valid numeric value (0 or 1)
+    // Skip filter for 'all' or undefined
+    if (activeStatus !== undefined && activeStatus !== 'all' && (activeStatus === '0' || activeStatus === '1')) {
       query += ' AND u.ActiveStatus = ?';
       params.push(parseInt(activeStatus));
     }
@@ -90,7 +92,8 @@ router.get('/users', async (request, response) => {
       countParams.push(userType);
     }
 
-    if (activeStatus !== undefined) {
+    // Only apply activeStatus filter if it's a valid numeric value (0 or 1)
+    if (activeStatus !== undefined && activeStatus !== 'all' && (activeStatus === '0' || activeStatus === '1')) {
       countQuery += ' AND u.ActiveStatus = ?';
       countParams.push(parseInt(activeStatus));
     }
@@ -223,6 +226,18 @@ router.post('/users', async (request, response) => {
           error: 'Missing required field for driver: performanceStatus' 
         });
       }
+      // If sponsorCompanyId is provided, validate it exists
+      if (sponsorCompanyId) {
+        const [companyCheck] = await connection.query(
+          'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?',
+          [sponsorCompanyId]
+        );
+        if (companyCheck.length === 0) {
+          return response.status(400).json({ 
+            error: 'Sponsor company not found' 
+          });
+        }
+      }
     }
 
     // Validate sponsor-specific required fields
@@ -230,6 +245,16 @@ router.post('/users', async (request, response) => {
       if (!sponsorCompanyId) {
         return response.status(400).json({ 
           error: 'Missing required field for sponsor: sponsorCompanyId' 
+        });
+      }
+      // Validate that the sponsor company exists
+      const [companyCheck] = await connection.query(
+        'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?',
+        [sponsorCompanyId]
+      );
+      if (companyCheck.length === 0) {
+        return response.status(400).json({ 
+          error: 'Sponsor company not found' 
         });
       }
     }
