@@ -31,7 +31,7 @@ export function CommentSystem({ reviewId, currentUserId }: { reviewId: string, c
 
     setNewComment("");
     setReplyTo(null);
-    fetchComments(); // Refresh list
+    fetchComments();
   };
 
   return (
