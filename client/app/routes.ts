@@ -6,7 +6,6 @@ export default [
   route("login",  "routes/login.tsx"),
   route("logout", "routes/logout.tsx"),
   route("about", "routes/about.tsx"),
-  route("change-password", "routes/change-password.tsx"),
   /* demo purposes only */
   route("components-demo", "routes/components-demo.tsx"),
 
@@ -17,6 +16,7 @@ export default [
   //PROFILES
   route("admin/profile/:id", "routes/admin/profile/$id/edit.tsx"),
   route("profile", "routes/profile.tsx"),
+  route("change-password", "routes/change-password.tsx"),
 
   //POINTS
   route("admin/profile/:id/points", "routes/admin/profile/$id/points.tsx"),
@@ -35,6 +35,5 @@ export default [
   //CATALOGS
   route("admin/catalogs", "routes/admin/catalogs.tsx"),
   route("driver/catalogs", "routes/driver/catalogs.tsx"),
-  route("sponsor/catalogs", "routes/sponsor/catalogs.tsx")
-  
+  route("sponsor/catalogs", "routes/sponsor/catalogs.tsx"),
 ] satisfies RouteConfig;
