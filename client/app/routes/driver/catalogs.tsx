@@ -8,9 +8,6 @@ import { Alert } from '../../components/Alert';
 import { createApiClient } from '~/utils/api';
 import { requireAuth } from '~/utils/session.server';
 import type { Route } from './+types/catalogs';
-import Lightbox from 'yet-another-react-lightbox';
-import Zoom from 'yet-another-react-lightbox/plugins/zoom';
-import 'yet-another-react-lightbox/styles.css';
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = requireAuth(request, ['driver']);
@@ -45,8 +42,6 @@ export default function DriverCatalogs() {
   const [isItemDetailOpen, setIsItemDetailOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     fetchCatalogs();
@@ -96,11 +91,6 @@ export default function DriverCatalogs() {
     setIsItemDetailOpen(true);
   };
 
-  const handleOpenLightbox = (index: number) => {
-    setCurrentImageIndex(index);
-    setIsLightboxOpen(true);
-  };
-
   const catalogColumns = [
     { key: 'id', header: 'Catalog ID' },
     { 
@@ -127,18 +117,9 @@ export default function DriverCatalogs() {
     {
       key: 'imageUrl',
       header: 'Image',
-      render: (item: CatalogItem) => {
-        const itemIndex = catalogItems.indexOf(item);
-        return (
-          <img 
-            src={item.imageUrl} 
-            alt={item.name} 
-            className="w-16 h-16 object-cover rounded cursor-pointer hover:scale-105 transition-transform" 
-            onClick={() => handleOpenLightbox(itemIndex)}
-            title="Click to zoom"
-          />
-        );
-      }
+      render: (item: CatalogItem) => (
+        <img src={item.imageUrl} alt={item.name} className="w-16 h-16 object-cover rounded" />
+      )
     },
     { key: 'name', header: 'Name' },
     { 
@@ -219,12 +200,7 @@ export default function DriverCatalogs() {
               <img 
                 src={selectedItem.imageUrl} 
                 alt={selectedItem.name} 
-                className="max-w-full h-64 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => {
-                  const itemIndex = catalogItems.findIndex(i => i.id === selectedItem.id);
-                  handleOpenLightbox(itemIndex >= 0 ? itemIndex : 0);
-                }}
-                title="Click to zoom"
+                className="max-w-full h-64 object-contain rounded"
               />
             </div>
             <div>
@@ -259,37 +235,6 @@ export default function DriverCatalogs() {
           </div>
         )}
       </Modal>
-
-      {/* image lightbox with zoom */}
-      <Lightbox
-        open={isLightboxOpen}
-        close={() => setIsLightboxOpen(false)}
-        slides={catalogItems.map(item => ({
-          src: item.imageUrl,
-          alt: item.name,
-          title: item.name,
-          description: `${item.pointCost} points`
-        }))}
-        index={currentImageIndex}
-        plugins={[Zoom]}
-        zoom={{
-          maxZoomPixelRatio: 3,
-          zoomInMultiplier: 2,
-          doubleTapDelay: 300,
-          doubleClickDelay: 300,
-          doubleClickMaxStops: 2,
-          keyboardMoveDistance: 50,
-          wheelZoomDistanceFactor: 100,
-          pinchZoomDistanceFactor: 100,
-          scrollToZoom: true
-        }}
-        carousel={{
-          finite: catalogItems.length <= 1
-        }}
-        controller={{
-          closeOnBackdropClick: true
-        }}
-      />
     </div>
   );
 }

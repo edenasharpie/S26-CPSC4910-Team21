@@ -162,7 +162,7 @@ export default function Catalogs() {
   const handleSearchStore = async () => {
     try {
       setSearchLoading(true);
-      const response = await api.fetchApi(`/admin/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
+      const response = await api.fetchApi(`/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
@@ -489,8 +489,8 @@ export default function Catalogs() {
                         key={product.id}
                         className={`border rounded p-3 cursor-pointer transition ${
                           selectedStoreProduct?.id === product.id
-                            ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900'
-                            : 'border-gray-300 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-600'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-300 hover:border-blue-300'
                         }`}
                         onClick={() => handleSelectStoreProduct(product)}
                       >
@@ -502,10 +502,10 @@ export default function Catalogs() {
                           />
                           <div className="flex-1">
                             <h4 className="font-medium">{product.title}</h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                            <p className="text-sm text-gray-600 line-clamp-2">
                               {product.description}
                             </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            <p className="text-xs text-gray-500 mt-1">
                               Category: {product.category} | Price: ${product.price}
                             </p>
                           </div>

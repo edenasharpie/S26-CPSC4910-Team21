@@ -374,46 +374,6 @@ export async function getCatalogsBySponsorCompany(sponsorCompanyId, limit = 10, 
 }
 
 /**
- * Get all catalogs across all sponsor companies (admin view)
- * @param {number} limit - Maximum number of results
- * @param {number} offset - Number of results to skip
- * @returns {Promise<Array>} Promise with array of catalog summaries
- */
-export async function getAllCatalogs(limit = 10, offset = 0) {
-  try {
-    const connection = await pool.getConnection();
-    
-    try {
-      // Ensure limit and offset are integers for MySQL
-      const limitInt = parseInt(limit);
-      const offsetInt = parseInt(offset);
-      
-      const [rows] = await connection.query(
-        `SELECT 
-          c.CatalogID as id,
-          c.SponsorCompanyID as sponsorCompanyId,
-          sc.CompanyName as sponsorCompanyName,
-          COUNT(ci.ItemID) as itemCount
-         FROM CATALOGS c
-         LEFT JOIN CATALOG_ITEMS ci ON c.CatalogID = ci.CatalogID
-         LEFT JOIN SPONSOR_COMPANIES sc ON c.SponsorCompanyID = sc.SponsorCompanyID
-         GROUP BY c.CatalogID
-         ORDER BY c.CatalogID DESC
-         LIMIT ? OFFSET ?`,
-        [limitInt, offsetInt]
-      );
-
-      return rows;
-    } finally {
-      connection.release();
-    }
-  } catch (error) {
-    console.error('Error fetching all catalogs:', error);
-    throw error;
-  }
-}
-
-/**
  * Verify that a catalog belongs to a specific sponsor company
  * @param {number} catalogId - The catalog ID to check
  * @param {number} sponsorCompanyId - The sponsor company ID that should own the catalog

@@ -134,59 +134,23 @@ export async function createUser(userData) {
 
 //Update user in the DB 
 export async function updateUser(id, updates) {
-  // Build dynamic UPDATE query to only update provided fields
-  const fields = [];
-  const values = [];
+  const { 
+    Username, Email, Phone, PassHash, 
+    FirstName, MiddleName, LastName, 
+    Pronouns, ProfilePicture, Bio, 
+    UserType, ActiveStatus 
+  } = updates;
 
-  // Map of allowed fields for USERS table
-  const allowedFields = {
-    Username: 'Username',
-    Email: 'Email',
-    Phone: 'Phone',
-    PassHash: 'PassHash',
-    FirstName: 'FirstName',
-    MiddleName: 'MiddleName',
-    LastName: 'LastName',
-    Pronouns: 'Pronouns',
-    ProfilePicture: 'ProfilePicture',
-    Bio: 'Bio',
-    UserType: 'UserType',
-    ActiveStatus: 'ActiveStatus'
-  };
-
-  // Only include fields that are explicitly provided and not undefined
-  for (const [key, dbColumn] of Object.entries(allowedFields)) {
-    if (updates[key] !== undefined) {
-      // Special handling for PassHash: validate format if provided
-      if (key === 'PassHash') {
-        const passHash = updates[key];
-        // Only update PassHash if it's non-empty and appears to be valid (contains colon for salt:hash format)
-        if (passHash && typeof passHash === 'string' && passHash.length > 0) {
-          if (!passHash.includes(':')) {
-            throw new Error('Invalid password hash format: must be in salt:hash format');
-          }
-          fields.push(`${dbColumn} = ?`);
-          values.push(passHash);
-        }
-        // If PassHash is empty or invalid, skip it (don't update)
-      } else {
-        fields.push(`${dbColumn} = ?`);
-        values.push(updates[key]);
-      }
-    }
-  }
-
-  // If no fields to update, return early
-  if (fields.length === 0) {
-    return { affectedRows: 0, message: 'No fields to update' };
-  }
-
-  // Add the user ID for the WHERE clause
-  values.push(id);
-
-  const query = `UPDATE USERS SET ${fields.join(', ')} WHERE UserID = ?`;
-  
-  const [result] = await pool.execute(query, values);
+  const [result] = await pool.execute(
+    `UPDATE USERS 
+     SET Username = ?, Email = ?, Phone = ?, PassHash = ?, 
+         FirstName = ?, MiddleName = ?, LastName = ?, 
+         Pronouns = ?, ProfilePicture = ?, Bio = ?, 
+         UserType = ?, ActiveStatus = ? 
+     WHERE UserID = ?`,
+    [Username, Email, Phone, PassHash, FirstName, MiddleName, LastName, 
+     Pronouns, ProfilePicture, Bio, UserType, ActiveStatus, id]
+  );
   return result;
 }
 
