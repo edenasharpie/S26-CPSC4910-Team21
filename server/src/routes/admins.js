@@ -25,7 +25,7 @@ router.get('/invoices', async (req, res) => {
   }
 });
 
-// GET /ap/admins/driver-report/:driverId
+// GET /api/admins/driver-report/:driverId
 router.get('/driver-report/:driverId', async (req, res) => {
   const { driverId } = req.params;
   const { startDate, endDate } = req.query; 

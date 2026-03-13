@@ -17,6 +17,7 @@ import driverCatalogsRoutes from './src/routes/driver-catalogs.js';
 import sponsorCatalogsRoutes from './src/routes/sponsor-catalogs.js';
 import sponsorReportsRoutes from './src/routes/sponsor-reports.js';
 import adminRoute from './src/routes/admins.js';
+import driverRoute from './src/routes/drivers.js';
 import accountsRoute from './src/routes/accounts.js';
 
 
@@ -39,7 +40,8 @@ app.use('/api/auth', loginRoutes);
 app.use('/api/user', userRoute);
 app.use('/api/accounts', accountsRoute);
 app.use('/api/sponsors', sponsorRoute);
-app.use('/api/admin/store', storeRoutes); 
+app.use('/api/drivers', driverRoute);
+app.use('/api/admin/store', storeRoutes);
 app.use('/api/admin/catalogs', adminCatalogsRoutes);
 app.use('/api/admin', adminUsersRoutes);
 app.use('/api/admin/reports', adminReportsRoutes);
@@ -47,8 +49,7 @@ app.use('/api/admin/audit-logs', adminEventsRoutes);
 app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
-//app.use('/api/admin', adminRoute);     
-//app.use('/api/drivers', driverRoute);
+//app.use('/api/admin', adminRoute);
 
 // Start the server
 const PORT = process.env.PORT || 5000;

@@ -204,5 +204,142 @@ router.patch('/:companyId/description', async (req, res) => {
 //  }
 //});
 
+// POST /api/sponsors/deduct-points
+router.post('/deduct-points', async (req, res) => {
+    const { driverId, points, reason, sponsorId } = req.body;
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // Update Driver's balance 
+        const [updateResult] = await connection.execute(
+            "UPDATE DRIVERS SET PointBalance = PointBalance - ? WHERE UserID = ?",
+            [points, driverId]
+        );
+
+        if (updateResult.affectedRows === 0) {
+            throw new Error("Driver not found");
+        }
+
+        // Get Driver's LicenseNumber for transaction log
+        const [driver] = await connection.execute(
+            "SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?",
+            [driverId]
+        );
+
+        // Log transaction as negative value
+        await connection.execute(
+            `INSERT INTO POINT_TRANSACTIONS 
+            (DriverID, PointChange, ReasonForChange, TimeChanged, UserChanged) 
+            VALUES (?, ?, ?, NOW(), ?)`,
+            [driver[0].LicenseNumber, -Math.abs(points), reason, sponsorId]
+        );
+
+        await connection.commit();
+        res.json({ message: `Successfully deducted ${points} points.` });
+    } catch (error) {
+        await connection.rollback();
+        console.error("Deduction Error:", error);
+        res.status(500).json({ error: error.message || "Failed to deduct points" });
+    } finally {
+        connection.release();
+    }
+});
+
+// GET /api/sponsors/driver-purchases/:companyId
+router.get('/driver-purchases/:companyId', async (req, res) => {
+  const { companyId } = req.params;
+
+  try {
+    const [history] = await pool.execute(
+      `SELECT
+          t.TransactionID,
+          t.PointChange,
+          t.ReasonForChange,
+          t.TimeChanged,
+          u.FirstName,
+          u.LastName
+       FROM POINT_TRANSACTIONS t
+       JOIN DRIVERS d ON t.DriverID = d.LicenseNumber
+       JOIN USERS u ON d.UserID = u.UserID
+       WHERE d.SponsorCompanyID = ?
+       ORDER BY t.TimeChanged DESC`,
+      [companyId]
+    );
+
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Sponsor/manage-users
+router.get('/affiliated-users', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT UserID, FirstName, LastName, Email, Bio 
+       FROM USERS 
+       WHERE UserType = 'sponsor'`
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error("Sponsor Route Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Sponso/manage-users.$userId
+router.get('/user/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [rows] = await pool.execute(
+            `SELECT UserID, FirstName, LastName, Email, Bio 
+             FROM USERS 
+             WHERE UserID = ?`, 
+            [id]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        res.json(rows[0]); // Return just the single user object
+    } catch (error) {
+        console.error("DB Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// Function to change a user's fields and store within the database
+router.put('/user/:id', async (req, res) => {
+    const { id } = req.params;
+    const { firstName, lastName, email } = req.body;
+
+    // --- DEBUG LOGS ---
+    console.log("PUT request received for ID:", id);
+    console.log("Body received:", req.body); 
+    // ------------------
+
+    try {
+        const [result] = await pool.execute(
+            `UPDATE USERS 
+             SET FirstName = ?, LastName = ?, Email = ? 
+             WHERE UserID = ?`,
+            [firstName, lastName, email, id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        console.log("DB Result:", result);
+        res.json({ message: "User updated successfully" });
+    } catch (error) {
+        console.error("Update Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 //module.exports = router;
 export default router;

@@ -1,4 +1,4 @@
-import { type RouteConfig, index, route } from "@react-router/dev/routes";
+import { type RouteConfig, index, route, layout } from "@react-router/dev/routes";
 
 export default [
   //INFO
@@ -35,6 +35,20 @@ export default [
   //CATALOGS
   route("admin/catalogs", "routes/admin/catalogs.tsx"),
   route("driver/catalogs", "routes/driver/catalogs.tsx"),
-  route("sponsor/catalogs", "routes/sponsor/catalogs.tsx")
-  
+  route("sponsor/catalogs", "routes/sponsor/catalogs.tsx"),
+
+  //ADMIN USER MANAGEMENT (quick-add forms)
+  route("admin/add-driver", "routes/admin/add-driver.tsx"),
+  route("admin/add-sponsor", "routes/admin/add-sponsor.tsx"),
+
+  //SPONSOR FLEET MANAGEMENT
+  route("sponsor/deduct-points", "routes/sponsor/deduct-points.tsx"),
+  route("sponsor/driver-purchases", "routes/sponsor/driver-purchases.tsx"),
+  route("sponsor/manage-users", "routes/sponsor/manage-users.tsx"),
+  route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
+
+  // Legacy driver dashboard (accessed by URL param)
+  // TODO: migrate to /driver/dashboard once session-based routing is finalized
+  route("driver-dashboard/:id", "routes/driver-dashboard.tsx"),
+
 ] satisfies RouteConfig;
