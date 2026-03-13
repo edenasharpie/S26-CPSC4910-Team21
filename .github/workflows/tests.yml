@@ -52,16 +52,16 @@ jobs:
         run: node setup.js
         continue-on-error: false
       
-      # - name: Run tests
-      #   working-directory: ./server/tests/api
-      #   run: |
-      #     for test in *.js; do
-      #       if [ -f "$test" ]; then
-      #         echo "Running $test..."
-      #         node "$test"
-      #       fi
-      #     done
-      #   continue-on-error: false
+      - name: Run tests
+        working-directory: ./server/tests/api
+        run: |
+          for test in *.js; do
+            if [ -f "$test" ]; then
+              echo "Running $test..."
+              node "$test"
+            fi
+          done
+        continue-on-error: false
       
       - name: Stop server
         if: always()
