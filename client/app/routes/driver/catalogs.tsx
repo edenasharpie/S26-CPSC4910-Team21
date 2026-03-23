@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLoaderData } from 'react-router';
+import { Link, useLoaderData, Form } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
@@ -8,6 +8,9 @@ import { Alert } from '../../components/Alert';
 import { createApiClient } from '~/utils/api';
 import { requireAuth } from '~/utils/session.server';
 import type { Route } from './+types/catalogs';
+import Lightbox from 'yet-another-react-lightbox';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
+import 'yet-another-react-lightbox/styles.css';
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = requireAuth(request, ['driver']);
@@ -42,6 +45,8 @@ export default function DriverCatalogs() {
   const [isItemDetailOpen, setIsItemDetailOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     fetchCatalogs();
@@ -91,6 +96,11 @@ export default function DriverCatalogs() {
     setIsItemDetailOpen(true);
   };
 
+  const handleOpenLightbox = (index: number) => {
+    setCurrentImageIndex(index);
+    setIsLightboxOpen(true);
+  };
+
   const catalogColumns = [
     { key: 'id', header: 'Catalog ID' },
     { 
@@ -117,9 +127,18 @@ export default function DriverCatalogs() {
     {
       key: 'imageUrl',
       header: 'Image',
-      render: (item: CatalogItem) => (
-        <img src={item.imageUrl} alt={item.name} className="w-16 h-16 object-cover rounded" />
-      )
+      render: (item: CatalogItem) => {
+        const itemIndex = catalogItems.indexOf(item);
+        return (
+          <img 
+            src={item.imageUrl} 
+            alt={item.name} 
+            className="w-16 h-16 object-cover rounded cursor-pointer hover:scale-105 transition-transform" 
+            onClick={() => handleOpenLightbox(itemIndex)}
+            title="Click to zoom"
+          />
+        );
+      }
     },
     { key: 'name', header: 'Name' },
     { 
@@ -148,6 +167,9 @@ export default function DriverCatalogs() {
       <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Available Catalogs</h1>
+        <Form method="post" action="/logout">
+          <Button variant="secondary" size="sm" type="submit">Sign out</Button>
+        </Form>
       </div>
 
       {/* Error Display */}
@@ -197,7 +219,12 @@ export default function DriverCatalogs() {
               <img 
                 src={selectedItem.imageUrl} 
                 alt={selectedItem.name} 
-                className="max-w-full h-64 object-contain rounded"
+                className="max-w-full h-64 object-contain rounded cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => {
+                  const itemIndex = catalogItems.findIndex(i => i.id === selectedItem.id);
+                  handleOpenLightbox(itemIndex >= 0 ? itemIndex : 0);
+                }}
+                title="Click to zoom"
               />
             </div>
             <div>
@@ -232,6 +259,37 @@ export default function DriverCatalogs() {
           </div>
         )}
       </Modal>
+
+      {/* image lightbox with zoom */}
+      <Lightbox
+        open={isLightboxOpen}
+        close={() => setIsLightboxOpen(false)}
+        slides={catalogItems.map(item => ({
+          src: item.imageUrl,
+          alt: item.name,
+          title: item.name,
+          description: `${item.pointCost} points`
+        }))}
+        index={currentImageIndex}
+        plugins={[Zoom]}
+        zoom={{
+          maxZoomPixelRatio: 3,
+          zoomInMultiplier: 2,
+          doubleTapDelay: 300,
+          doubleClickDelay: 300,
+          doubleClickMaxStops: 2,
+          keyboardMoveDistance: 50,
+          wheelZoomDistanceFactor: 100,
+          pinchZoomDistanceFactor: 100,
+          scrollToZoom: true
+        }}
+        carousel={{
+          finite: catalogItems.length <= 1
+        }}
+        controller={{
+          closeOnBackdropClick: true
+        }}
+      />
     </div>
   );
 }

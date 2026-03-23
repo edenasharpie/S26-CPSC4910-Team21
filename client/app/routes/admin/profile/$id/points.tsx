@@ -110,8 +110,14 @@ export default function PointsPage() {
   return (
     <div className="p-8 max-w-[1600px] mx-auto space-y-10 text-left">
       <Link
+        to="/"
+        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+      >
+        ← Home
+      </Link>
+      <Link
         to="/admin/dashboard"
-        className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
+        className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors ml-4"
       >
         ← Back to Admin Dashboard
       </Link>

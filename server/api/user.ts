@@ -24,7 +24,6 @@
 //  error?: string;
 //}
 
-//<<<<<<< HEAD
 //interface PasswordHistoryEntry {
 //  password_hash: string;
 //  changed_at: string;
@@ -44,7 +43,6 @@
 // */
 //export async function getProfile(pool: any, userId: number) {
 //  const user = await getUserById(pool, userId);
-//=======
 //// Helper function to call to db
 //export async function getUserById(pool: any, userId: number | string): Promise<User | undefined> {
 //  const [rows] = await pool.query(
@@ -62,7 +60,6 @@
 // */
 //export async function getProfile(pool: any, userId: number) {
 //  const user = await getUserById(pool, userId);
-//>>>>>>> kyle-temp
   
 //  if (!user) {
 //    return { error: 'User not found', status: 404 };

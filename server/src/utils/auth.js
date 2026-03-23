@@ -7,6 +7,28 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY
     : Buffer.from("abcdef0123456789abcdef0123456789");
 const IV_LENGTH = 16;
 
+/**
+ * Validate password complexity (story 4287/4288).
+ * Rules: min 10 chars, at least one uppercase, one lowercase, one special character.
+ * @param {string} plain - Plain-text password to validate.
+ * @returns {{ valid: boolean, error?: string }}
+ */
+export function validatePasswordComplexity(plain) {
+  if (!plain || plain.length < 10) {
+    return { valid: false, error: 'Password must be at least 10 characters long.' };
+  }
+  if (!/[A-Z]/.test(plain)) {
+    return { valid: false, error: 'Password must contain at least one uppercase letter.' };
+  }
+  if (!/[a-z]/.test(plain)) {
+    return { valid: false, error: 'Password must contain at least one lowercase letter.' };
+  }
+  if (!/[^A-Za-z0-9]/.test(plain)) {
+    return { valid: false, error: 'Password must contain at least one special character.' };
+  }
+  return { valid: true };
+}
+
 // Use a salted SHA-256 hash for password storage. Format: <saltHex>:<hashHex>
 export async function verifyPassword(plain, hashed) {
     if (!hashed) return false;

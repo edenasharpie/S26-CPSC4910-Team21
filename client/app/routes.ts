@@ -1,14 +1,12 @@
-import { type RouteConfig, index, route } from "@react-router/dev/routes";
+import { type RouteConfig, index, route, layout } from "@react-router/dev/routes";
 
 export default [
   //INFO
   index("routes/home.tsx"),
   route("login",  "routes/login.tsx"),
   route("logout", "routes/logout.tsx"),
-  route("admin/profile/:id", "routes/admin/profile/$id/edit.tsx"),
-  route("admin/profile/:id/points", "routes/admin/profile/$id/points.tsx"),
-  route("admin/invoices", "routes/admin/invoices.tsx"),
   route("about", "routes/about.tsx"),
+  route("change-password", "routes/change-password.tsx"),
   /* demo purposes only */
   route("components-demo", "routes/components-demo.tsx"),
 
@@ -18,6 +16,7 @@ export default [
 
   //PROFILES
   route("admin/profile/:id", "routes/admin/profile/$id/edit.tsx"),
+  route("profile", "routes/profile.tsx"),
 
   //POINTS
   route("admin/profile/:id/points", "routes/admin/profile/$id/points.tsx"),
@@ -28,15 +27,28 @@ export default [
 
   //AUDIT LOGS
   route("admin/audit-logs", "routes/admin/audit-logs.tsx"),
-  route("profile", "routes/profile.tsx"),
-  route("change-password", "routes/change-password.tsx"),
+
+  //REPORTS
   route("admin/reports", "routes/admin/reports.tsx"),
+  route("sponsor/reports", "routes/sponsor/reports.tsx"),
+
+  //CATALOGS
   route("admin/catalogs", "routes/admin/catalogs.tsx"),
   route("driver/catalogs", "routes/driver/catalogs.tsx"),
   route("sponsor/catalogs", "routes/sponsor/catalogs.tsx"),
-  route("sponsor/reports", "routes/sponsor/reports.tsx"),
-  /* demo purposes only */
-  route("components-demo", "routes/components-demo.tsx")
-  
-  
+
+  //ADMIN USER MANAGEMENT (quick-add forms)
+  route("admin/add-driver", "routes/admin/add-driver.tsx"),
+  route("admin/add-sponsor", "routes/admin/add-sponsor.tsx"),
+
+  //SPONSOR FLEET MANAGEMENT
+  route("sponsor/deduct-points", "routes/sponsor/deduct-points.tsx"),
+  route("sponsor/driver-purchases", "routes/sponsor/driver-purchases.tsx"),
+  route("sponsor/manage-users", "routes/sponsor/manage-users.tsx"),
+  route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
+
+  // Legacy driver dashboard (accessed by URL param)
+  // TODO: migrate to /driver/dashboard once session-based routing is finalized
+  route("driver-dashboard/:id", "routes/driver-dashboard.tsx"),
+
 ] satisfies RouteConfig;

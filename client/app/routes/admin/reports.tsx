@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router';
 import { Card, Button, Table, Badge, Alert } from '~/components';
 
 const BASE_URL = 'http://localhost:5000';
@@ -161,6 +162,12 @@ export default function AdminReports() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <Link
+        to="/"
+        className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6 block"
+      >
+        ← Home
+      </Link>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Reports</h1>
         <p className="text-gray-600">Generate and export reports with customizable filters</p>

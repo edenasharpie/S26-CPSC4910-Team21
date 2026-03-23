@@ -15,13 +15,27 @@ export async function loader({ request }: Route.LoaderArgs) {
     const res = await fetch(`${API_URL}/api/admin/users?activeStatus=all`);
     if (!res.ok) throw new Error(`API returned ${res.status}`);
     const data = await res.json();
+    
+    // Fetch sponsor companies for the dropdown
+    let companies = [];
+    try {
+      const companiesRes = await fetch(`${API_URL}/api/sponsors`);
+      if (companiesRes.ok) {
+        companies = await companiesRes.json();
+      }
+    } catch {
+      // Fallback to empty array if fetch fails
+      companies = [];
+    }
+    
     return {
       users: Array.isArray(data.users) ? data.users : [],
+      companies: Array.isArray(companies) ? companies : [],
       session,
       error: null as string | null,
     };
   } catch (error: any) {
-    return { users: [] as any[], session, error: error.message as string };
+    return { users: [] as any[], session, companies: [] as any[], error: error.message as string };
   }
 }
 
@@ -74,7 +88,7 @@ export function meta({}: Route.MetaArgs) {
 // Component
 // ---------------------------------------------------------------------------
 export default function AdminPortal() {
-  const { users, error } = useLoaderData<typeof loader>();
+  const { users, companies, error } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
 
@@ -84,6 +98,7 @@ export default function AdminPortal() {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen]     = useState(false);
   const [selectedType, setSelectedType]   = useState("driver");
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
 
   // Count stats
   const totalUsers   = users.length;
@@ -222,6 +237,11 @@ export default function AdminPortal() {
               System administration and user oversight.
             </p>
           </div>
+          <Form method="post" action="/logout">
+            <Button variant="secondary" size="sm" type="submit">
+              Sign out
+            </Button>
+          </Form>
         </div>
 
         {error && (
@@ -453,12 +473,23 @@ export default function AdminPortal() {
             </>
           )}
           {selectedType === "sponsor" && (
-            <Input
-              label="Sponsor Company ID"
-              name="sponsorCompanyId"
-              type="number"
-              required
-            />
+            <div className="text-left">
+              <label className="text-sm font-medium mb-1 block">Sponsor Company</label>
+              <select
+                name="sponsorCompanyId"
+                value={selectedCompanyId}
+                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                required
+                className="w-full rounded-md border border-gray-200 dark:border-gray-700 p-2 text-sm bg-white dark:bg-gray-800"
+              >
+                <option value="">Select a company...</option>
+                {companies.map((company: any) => (
+                  <option key={company.id} value={company.id}>
+                    {company.companyName} (ID: {company.id})
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
           <div className="flex justify-end gap-2 pt-4">
             <Button

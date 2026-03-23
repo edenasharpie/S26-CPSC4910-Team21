@@ -65,7 +65,9 @@ router.get('/users', async (request, response) => {
       params.push(userType);
     }
 
-    if (activeStatus !== undefined) {
+    // Only apply activeStatus filter if it's a valid numeric value (0 or 1)
+    // Skip filter for 'all' or undefined
+    if (activeStatus !== undefined && activeStatus !== 'all' && (activeStatus === '0' || activeStatus === '1')) {
       query += ' AND u.ActiveStatus = ?';
       params.push(parseInt(activeStatus));
     }
@@ -90,7 +92,8 @@ router.get('/users', async (request, response) => {
       countParams.push(userType);
     }
 
-    if (activeStatus !== undefined) {
+    // Only apply activeStatus filter if it's a valid numeric value (0 or 1)
+    if (activeStatus !== undefined && activeStatus !== 'all' && (activeStatus === '0' || activeStatus === '1')) {
       countQuery += ' AND u.ActiveStatus = ?';
       countParams.push(parseInt(activeStatus));
     }
@@ -223,6 +226,18 @@ router.post('/users', async (request, response) => {
           error: 'Missing required field for driver: performanceStatus' 
         });
       }
+      // If sponsorCompanyId is provided, validate it exists
+      if (sponsorCompanyId) {
+        const [companyCheck] = await connection.query(
+          'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?',
+          [sponsorCompanyId]
+        );
+        if (companyCheck.length === 0) {
+          return response.status(400).json({ 
+            error: 'Sponsor company not found' 
+          });
+        }
+      }
     }
 
     // Validate sponsor-specific required fields
@@ -230,6 +245,16 @@ router.post('/users', async (request, response) => {
       if (!sponsorCompanyId) {
         return response.status(400).json({ 
           error: 'Missing required field for sponsor: sponsorCompanyId' 
+        });
+      }
+      // Validate that the sponsor company exists
+      const [companyCheck] = await connection.query(
+        'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?',
+        [sponsorCompanyId]
+      );
+      if (companyCheck.length === 0) {
+        return response.status(400).json({ 
+          error: 'Sponsor company not found' 
         });
       }
     }
@@ -500,11 +525,40 @@ router.patch('/users/:id', async (request, response) => {
 router.delete('/users/:id', async (request, response) => {
   let connection;
   try {
-    await updatePointTransaction(Number(req.params.transactionId), newPoints, newReason, adminUserId);
-    return res.json({ success: true });
-  } catch (err) {
-    console.error('PUT /admin/point-transactions/:transactionId error:', err);
-    return res.status(500).json({ error: err.message });
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const { id } = request.params;
+
+    // Check if user exists
+    const checkUser = await connection.query(
+      'SELECT UserID, ActiveStatus FROM USERS WHERE UserID = ?',
+      [id]
+    );
+
+    if (checkUser[0].length === 0) {
+      await connection.rollback();
+      return response.status(404).json({ error: 'User not found' });
+    }
+
+    // Soft delete: set ActiveStatus to 0 instead of deleting
+    await connection.query(
+      'UPDATE USERS SET ActiveStatus = 0 WHERE UserID = ?',
+      [id]
+    );
+
+    await connection.commit();
+    response.status(204).send();
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error('Error deleting user:', error);
+    response.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
@@ -584,6 +638,232 @@ router.post('/drivers/:driverUserId/point-transactions', async (req, res) => {
   } catch (err) {
     console.error('POST /admin/drivers/:driverUserId/point-transactions error:', err);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Additional admin utilities (ported from Kyle's sprint)
+// ---------------------------------------------------------------------------
+
+// POST /api/admin/add-points/:licenseNumber
+router.post('/add-points/:licenseNumber', async (req, res) => {
+  const { licenseNumber } = req.params;
+  const { amount, reason, adminId } = req.body;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    await connection.execute(
+      'UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = ?',
+      [amount, licenseNumber]
+    );
+
+    await connection.execute(
+      `INSERT INTO POINT_TRANSACTIONS
+       (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
+       VALUES (?, ?, ?, ?, NOW())`,
+      [licenseNumber, adminId, amount, reason]
+    );
+
+    await connection.commit();
+    res.json({ success: true });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// GET /api/admin/users-with-points
+router.get('/users-with-points', async (req, res) => {
+  try {
+    const query = `
+      SELECT
+        u.UserID,
+        u.Username,
+        u.FirstName,
+        u.LastName,
+        u.UserType,
+        u.ActiveStatus,
+        d.PointBalance,
+        d.LicenseNumber
+      FROM USERS u
+      LEFT JOIN DRIVERS d ON u.UserID = d.UserID
+    `;
+
+    const [rows] = await pool.execute(query);
+    res.json(rows);
+  } catch (error) {
+    console.error('Database Error:', error);
+    res.status(500).json({ error: 'Failed to fetch users with points' });
+  }
+});
+
+// GET /api/admin/audit-reports
+router.get('/audit-reports', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT
+        p.PointChange,
+        p.ReasonForChange,
+        p.TimeChanged,
+        u.FirstName AS DriverFirstName,
+        u.LastName AS DriverLastName,
+        admin.FirstName AS AdminFirstName
+       FROM POINT_TRANSACTIONS p
+       JOIN DRIVERS d ON p.DriverID = d.LicenseNumber
+       JOIN USERS u ON d.UserID = u.UserID
+       JOIN USERS admin ON p.UserChanged = admin.UserID
+       ORDER BY p.TimeChanged DESC`
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Audit Report Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/admin/add-driver
+router.post('/add-driver', async (req, res) => {
+  const { firstName, lastName, email, password, licenseNumber } = req.body;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const username = email;
+    const passHash = await hashPassword(password || 'ChangeMe123!');
+    const permissions = JSON.stringify({});
+
+    const [userResult] = await connection.execute(
+      `INSERT INTO USERS
+       (Username, FirstName, LastName, Email, PassHash, UserType, ActiveStatus, LastLogin, LastPasswordChange, Permissions)
+       VALUES (?, ?, ?, ?, ?, 'driver', 1, NOW(), NOW(), ?)`,
+      [username, firstName, lastName, email, passHash, permissions]
+    );
+
+    const newUserId = userResult.insertId;
+
+    await connection.execute(
+      'INSERT INTO DRIVERS (UserID, LicenseNumber, PointBalance, PerformanceStatus, AlertPoints, AlertOrders) VALUES (?, ?, 0, ?, 1, 1)',
+      [newUserId, licenseNumber, 'good']
+    );
+
+    await connection.commit();
+    res.status(201).json({ message: 'Driver created successfully', userId: newUserId });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Add Driver Error:', error);
+    res.status(500).json({ error: 'Failed to create driver. License or Email might already exist.' });
+  } finally {
+    connection.release();
+  }
+});
+
+// POST /api/admin/add-sponsor
+router.post('/add-sponsor', async (req, res) => {
+  const { firstName, lastName, email, password, sponsorCompanyId } = req.body;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const username = email;
+    const passHash = await hashPassword(password || 'ChangeMe123!');
+    const permissions = JSON.stringify({});
+
+    const [userResult] = await connection.execute(
+      `INSERT INTO USERS
+       (Username, FirstName, LastName, Email, PassHash, UserType, ActiveStatus, LastLogin, LastPasswordChange, Permissions)
+       VALUES (?, ?, ?, ?, ?, 'sponsor', 1, NOW(), NOW(), ?)`,
+      [username, firstName, lastName, email, passHash, permissions]
+    );
+
+    const newUserId = userResult.insertId;
+
+    await connection.execute(
+      'INSERT INTO SPONSORS (UserID, SponsorCompanyID) VALUES (?, ?)',
+      [newUserId, sponsorCompanyId]
+    );
+
+    await connection.commit();
+    res.status(201).json({ message: 'Sponsor created successfully', userId: newUserId });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Add Sponsor Error:', error);
+    res.status(500).json({ error: 'Failed to create sponsor. Email may already be in use.' });
+  } finally {
+    connection.release();
+  }
+});
+
+// PUT /api/admin/reactivate-driver/:id
+router.put('/reactivate-driver/:id', async (req, res) => {
+  const driverId = req.params.id;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [result] = await connection.execute(
+      'UPDATE USERS SET ActiveStatus = 1 WHERE UserID = ? AND UserType = "driver"',
+      [driverId]
+    );
+
+    if (result.affectedRows === 0) {
+      throw new Error('User not found');
+    }
+
+    await connection.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountStatusChange', JSON_OBJECT('newStatus', true, 'targetUserId', ?, 'adminNotes', 'reactivate-driver'))`,
+      [driverId, driverId]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Driver account has been reactivated successfully.' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Reactivation Error:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// PUT /api/admin/reactivate-sponsor/:id
+router.put('/reactivate-sponsor/:id', async (req, res) => {
+  const sponsorId = req.params.id;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [result] = await connection.execute(
+      'UPDATE USERS SET ActiveStatus = 1 WHERE UserID = ? AND UserType = "sponsor"',
+      [sponsorId]
+    );
+
+    if (result.affectedRows === 0) {
+      throw new Error('Sponsor not found or UserID is not a sponsor type.');
+    }
+
+    await connection.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountStatusChange', JSON_OBJECT('newStatus', true, 'targetUserId', ?, 'adminNotes', 'reactivate-sponsor'))`,
+      [sponsorId, sponsorId]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Sponsor access has been restored.' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Sponsor Reactivation Error:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
   }
 });
 

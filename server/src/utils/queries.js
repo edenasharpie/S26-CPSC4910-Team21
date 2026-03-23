@@ -92,18 +92,30 @@ export async function changePasswordWithHistory(userId, newPassword) {
   try {
     await connection.beginTransaction();
 
+    // Fetch up to 5 recent old hashes from PasswordChange events, plus the current hash.
+    // Per schema: Properties.oldHash stores the hash that was replaced at the time of each change.
     const [rows] = await connection.query(
-      `SELECT PassHash FROM (
-        SELECT PassHash, TimeChanged FROM POINT_TRANSACTIONS WHERE UserID = ?
-        UNION 
-        SELECT PassHash, NULL as TimeChanged FROM USERS WHERE UserID = ?
-      ) as combined_history 
-      ORDER BY TimeChanged DESC LIMIT 5`,
-      [userId, userId]
+      `SELECT JSON_UNQUOTE(JSON_EXTRACT(Properties, '$.oldHash')) AS PassHash
+       FROM EVENTS
+       WHERE UserID = ? AND EventType = 'PasswordChange'
+         AND JSON_EXTRACT(Properties, '$.oldHash') IS NOT NULL
+       ORDER BY Timestamp DESC
+       LIMIT 5`,
+      [userId]
     );
 
-    for (const record of rows) {
-      const isMatch = await verifyPassword(newPassword, record.PassHash);
+    // Also check the current password hash from USERS
+    const [currentRows] = await connection.query(
+      'SELECT PassHash FROM USERS WHERE UserID = ?',
+      [userId]
+    );
+    const allHashes = [
+      ...currentRows.map((r) => r.PassHash),
+      ...rows.map((r) => r.PassHash),
+    ].filter(Boolean);
+
+    for (const hash of allHashes) {
+      const isMatch = await verifyPassword(newPassword, hash);
       if (isMatch) {
         throw new Error("REUSE_ERROR");
       }
@@ -112,16 +124,31 @@ export async function changePasswordWithHistory(userId, newPassword) {
     // Hash the new password using salted SHA-256
     const newHash = await hashPassword(newPassword);
 
+    // Store old hash in EVENTS before overwriting
+    const [userRows] = await connection.query(
+      'SELECT PassHash FROM USERS WHERE UserID = ?',
+      [userId]
+    );
+    const oldHash = userRows[0]?.PassHash ?? null;
+
     // Update the USERS table
     await connection.query(
       'UPDATE USERS SET PassHash = ?, LastPasswordChange = NOW() WHERE UserID = ?',
       [newHash, userId]
     );
 
-    // Log this change in password_history 
+    // Log the change in EVENTS with the old hash so future reuse checks work
     await connection.query(
-      'INSERT INTO EVENTS (EventID, UserID, Timestamp, EventType, Properties) VALUES (UUID(), ?, NOW(), "PasswordChange", ?)',
-      [userId, JSON.stringify({ method: 'user_initiated' })]
+      'INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties) VALUES (?, NOW(), ?, ?)',
+      [
+        userId,
+        'PasswordChange',
+        JSON.stringify({
+          success: true,
+          changeMethod: 'user_initiated',
+          oldHash,
+        }),
+      ]
     );
 
     await connection.commit();
@@ -342,6 +369,46 @@ export async function getCatalogsBySponsorCompany(sponsorCompanyId, limit = 10, 
     }
   } catch (error) {
     console.error('Error fetching catalogs by sponsor company:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get all catalogs across all sponsor companies (admin view)
+ * @param {number} limit - Maximum number of results
+ * @param {number} offset - Number of results to skip
+ * @returns {Promise<Array>} Promise with array of catalog summaries
+ */
+export async function getAllCatalogs(limit = 10, offset = 0) {
+  try {
+    const connection = await pool.getConnection();
+    
+    try {
+      // Ensure limit and offset are integers for MySQL
+      const limitInt = parseInt(limit);
+      const offsetInt = parseInt(offset);
+      
+      const [rows] = await connection.query(
+        `SELECT 
+          c.CatalogID as id,
+          c.SponsorCompanyID as sponsorCompanyId,
+          sc.CompanyName as sponsorCompanyName,
+          COUNT(ci.ItemID) as itemCount
+         FROM CATALOGS c
+         LEFT JOIN CATALOG_ITEMS ci ON c.CatalogID = ci.CatalogID
+         LEFT JOIN SPONSOR_COMPANIES sc ON c.SponsorCompanyID = sc.SponsorCompanyID
+         GROUP BY c.CatalogID
+         ORDER BY c.CatalogID DESC
+         LIMIT ? OFFSET ?`,
+        [limitInt, offsetInt]
+      );
+
+      return rows;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error fetching all catalogs:', error);
     throw error;
   }
 }

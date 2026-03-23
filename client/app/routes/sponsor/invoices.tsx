@@ -66,11 +66,17 @@ export default function InvoicesPage() {
         
         {/* Navigation Link - Matches Audit Style */}
         <div className="mb-4 text-left">
-          <Link 
-            to="/admin/dashboard" 
+          <Link
+            to="/"
             className="text-sm font-medium text-blue-600 hover:underline mb-2 block"
           >
-            ← Return to Admin Dashboard
+            ← Home
+          </Link>
+          <Link 
+            to="/sponsor/dashboard" 
+            className="text-sm font-medium text-blue-600 hover:underline mb-2 block"
+          >
+            ← Return to Sponsor Dashboard
           </Link>
         </div>
 

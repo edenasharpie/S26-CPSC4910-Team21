@@ -1,49 +1,74 @@
 // --- IMPORTS ---
 import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
-import { Table, Input, Button, Badge, Modal } from "~/components";
+import { Table, Input, Button, Modal } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
-//import { getDriversBySponsor, createUser } from "../../../../server/src/db.js"; // TODO: WE CANNOT HAVE THIS PATTERN IN OUR CODE
+import { requireAuth } from "~/utils/session.server";
 
-const TARGET_SPONSOR_ID = "123456791"; // TODO: get these two lines data from server (via api with auth)
-const TARGET_COMPANY_ID = 17;
+const API_URL = process.env.API_URL ?? 'http://localhost:5000';
 
 // --- LOADER ---
-export async function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
+  const user = requireAuth(request, ['sponsor']);
   try {
-    const drivers = await getDriversBySponsor(TARGET_COMPANY_ID); // TODO: REPLACE WITH API
+    const companyRes = await fetch(`${API_URL}/api/sponsors/user/${user.UserID}`);
+    if (!companyRes.ok) throw new Error(`Could not load company info (${companyRes.status})`);
+    const company = await companyRes.json();
+
+    const driversRes = await fetch(`${API_URL}/api/sponsors/my-drivers/${company.sponsorCompanyId}`);
+    if (!driversRes.ok) throw new Error(`Could not load drivers (${driversRes.status})`);
+    const drivers = await driversRes.json();
+
     return {
+      user,
+      companyId: company.sponsorCompanyId as number,
+      companyName: company.companyName as string,
       drivers: Array.isArray(drivers) ? drivers : [],
-      error: null
+      error: null as string | null,
     };
   } catch (error: any) {
-    return { drivers: [], error: `Database Error: ${error.message}` };
+    return { user, companyId: null as number | null, companyName: 'Unknown', drivers: [] as any[], error: error.message as string };
   }
 }
 
 // --- ACTION ---
 export async function action({ request }: Route.ActionArgs) {
+  const user = requireAuth(request, ['sponsor']);
   const formData = await request.formData();
+  const companyRes = await fetch(`${API_URL}/api/sponsors/user/${user.UserID}`);
+  if (!companyRes.ok) return { success: false, error: 'Could not determine your company.' };
+  const { sponsorCompanyId } = await companyRes.json();
+
   try {
-    await createUser({ // TODO: REPLACE WITH API
-      Username: formData.get("username") as string,
-      FirstName: formData.get("firstName") as string,
-      LastName: formData.get("lastName") as string,
-      UserType: "Driver",
-      ActiveStatus: 1, 
-      LicenseNumber: formData.get("licenseNumber") as string,
-      SponsorCompanyID: TARGET_COMPANY_ID 
+    const res = await fetch(`${API_URL}/api/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: formData.get('username'),
+        email: formData.get('email'),
+        firstName: formData.get('firstName'),
+        lastName: formData.get('lastName'),
+        userType: 'driver',
+        activeStatus: 1,
+        licenseNumber: formData.get('licenseNumber'),
+        performanceStatus: 'good',
+        sponsorCompanyId,
+      }),
     });
-    return { success: true };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { success: false, error: (err as any).error ?? 'Failed to create driver' };
+    }
+    return { success: true, error: null };
   } catch (error: any) {
-    return { error: error.message };
+    return { success: false, error: error.message };
   }
 }
 
 // --- MAIN COMPONENT ---
 export default function SponsorPortal() {
-  const { drivers, error } = useLoaderData<typeof loader>();
-  const actionData = useActionData();
+  const { user, companyId, companyName, drivers, error } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -56,7 +81,7 @@ export default function SponsorPortal() {
   const inactiveCount = drivers.filter((d: any) => d.ActiveStatus === 0).length;
 
   useEffect(() => {
-    if (actionData?.success) setIsAddUserOpen(false);
+    if ((actionData as any)?.success) setIsAddUserOpen(false);
   }, [actionData]);
 
   const filteredDrivers = drivers.filter((d: any) => {
@@ -136,26 +161,31 @@ export default function SponsorPortal() {
           <div className="text-left">
             <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Return to Home</Link>
             <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>
-            <p className="text-gray-500 text-sm mt-1 font-medium italic">Global Logistics Administration</p>
+            <p className="text-gray-500 text-sm mt-1 font-medium italic">{companyName}</p>
           </div>
 
-          <button 
-            onClick={() => navigate(`/sponsor/profile/${TARGET_SPONSOR_ID}`)}
-            className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
-          >
+          <div className="flex items-center gap-3">
+            <Form method="post" action="/logout">
+              <Button variant="secondary" size="sm" type="submit">Sign out</Button>
+            </Form>
+            <button 
+              onClick={() => navigate(`/sponsor/profile/${user.UserID}`)}
+              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
+            >
             <div className="relative">
               <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${TARGET_SPONSOR_ID}`}
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`}
                 alt=""
                 className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
               />
               <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">Sponsor Admin</p>
-              <p className="text-[10px] text-gray-400 font-mono mt-0.5">ID: {TARGET_SPONSOR_ID}</p>
+              <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{user.Username}</p>
+              <p className="text-[10px] text-gray-400 font-mono mt-0.5">{companyName}</p>
             </div>
-          </button>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -233,9 +263,10 @@ export default function SponsorPortal() {
         </div>
 
         {/* Modal: Register Driver */}
-        <Modal isOpen={isAddUserOpen} onClose={() => setIsAddUserOpen(false)} title="Register Driver to Company 17">
+        <Modal isOpen={isAddUserOpen && !(actionData as any)?.success} onClose={() => setIsAddUserOpen(false)} title={`Register Driver to ${companyName}`}>
           <Form method="post" className="space-y-4">
             <Input label="Username" name="username" required />
+            <Input label="Email" name="email" type="email" required />
             <div className="grid grid-cols-2 gap-4">
               <Input label="First Name" name="firstName" required />
               <Input label="Last Name" name="lastName" required />
