@@ -38,4 +38,25 @@ router.get('/my-points/:userId', async (req, res) => {
   }
 });
 
+// GET /api/drivers/performance/:userId
+router.get('/performance/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const [rows] = await pool.execute(
+      'SELECT PerformanceStatus FROM DRIVERS WHERE UserID = ?',
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Driver profile not found.' });
+    }
+
+    return res.json({ performanceStatus: rows[0].PerformanceStatus });
+  } catch (error) {
+    console.error('Driver Performance Error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
