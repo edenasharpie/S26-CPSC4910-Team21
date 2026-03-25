@@ -4,6 +4,7 @@ export default [
   //INFO
   index("routes/home.tsx"),
   route("login",  "routes/login.tsx"),
+  route("register", "routes/register.tsx"),
   route("logout", "routes/logout.tsx"),
   route("about", "routes/about.tsx"),
   route("change-password", "routes/change-password.tsx"),
@@ -13,6 +14,7 @@ export default [
   //DASHBOARDS
   route("admin/dashboard", "routes/admin/dashboard.tsx"),
   route("sponsor/dashboard", "routes/sponsor/dashboard.tsx"),
+  route("driver/dashboard", "routes/driver/dashboard.tsx"),
 
   //PROFILES
   route("admin/profile/:id", "routes/admin/profile/$id/edit.tsx"),
@@ -35,6 +37,7 @@ export default [
   //CATALOGS
   route("admin/catalogs", "routes/admin/catalogs.tsx"),
   route("driver/catalogs", "routes/driver/catalogs.tsx"),
+  route("driver/orders", "routes/driver/orders.tsx"),
   route("sponsor/catalogs", "routes/sponsor/catalogs.tsx"),
 
   //ADMIN USER MANAGEMENT (quick-add forms)
@@ -48,7 +51,6 @@ export default [
   route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
 
   // Legacy driver dashboard (accessed by URL param)
-  // TODO: migrate to /driver/dashboard once session-based routing is finalized
   route("driver-dashboard/:id", "routes/driver-dashboard.tsx"),
 
 ] satisfies RouteConfig;
