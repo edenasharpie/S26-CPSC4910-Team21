@@ -1,5 +1,5 @@
 import express from 'express';
-import { validatePasswordComplexity } from '../utils/auth.js';
+import { validatePasswordComplexity, hashPassword } from '../utils/auth.js';
 import { changePasswordWithHistory, getUserById } from '../utils/queries.js';
 import { pool } from '../db.js';
 
@@ -47,6 +47,103 @@ router.post('/change-password', async (req, res) => {
   } catch (error) {
     console.error("Change Password Route Error:", error);
     return res.status(500).json({ message: "Internal server error." });
+  }
+});
+
+/**
+ * POST /api/user/register-driver
+ * Public endpoint for driver self-registration.
+ */
+router.post('/register-driver', async (req, res) => {
+  const {
+    username,
+    email,
+    password,
+    firstName,
+    lastName,
+    licenseNumber,
+    phone,
+  } = req.body ?? {};
+
+  if (!username || !email || !password || !firstName || !lastName || !licenseNumber) {
+    return res.status(400).json({
+      error: 'Missing required fields: username, email, password, firstName, lastName, licenseNumber',
+    });
+  }
+
+  const complexity = validatePasswordComplexity(String(password));
+  if (!complexity.valid) {
+    return res.status(400).json({ error: complexity.error });
+  }
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [existingUsers] = await connection.execute(
+      'SELECT UserID FROM USERS WHERE Username = ? OR Email = ?',
+      [String(username).trim(), String(email).trim()]
+    );
+
+    if (existingUsers.length > 0) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Username or email already exists' });
+    }
+
+    const [existingDrivers] = await connection.execute(
+      'SELECT UserID FROM DRIVERS WHERE LicenseNumber = ?',
+      [String(licenseNumber).trim()]
+    );
+
+    if (existingDrivers.length > 0) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'License number is already registered' });
+    }
+
+    const passHash = await hashPassword(String(password));
+    const defaultPermissions = JSON.stringify({});
+
+    const [userResult] = await connection.execute(
+      `INSERT INTO USERS
+        (Username, Email, Phone, PassHash, UserType, FirstName, LastName, ActiveStatus, LastLogin, LastPasswordChange, Permissions)
+       VALUES (?, ?, ?, ?, 'driver', ?, ?, 1, NOW(), NOW(), ?)`,
+      [
+        String(username).trim(),
+        String(email).trim(),
+        phone ? String(phone).trim() : null,
+        passHash,
+        String(firstName).trim(),
+        String(lastName).trim(),
+        defaultPermissions,
+      ]
+    );
+
+    const newUserId = userResult.insertId;
+
+    await connection.execute(
+      `INSERT INTO DRIVERS
+        (LicenseNumber, UserID, SponsorCompanyID, PointBalance, PerformanceStatus, AlertPoints, AlertOrders)
+       VALUES (?, ?, NULL, 0, 'good', 1, 1)`,
+      [String(licenseNumber).trim(), newUserId]
+    );
+
+    await connection.commit();
+
+    return res.status(201).json({
+      message: 'Driver account created successfully.',
+      userId: newUserId,
+    });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error('Driver registration error:', error);
+    return res.status(500).json({ error: 'Failed to create driver account.' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 

@@ -3,24 +3,64 @@ import { useState, useEffect } from "react";
 import { useLoaderData, useActionData, Form, useSubmit, Link } from "react-router";
 import type { Route } from "./+types/profile";
 import { Table, Input, Button, Badge, Alert } from "~/components";
+import { requireAuth } from "~/utils/session.server";
 //import { getUserById } from "../../../server/database/db";
 
+const API_URL = process.env.API_URL ?? "http://localhost:5000";
+
 // 1. THE LOADER: This pulls real data from the DB before the page renders
-export async function loader({ params }: Route.LoaderArgs) {
-  // In a real app, you'd get the ID from the session. 
-  // For now, we are using ID 2 (Jane Smith) as per your mock.
-  const response = await fetch(`/api/users/${params.id}`); 
-  
+export async function loader({ request }: Route.LoaderArgs) {
+  const session = requireAuth(request);
+  const userId = session.UserID;
+
+  const response = await fetch(`${API_URL}/api/user/profile/${userId}`);
   if (!response.ok) {
     throw new Response("User Not Found", { status: 404 });
   }
 
   const user = await response.json();
-  return { user };
+  const displayName = `${user.FirstName ?? ""} ${user.LastName ?? ""}`.trim();
+  const accountType = user.UserType
+    ? `${user.UserType.charAt(0).toUpperCase()}${user.UserType.slice(1)}`
+    : "User";
+
+  let performanceStatus: string | undefined;
+  if (session.UserType === "driver") {
+    const statusRes = await fetch(`${API_URL}/api/drivers/performance/${userId}`);
+    if (statusRes.ok) {
+      const status = await statusRes.json();
+      performanceStatus = status.performanceStatus;
+    }
+  }
+
+  const profile = {
+    id: user.UserID,
+    displayName: displayName || user.Username || "User",
+    email: user.Email,
+    phone_number: user.Phone || "",
+    point_to_dollar_ratio: 0,
+    profile_picture_url: user.ProfilePicture,
+    account_type: accountType,
+    created_at: user.LastLogin || new Date().toISOString(),
+    last_password_change: user.LastPasswordChange || user.LastLogin || new Date().toISOString(),
+  };
+
+  return { user: profile, performanceStatus };
 }
 
 export default function ProfilePage() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, performanceStatus } = useLoaderData<typeof loader>();
+  const normalizedPerformanceStatus = (performanceStatus ?? "").toLowerCase();
+  const performanceBadgeVariant =
+    normalizedPerformanceStatus === "excellent"
+      ? "success"
+      : normalizedPerformanceStatus === "good"
+      ? "info"
+      : normalizedPerformanceStatus === "average"
+      ? "warning"
+      : normalizedPerformanceStatus === "poor"
+      ? "danger"
+      : "default";
   
   // UI States
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -80,7 +120,7 @@ export default function ProfilePage() {
     <div className="p-8 max-w-6xl mx-auto">
       <Link
         to="/"
-        className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6 block"
+        className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6"
       >
         ← Home
       </Link>
@@ -134,6 +174,14 @@ export default function ProfilePage() {
                     {new Date(user.last_password_change).toLocaleString()}
                 </span>
               </div>
+              {performanceStatus && (
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-gray-500 text-sm">Performance Status:</span>
+                  <Badge variant={performanceBadgeVariant} size="md" className="capitalize">
+                    {performanceStatus}
+                  </Badge>
+                </div>
+              )}
             </div>
           </div>
         </div>

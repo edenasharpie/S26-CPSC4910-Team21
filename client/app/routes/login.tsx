@@ -71,22 +71,20 @@ export default function LoginPage() {
   const isSubmitting = navigation.state !== "idle";
 
   return (
-    /* Updated Background: Baby Blue (Soft and bright) */
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-blue-50 bg-gradient-to-b from-blue-50 to-blue-100/50 px-4 py-12">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-slate-950 dark:to-slate-900 px-4 py-12">
       <div className="w-full max-w-96 mx-auto">
         
-        {/* Branding - Darker Slate text for high contrast on Baby Blue */}
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-4xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
             FleetScore
           </h1>
-          <p className="text-slate-500 text-sm mt-2 font-medium">
+          <p className="text-slate-500 dark:text-slate-300 text-sm mt-2 font-medium">
             Sign in to your account
           </p>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-3xl shadow-xl shadow-blue-200/50 p-8 space-y-5 border border-white">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl shadow-blue-200/50 dark:shadow-black/30 p-8 space-y-5 border border-white dark:border-slate-800">
           {/* Error banner */}
           {error && (
             <Alert variant="error" message={error} dismissible={false} />
@@ -117,7 +115,7 @@ export default function LoginPage() {
               <div className="text-right pt-0.5">
                 <Link
                   to="/change-password"
-                  className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                  className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                 >
                   Forgot password?
                 </Link>
@@ -136,11 +134,11 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-slate-500 mt-8 font-medium">
+        <p className="text-center text-sm text-slate-500 dark:text-slate-300 mt-8 font-medium">
           New driver?{" "}
           <Link
             to="/register"
-            className="text-blue-600 font-bold hover:text-blue-700 underline underline-offset-4"
+            className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
           >
             Create an account
           </Link>

@@ -19,6 +19,7 @@ import sponsorReportsRoutes from './src/routes/sponsor-reports.js';
 import adminRoute from './src/routes/admins.js';
 import driverRoute from './src/routes/drivers.js';
 import accountsRoute from './src/routes/accounts.js';
+import driverOrdersRoutes from './src/routes/driver-orders.js';
 
 
 const app = express();
@@ -47,6 +48,7 @@ app.use('/api/admin', adminUsersRoutes);
 app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/admin/audit-logs', adminEventsRoutes);
 app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
+app.use('/api/driver/:userId/orders', driverOrdersRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
 //app.use('/api/admin', adminRoute);

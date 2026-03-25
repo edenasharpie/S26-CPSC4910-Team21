@@ -34,6 +34,11 @@ interface Catalog {
   itemCount: number;
 }
 
+interface CartItem {
+  item: CatalogItem;
+  quantity: number;
+}
+
 export default function DriverCatalogs() {
   const { user } = useLoaderData<typeof loader>();
   const api = useMemo(() => createApiClient({ id: user.UserID, role: 'driver' }), [user.UserID]);
@@ -45,8 +50,12 @@ export default function DriverCatalogs() {
   const [isItemDetailOpen, setIsItemDetailOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
 
   useEffect(() => {
     fetchCatalogs();
@@ -58,20 +67,39 @@ export default function DriverCatalogs() {
     }
   }, [selectedCatalog]);
 
+  const getCatalogFetchErrorMessage = async (response: Response) => {
+    if (response.status >= 500) {
+      return 'Failed to fetch catalogs. Please check your catalog connection.';
+    }
+
+    try {
+      const body = await response.json();
+      if (body && typeof body.error === 'string' && body.error.trim().length > 0) {
+        return body.error;
+      }
+    } catch {
+      // Ignore non-JSON responses and fall back to generic copy.
+    }
+
+    return 'Unable to load catalogs right now.';
+  };
+
   const fetchCatalogs = async () => {
     try {
       setError(null);
       setLoading(true);
       const response = await api.get('/catalogs');
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        setCatalogs([]);
+        setError(await getCatalogFetchErrorMessage(response));
+        return;
       }
       const data = await response.json();
       console.log('Fetched driver catalogs:', data);
       setCatalogs(data);
     } catch (error) {
       console.error('Error fetching catalogs:', error);
-      setError('Failed to fetch catalogs. Please check your connection.');
+      setError('Unable to load catalogs right now. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -99,6 +127,75 @@ export default function DriverCatalogs() {
   const handleOpenLightbox = (index: number) => {
     setCurrentImageIndex(index);
     setIsLightboxOpen(true);
+  };
+
+  const handleAddToCart = (item: CatalogItem) => {
+    setCartItems((prev) => {
+      const existing = prev.find((entry) => entry.item.id === item.id);
+      if (existing) {
+        return prev.map((entry) =>
+          entry.item.id === item.id
+            ? { ...entry, quantity: entry.quantity + 1 }
+            : entry
+        );
+      }
+      return [...prev, { item, quantity: 1 }];
+    });
+    setSuccessMessage(`${item.name} added to cart.`);
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
+  const handleUpdateCartQuantity = (itemId: number, quantity: number) => {
+    setCartItems((prev) =>
+      prev
+        .map((entry) =>
+          entry.item.id === itemId
+            ? { ...entry, quantity: Math.max(1, Math.floor(quantity)) }
+            : entry
+        )
+        .filter((entry) => entry.quantity > 0)
+    );
+  };
+
+  const handleRemoveFromCart = (itemId: number) => {
+    setCartItems((prev) => prev.filter((entry) => entry.item.id !== itemId));
+  };
+
+  const totalPoints = cartItems.reduce(
+    (sum, entry) => sum + entry.item.pointCost * entry.quantity,
+    0
+  );
+
+  const handlePlaceOrder = async () => {
+    if (cartItems.length === 0) {
+      setError("Your cart is empty.");
+      return;
+    }
+
+    try {
+      setPlacingOrder(true);
+      setError(null);
+      const payload = {
+        items: cartItems.map((entry) => ({
+          itemId: entry.item.id,
+          quantity: entry.quantity,
+        })),
+      };
+      const response = await api.post("/orders", payload);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to place order");
+      }
+      setCartItems([]);
+      setIsCartOpen(false);
+      setSuccessMessage("Order placed successfully.");
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (err: any) {
+      console.error("Order failed:", err);
+      setError(err.message || "Failed to place order.");
+    } finally {
+      setPlacingOrder(false);
+    }
   };
 
   const catalogColumns = [
@@ -155,9 +252,14 @@ export default function DriverCatalogs() {
       key: 'actions',
       header: 'Actions',
       render: (item: CatalogItem) => (
-        <Button variant="secondary" onClick={() => handleViewItemDetail(item)}>
-          View Details
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => handleViewItemDetail(item)}>
+            View Details
+          </Button>
+          <Button variant="primary" onClick={() => handleAddToCart(item)}>
+            Add to Cart
+          </Button>
+        </div>
       )
     }
   ];
@@ -165,16 +267,28 @@ export default function DriverCatalogs() {
   return (
     <div className="p-6 space-y-6">
       <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-3xl font-bold">Available Catalogs</h1>
-        <Form method="post" action="/logout">
-          <Button variant="secondary" size="sm" type="submit">Sign out</Button>
-        </Form>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setIsCartOpen(true)}>
+            Cart ({cartItems.length})
+          </Button>
+          <Link to="/driver/orders">
+            <Button variant="ghost">View Orders</Button>
+          </Link>
+          <Form method="post" action="/logout">
+            <Button variant="secondary" size="sm" type="submit">Sign out</Button>
+          </Form>
+        </div>
       </div>
 
       {/* Error Display */}
-      {error && (
+      {error && !isCartOpen && (
         <Alert message={error} onDismiss={() => setError(null)} />
+      )}
+
+      {successMessage && (
+        <Alert variant="success" message={successMessage} onDismiss={() => setSuccessMessage(null)} />
       )}
 
       {/* Catalogs List */}
@@ -246,18 +360,87 @@ export default function DriverCatalogs() {
               )}
             </div>
             <div className="flex justify-end pt-4">
-              <Button 
-                variant="secondary" 
-                onClick={() => {
-                  setIsItemDetailOpen(false);
-                  setSelectedItem(null);
-                }}
-              >
-                Close
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setIsItemDetailOpen(false);
+                    setSelectedItem(null);
+                  }}
+                >
+                  Close
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (selectedItem) {
+                      handleAddToCart(selectedItem);
+                    }
+                  }}
+                >
+                  Add to Cart
+                </Button>
+              </div>
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        title="Your Cart"
+      >
+        <div className="space-y-4">
+          {error && (
+            <div className="fixed top-4 left-1/2 z-60 w-[min(90vw,40rem)] -translate-x-1/2">
+              <Alert message={error} onDismiss={() => setError(null)} />
+            </div>
+          )}
+
+          {cartItems.length === 0 ? (
+            <p className="text-sm text-gray-500">Your cart is empty.</p>
+          ) : (
+            <div className="space-y-3">
+              {cartItems.map((entry) => (
+                <div key={entry.item.id} className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-gray-900">{entry.item.name}</p>
+                    <p className="text-xs text-gray-500">{entry.item.pointCost} pts each</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      className="w-20 rounded border border-gray-300 px-2 py-1 text-right"
+                      value={entry.quantity}
+                      onChange={(event) =>
+                        handleUpdateCartQuantity(entry.item.id, Number(event.target.value))
+                      }
+                    />
+                    <Button variant="ghost" size="sm" onClick={() => handleRemoveFromCart(entry.item.id)}>
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between border-t pt-4 text-sm">
+            <span className="font-semibold">Total Points</span>
+            <span>{totalPoints}</span>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setIsCartOpen(false)}>
+              Close
+            </Button>
+            <Button variant="primary" onClick={handlePlaceOrder} disabled={placingOrder}>
+              {placingOrder ? "Placing..." : "Place Order"}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* image lightbox with zoom */}
