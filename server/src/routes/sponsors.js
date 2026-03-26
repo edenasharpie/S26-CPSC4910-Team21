@@ -58,6 +58,259 @@ router.get('/my-drivers/:companyId', async (req, res) => {
   }
 });
 
+// ============================================================================
+// MORE SPECIFIC ROUTES (must come BEFORE generic /:userId/drivers/:driverId)
+// ============================================================================
+
+// GET /api/sponsors/:userId/drivers/:driverId/points - Get driver point balance
+router.get('/:userId/drivers/:driverId/points', async (req, res) => {
+  try {
+    const { userId, driverId } = req.params;
+    console.log(`[SPONSOR_GET_POINTS] userId=${userId}, driverId=${driverId}`);
+    
+    // Get the sponsor's company
+    const [sponsorRows] = await pool.execute(
+      `SELECT sc.SponsorCompanyID
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?`,
+      [userId]
+    );
+    
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+    
+    const companyId = sponsorRows[0].SponsorCompanyID;
+    
+    // Get the driver
+    const [drivers] = await pool.execute(
+      `SELECT
+         u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
+         d.PerformanceStatus, d.PointBalance, u.ActiveStatus
+       FROM USERS u
+       JOIN DRIVERS d ON u.UserID = d.UserID
+       WHERE u.UserID = ? AND d.SponsorCompanyID = ?`,
+      [driverId, companyId]
+    );
+    
+    if (drivers.length === 0) {
+      return res.status(404).json({ error: 'Driver not found for this sponsor' });
+    }
+    
+    res.json(drivers[0]);
+  } catch (error) {
+    console.error('[SPONSOR_GET_POINTS] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch driver points' });
+  }
+});
+
+// GET /api/sponsors/:userId/drivers/:driverId/point-history - Get driver transaction history
+router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
+  try {
+    const { userId, driverId } = req.params;
+    console.log(`[SPONSOR_GET_HISTORY] userId=${userId}, driverId=${driverId}`);
+    
+    // Get the sponsor's company
+    const [sponsorRows] = await pool.execute(
+      `SELECT sc.SponsorCompanyID
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?`,
+      [userId]
+    );
+    
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+    
+    const companyId = sponsorRows[0].SponsorCompanyID;
+    
+    // Get point history for this driver from this sponsor company
+    const [history] = await pool.execute(
+      `SELECT
+         pt.TransactionID, pt.DriverID, pt.UserChanged, pt.PointChange, 
+         pt.ReasonForChange, pt.TimeChanged, u.Username as ChangedByUsername
+       FROM POINT_TRANSACTIONS pt
+       JOIN USERS u ON pt.UserChanged = u.UserID
+       WHERE pt.DriverID = ?
+       ORDER BY pt.TimeChanged DESC
+       LIMIT 100`,
+      [driverId]
+    );
+    
+    res.json(history);
+  } catch (error) {
+    console.error('[SPONSOR_GET_HISTORY] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch point history' });
+  }
+});
+
+// POST /api/sponsors/:userId/drivers/:driverId/point-transactions - Add point transaction
+router.post('/:userId/drivers/:driverId/point-transactions', async (req, res) => {
+  try {
+    const { userId, driverId } = req.params;
+    const { pointChange, reason } = req.body;
+    
+    if (!pointChange || !reason) {
+      return res.status(400).json({ error: 'pointChange and reason are required' });
+    }
+    
+    // Get the sponsor's company
+    const [sponsorRows] = await pool.execute(
+      `SELECT sc.SponsorCompanyID
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?`,
+      [userId]
+    );
+    
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+    
+    const companyId = sponsorRows[0].SponsorCompanyID;
+    
+    // Verify driver belongs to sponsor
+    const [drivers] = await pool.execute(
+      `SELECT u.UserID, d.PointBalance
+       FROM USERS u
+       JOIN DRIVERS d ON u.UserID = d.UserID
+       WHERE u.UserID = ? AND d.SponsorCompanyID = ?`,
+      [driverId, companyId]
+    );
+    
+    if (drivers.length === 0) {
+      return res.status(404).json({ error: 'Driver not found for this sponsor' });
+    }
+    
+    // Create transaction
+    await pool.execute(
+      `INSERT INTO POINT_TRANSACTIONS (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
+       VALUES (?, ?, ?, ?, NOW())`,
+      [driverId, userId, pointChange, reason]
+    );
+    
+    // Update driver's point balance
+    const newBalance = drivers[0].PointBalance + pointChange;
+    await pool.execute(
+      `UPDATE DRIVERS SET PointBalance = ? WHERE UserID = ?`,
+      [newBalance, driverId]
+    );
+    
+    res.json({ success: true, newBalance });
+  } catch (error) {
+    console.error('Error creating transaction:', error);
+    res.status(500).json({ error: 'Failed to create transaction' });
+  }
+});
+
+// PUT /api/sponsors/:userId/point-transactions/:tId - Edit a transaction
+router.put('/:userId/point-transactions/:tId', async (req, res) => {
+  try {
+    const { userId, tId } = req.params;
+    const { newPoints, newReason } = req.body;
+    
+    if (newPoints === undefined || !newReason) {
+      return res.status(400).json({ error: 'newPoints and newReason are required' });
+    }
+    
+    // Get the sponsor's company
+    const [sponsorRows] = await pool.execute(
+      `SELECT sc.SponsorCompanyID
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?`,
+      [userId]
+    );
+    
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+    
+    // Get the transaction
+    const [transactions] = await pool.execute(
+      `SELECT * FROM POINT_TRANSACTIONS WHERE TransactionID = ?`,
+      [tId]
+    );
+    
+    if (transactions.length === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+    
+    const oldPoints = transactions[0].PointChange;
+    const pointDifference = newPoints - oldPoints;
+    
+    // Update transaction
+    await pool.execute(
+      `UPDATE POINT_TRANSACTIONS SET PointChange = ?, ReasonForChange = ? WHERE TransactionID = ?`,
+      [newPoints, newReason, tId]
+    );
+    
+    // Update driver's point balance by the difference
+    await pool.execute(
+      `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = (SELECT DriverID FROM POINT_TRANSACTIONS WHERE TransactionID = ?)`,
+      [pointDifference, tId]
+    );
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating transaction:', error);
+    res.status(500).json({ error: 'Failed to update transaction' });
+  }
+});
+
+// ============================================================================
+// GENERIC ROUTES (come AFTER specific routes)
+// ============================================================================
+
+// GET /api/sponsors/:userId/drivers/:driverId - Get a single driver for a sponsor
+router.get('/:userId/drivers/:driverId', async (req, res) => {
+  try {
+    const { userId, driverId } = req.params;
+    console.log(`[SPONSOR_GET_DRIVER] userId=${userId}, driverId=${driverId}`);
+    
+    // Get the sponsor's company
+    const [sponsorRows] = await pool.execute(
+      `SELECT sc.SponsorCompanyID
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?`,
+      [userId]
+    );
+    
+    if (sponsorRows.length === 0) {
+      console.log(`[SPONSOR_GET_DRIVER] Sponsor not found for userId=${userId}`);
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+    
+    const companyId = sponsorRows[0].SponsorCompanyID;
+    console.log(`[SPONSOR_GET_DRIVER] Found companyId=${companyId}`);
+    
+    // Get the driver
+    const [drivers] = await pool.execute(
+      `SELECT
+         u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
+         d.PerformanceStatus, d.PointBalance, u.ActiveStatus
+       FROM USERS u
+       JOIN DRIVERS d ON u.UserID = d.UserID
+       WHERE u.UserID = ? AND d.SponsorCompanyID = ?`,
+      [driverId, companyId]
+    );
+    
+    if (drivers.length === 0) {
+      console.log(`[SPONSOR_GET_DRIVER] Driver not found for driverId=${driverId}, companyId=${companyId}`);
+      return res.status(404).json({ error: 'Driver not found for this sponsor' });
+    }
+    
+    console.log(`[SPONSOR_GET_DRIVER] Success - returning driver`);
+    res.json(drivers[0]);
+  } catch (error) {
+    console.error('[SPONSOR_GET_DRIVER] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch driver' });
+  }
+});
+
 /**
  * PATCH /api/sponsors/:companyId/description
  * Update a sponsor company's description
