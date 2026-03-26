@@ -20,6 +20,7 @@ import adminRoute from './src/routes/admins.js';
 import driverRoute from './src/routes/drivers.js';
 import accountsRoute from './src/routes/accounts.js';
 import driverOrdersRoutes from './src/routes/driver-orders.js';
+import imagesRoutes from './src/routes/images.js';
 
 
 const app = express();
@@ -47,6 +48,7 @@ app.use('/api/admin/catalogs', adminCatalogsRoutes);
 app.use('/api/admin', adminUsersRoutes);
 app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/admin/audit-logs', adminEventsRoutes);
+app.use('/api/images', imagesRoutes);
 app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/driver/:userId/orders', driverOrdersRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);

@@ -23,9 +23,14 @@ router.get('/user/:userId', async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT sc.SponsorCompanyID as sponsorCompanyId,
               sc.CompanyName      as companyName,
-              sc.PointDollarValue as pointDollarValue
+              sc.PointDollarValue as pointDollarValue,
+              u.FirstName         as firstName,
+              u.LastName          as lastName,
+              u.Username          as username,
+              u.ProfilePicture    as profilePicture
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       JOIN USERS u ON s.UserID = u.UserID
        WHERE s.UserID = ?`,
       [userId]
     );
@@ -43,7 +48,7 @@ router.get('/my-drivers/:companyId', async (req, res) => {
     const { companyId } = req.params;
     const [drivers] = await pool.execute(
       `SELECT
-         u.UserID, u.FirstName, u.LastName, u.Username,
+         u.UserID, u.FirstName, u.LastName, u.Username, u.ProfilePicture,
          d.PerformanceStatus, d.PointBalance, u.ActiveStatus
        FROM USERS u
        JOIN DRIVERS d ON u.UserID = d.UserID

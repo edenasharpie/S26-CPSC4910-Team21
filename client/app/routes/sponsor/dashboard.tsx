@@ -19,8 +19,16 @@ export async function loader({ request }: Route.LoaderArgs) {
     if (!driversRes.ok) throw new Error(`Could not load drivers (${driversRes.status})`);
     const drivers = await driversRes.json();
 
+    const mergedUser = {
+      ...user,
+      FirstName: company.firstName ?? (user as any).FirstName,
+      LastName: company.lastName ?? (user as any).LastName,
+      Username: company.username ?? user.Username,
+      ProfilePicture: company.profilePicture ?? (user as any).ProfilePicture ?? "",
+    };
+
     return {
-      user,
+      user: mergedUser,
       companyId: company.sponsorCompanyId as number,
       companyName: company.companyName as string,
       drivers: Array.isArray(drivers) ? drivers : [],
@@ -104,13 +112,17 @@ export default function SponsorPortal() {
     {
       key: "Avatar",
       header: "Avatar",
-      render: (user: any) => (
-        <img
-          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`}
-          alt=""
-          className="w-10 h-10 rounded-full border border-gray-100 dark:border-gray-800"
-        />
-      ),
+      render: (user: any) => {
+        return (
+          <AvatarOrInitials
+            profilePicture={user.ProfilePicture}
+            firstName={user.FirstName}
+            lastName={user.LastName}
+            className="w-10 h-10 rounded-full border border-gray-100 dark:border-gray-800"
+            initialsClassName="text-[11px]"
+          />
+        );
+      },
     },
     {
       key: "Name",
@@ -192,10 +204,12 @@ export default function SponsorPortal() {
               className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
             >
             <div className="relative">
-              <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`}
-                alt=""
+              <AvatarOrInitials
+                profilePicture={user.ProfilePicture}
+                firstName={user.FirstName ?? user.Username}
+                lastName={user.LastName ?? user.Username}
                 className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
+                initialsClassName="text-xs"
               />
               <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
             </div>
@@ -312,5 +326,99 @@ function StatCard({ title, value, color }: { title: string; value: number; color
         {value}
       </div>
     </div>
+  );
+}
+
+function resolveProfileImageUrl(profilePicture?: string) {
+  if (!profilePicture) return null;
+
+  const trimmed = profilePicture.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "external-content.duckduckgo.com") {
+      const wrapped = url.searchParams.get("u");
+      return wrapped ? decodeURIComponent(wrapped) : trimmed;
+    }
+  } catch {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
+function getProfileImageCandidates(profilePicture?: string) {
+  const trimmed = profilePicture?.trim();
+  if (!trimmed) return [] as string[];
+
+  const candidates = [trimmed];
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "external-content.duckduckgo.com") {
+      const wrapped = url.searchParams.get("u");
+      if (wrapped) candidates.push(decodeURIComponent(wrapped));
+    }
+  } catch {
+    return candidates;
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+function toRenderableImageUrl(profilePicture?: string) {
+  const resolved = resolveProfileImageUrl(profilePicture);
+  if (!resolved) return null;
+  if (resolved.startsWith('data:image')) return resolved;
+  if (resolved.startsWith(`${API_URL}/api/images/proxy?url=`)) return resolved;
+  return `${API_URL}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
+}
+
+function AvatarOrInitials({
+  profilePicture,
+  firstName,
+  lastName,
+  className,
+  initialsClassName,
+}: {
+  profilePicture?: string;
+  firstName?: string;
+  lastName?: string;
+  className: string;
+  initialsClassName: string;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const sources = getProfileImageCandidates(profilePicture);
+  const imgSrc = toRenderableImageUrl(sources[sourceIndex]);
+  const initials = `${(firstName?.[0] ?? "U").toUpperCase()}${(lastName?.[0] ?? "U").toUpperCase()}`;
+
+  useEffect(() => {
+    setImageError(false);
+    setSourceIndex(0);
+  }, [profilePicture]);
+
+  if (!imgSrc || imageError) {
+    return (
+      <div className={`${className} bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center justify-center font-bold ${initialsClassName}`}>
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imgSrc}
+      alt="avatar"
+      className={`${className} object-cover`}
+      referrerPolicy="no-referrer"
+      onError={() => {
+        if (sourceIndex < sources.length - 1) {
+          setSourceIndex((idx) => idx + 1);
+          return;
+        }
+        setImageError(true);
+      }}
+    />
   );
 }

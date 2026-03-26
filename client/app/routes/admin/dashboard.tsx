@@ -1,5 +1,5 @@
 import type { Route } from "./+types/dashboard";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
 import { requireAuth } from "~/utils/session.server";
@@ -107,6 +107,11 @@ export default function AdminPortal() {
   const adminCount   = users.filter((u: any) => u.UserType?.toLowerCase() === "admin"   && u.ActiveStatus !== 0).length;
   const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
   const totalPoints = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").reduce((sum: number, u: any) => sum + (u.PointBalance ?? 0), 0);
+  const currentAdmin = users.find((u: any) => u.UserID === session?.UserID);
+  const adminFirstName = session?.FirstName ?? currentAdmin?.FirstName ?? "Admin";
+  const adminLastName = session?.LastName ?? currentAdmin?.LastName ?? "User";
+  const adminUsername = session?.Username ?? currentAdmin?.Username ?? "admin";
+  const adminProfilePicture = currentAdmin?.ProfilePicture ?? "";
 
   // Client-side filtering
   const filteredUsers = users.filter((u: any) => {
@@ -131,15 +136,13 @@ export default function AdminPortal() {
       key: "Avatar",
       header: "",
       render: (user: any) => {
-        const src =
-          user.ProfilePicture && user.ProfilePicture.includes("base64")
-            ? user.ProfilePicture
-            : `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`;
         return (
-          <img
-            src={src}
-            alt="avatar"
-            className="w-10 h-10 rounded-full object-cover border border-gray-100 dark:border-gray-800"
+          <AvatarOrInitials
+            profilePicture={user.ProfilePicture}
+            firstName={user.FirstName}
+            lastName={user.LastName}
+            className="w-10 h-10 rounded-full border border-gray-100 dark:border-gray-800"
+            initialsClassName="text-[11px]"
           />
         );
       },
@@ -271,16 +274,18 @@ export default function AdminPortal() {
               className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm cursor-pointer"
             >
             <div className="relative">
-              <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${session?.Username || 'admin'}`}
-                alt=""
+              <AvatarOrInitials
+                profilePicture={adminProfilePicture}
+                firstName={adminFirstName}
+                lastName={adminLastName}
                 className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
+                initialsClassName="text-xs"
               />
               <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
             </div>
-            <div className="hidden sm:block text-left">
-              <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{session?.FirstName} {session?.LastName}</p>
-              <p className="text-[10px] text-gray-400 font-mono mt-0.5">{session?.Username}</p>
+            <div className="block text-left">
+              <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{adminFirstName} {adminLastName}</p>
+              <p className="text-[10px] text-gray-400 font-mono mt-0.5">{adminUsername}</p>
             </div>
             </button>
           </div>
@@ -595,5 +600,99 @@ function AuditOption({
       />
       <span className="text-xs font-semibold">{label}</span>
     </label>
+  );
+}
+
+function resolveProfileImageUrl(profilePicture?: string) {
+  if (!profilePicture) return null;
+
+  const trimmed = profilePicture.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "external-content.duckduckgo.com") {
+      const wrapped = url.searchParams.get("u");
+      return wrapped ? decodeURIComponent(wrapped) : trimmed;
+    }
+  } catch {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
+function getProfileImageCandidates(profilePicture?: string) {
+  const trimmed = profilePicture?.trim();
+  if (!trimmed) return [] as string[];
+
+  const candidates = [trimmed];
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "external-content.duckduckgo.com") {
+      const wrapped = url.searchParams.get("u");
+      if (wrapped) candidates.push(decodeURIComponent(wrapped));
+    }
+  } catch {
+    return candidates;
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+function toRenderableImageUrl(profilePicture?: string) {
+  const resolved = resolveProfileImageUrl(profilePicture);
+  if (!resolved) return null;
+  if (resolved.startsWith('data:image')) return resolved;
+  if (resolved.startsWith(`${API_URL}/api/images/proxy?url=`)) return resolved;
+  return `${API_URL}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
+}
+
+function AvatarOrInitials({
+  profilePicture,
+  firstName,
+  lastName,
+  className,
+  initialsClassName,
+}: {
+  profilePicture?: string;
+  firstName?: string;
+  lastName?: string;
+  className: string;
+  initialsClassName: string;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const sources = getProfileImageCandidates(profilePicture);
+  const imgSrc = toRenderableImageUrl(sources[sourceIndex]);
+  const initials = `${(firstName?.[0] ?? "U").toUpperCase()}${(lastName?.[0] ?? "U").toUpperCase()}`;
+
+  useEffect(() => {
+    setImageError(false);
+    setSourceIndex(0);
+  }, [profilePicture]);
+
+  if (!imgSrc || imageError) {
+    return (
+      <div className={`${className} bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center justify-center font-bold ${initialsClassName}`}>
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imgSrc}
+      alt="avatar"
+      className={`${className} object-cover`}
+      referrerPolicy="no-referrer"
+      onError={() => {
+        if (sourceIndex < sources.length - 1) {
+          setSourceIndex((idx) => idx + 1);
+          return;
+        }
+        setImageError(true);
+      }}
+    />
   );
 }
