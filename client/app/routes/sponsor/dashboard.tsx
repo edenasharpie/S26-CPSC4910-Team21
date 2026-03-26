@@ -79,6 +79,7 @@ export default function SponsorPortal() {
   const totalCount = drivers.length;
   const activeCount = drivers.filter((d: any) => d.ActiveStatus === 1).length;
   const inactiveCount = drivers.filter((d: any) => d.ActiveStatus === 0).length;
+  const totalPoints = drivers.reduce((sum: number, d: any) => sum + (d.TotalPoints ?? d.PointBalance ?? 0), 0);
 
   useEffect(() => {
     if ((actionData as any)?.success) setIsAddUserOpen(false);
@@ -160,8 +161,16 @@ export default function SponsorPortal() {
         <div className="mb-8 border-b pb-6 dark:border-gray-800 flex justify-between items-end">
           <div className="text-left">
             <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Return to Home</Link>
-            <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>
-            <p className="text-gray-500 text-sm mt-1 font-medium italic">{companyName}</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>
+                <p className="text-gray-500 text-sm mt-1 font-medium italic">{companyName}</p>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
+                <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
+                <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

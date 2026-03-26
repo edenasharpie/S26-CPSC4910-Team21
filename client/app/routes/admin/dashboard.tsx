@@ -106,6 +106,7 @@ export default function AdminPortal() {
   const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor" && u.ActiveStatus !== 0).length;
   const adminCount   = users.filter((u: any) => u.UserType?.toLowerCase() === "admin"   && u.ActiveStatus !== 0).length;
   const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
+  const totalPoints = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").reduce((sum: number, u: any) => sum + (u.TotalPoints ?? u.PointBalance ?? 0), 0);
 
   // Client-side filtering
   const filteredUsers = users.filter((u: any) => {
@@ -230,12 +231,20 @@ export default function AdminPortal() {
             >
               ← Home
             </Link>
-            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">
-              Admin Portal
-            </h1>
-            <p className="text-gray-500 text-sm mt-1 font-medium italic">
-              System administration and user oversight.
-            </p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+                  Admin Portal
+                </h1>
+                <p className="text-gray-500 text-sm mt-1 font-medium italic">
+                  System administration and user oversight.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
+                <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
+                <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
+              </div>
+            </div>
           </div>
           <Form method="post" action="/logout">
             <Button variant="secondary" size="sm" type="submit">
