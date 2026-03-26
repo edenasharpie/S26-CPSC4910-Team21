@@ -846,3 +846,174 @@ export async function getAuditLogs(filters = []) {
     connection.release();
   }
 }
+
+/**
+ * Get all sponsor company IDs.
+ * @returns {Promise<number[]>} Array of sponsor company IDs.
+ */
+export async function getAllSponsorCompanyIds() {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.execute(
+      'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES ORDER BY SponsorCompanyID ASC'
+    );
+
+    return rows.map((row) => Number(row.SponsorCompanyID));
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Insert or update a generated daily report record.
+ * Enforces one report per sponsor/reportType/date using the table unique constraint.
+ * @param {Object} record - Report record to upsert.
+ * @returns {Promise<void>}
+ */
+export async function upsertGeneratedReport(record) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.execute(
+      `INSERT INTO GENERATED_REPORTS (
+         SponsorCompanyID,
+         ReportType,
+         ReportDate,
+         GeneratedAt,
+         SchedulerRunAt,
+         GenerationStatus,
+         GenerationError,
+         ReportPayload,
+         IsVisible
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+       ON DUPLICATE KEY UPDATE
+         GeneratedAt = VALUES(GeneratedAt),
+         SchedulerRunAt = VALUES(SchedulerRunAt),
+         GenerationStatus = VALUES(GenerationStatus),
+         GenerationError = VALUES(GenerationError),
+         ReportPayload = VALUES(ReportPayload),
+         IsVisible = 1`,
+      [
+        record.sponsorCompanyId,
+        record.reportType,
+        record.reportDate,
+        record.generatedAt,
+        record.schedulerRunAt,
+        record.generationStatus,
+        record.generationError,
+        record.reportPayload ? JSON.stringify(record.reportPayload) : null,
+      ]
+    );
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * List generated daily reports for a sponsor company.
+ * @param {number} sponsorCompanyId - Sponsor company ID.
+ * @param {Object} options - Optional filters and pagination.
+ * @returns {Promise<{reports: Object[], total: number, limit: number, offset: number}>}
+ */
+export async function listGeneratedReportsForSponsor(sponsorCompanyId, options = {}) {
+  const connection = await pool.getConnection();
+  try {
+    const limit = Number.isInteger(options.limit) ? options.limit : 20;
+    const offset = Number.isInteger(options.offset) ? options.offset : 0;
+
+    let whereClause = 'WHERE SponsorCompanyID = ? AND IsVisible = 1';
+    const params = [sponsorCompanyId];
+
+    if (options.reportType) {
+      whereClause += ' AND ReportType = ?';
+      params.push(options.reportType);
+    }
+
+    if (options.startDate) {
+      whereClause += ' AND ReportDate >= ?';
+      params.push(options.startDate);
+    }
+
+    if (options.endDate) {
+      whereClause += ' AND ReportDate <= ?';
+      params.push(options.endDate);
+    }
+
+    const [countRows] = await connection.query(
+      `SELECT COUNT(*) AS total
+       FROM GENERATED_REPORTS
+       ${whereClause}`,
+      params
+    );
+
+    const [rows] = await connection.query(
+      `SELECT
+         ReportID,
+         SponsorCompanyID,
+         ReportType,
+         ReportDate,
+         GeneratedAt,
+         SchedulerRunAt,
+         GenerationStatus,
+         GenerationError
+       FROM GENERATED_REPORTS
+       ${whereClause}
+       ORDER BY ReportDate DESC, ReportType ASC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    return {
+      reports: rows,
+      total: Number(countRows[0]?.total ?? 0),
+      limit,
+      offset,
+    };
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Fetch a generated report by id within a sponsor company boundary.
+ * @param {number} reportId - Generated report ID.
+ * @param {number} sponsorCompanyId - Sponsor company ID.
+ * @returns {Promise<Object|null>} Generated report row.
+ */
+export async function getGeneratedReportByIdForSponsor(reportId, sponsorCompanyId) {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.execute(
+      `SELECT
+         ReportID,
+         SponsorCompanyID,
+         ReportType,
+         ReportDate,
+         GeneratedAt,
+         SchedulerRunAt,
+         GenerationStatus,
+         GenerationError,
+         ReportPayload
+       FROM GENERATED_REPORTS
+       WHERE ReportID = ? AND SponsorCompanyID = ? AND IsVisible = 1
+       LIMIT 1`,
+      [reportId, sponsorCompanyId]
+    );
+
+    if (rows.length === 0) {
+      return null;
+    }
+
+    const row = rows[0];
+    if (typeof row.ReportPayload === 'string') {
+      try {
+        row.ReportPayload = JSON.parse(row.ReportPayload);
+      } catch {
+        row.ReportPayload = null;
+      }
+    }
+
+    return row;
+  } finally {
+    connection.release();
+  }
+}

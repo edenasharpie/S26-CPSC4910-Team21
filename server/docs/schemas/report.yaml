@@ -247,3 +247,67 @@ ReportTypeList:
               type: string
             description: List of allowed filter parameters for this report type
             example: ["status", "startDate", "endDate", "sponsorCompanyId", "driverId"]
+
+GeneratedReport:
+  type: object
+  required:
+    - ReportID
+    - SponsorCompanyID
+    - ReportType
+    - ReportDate
+    - GeneratedAt
+    - SchedulerRunAt
+    - GenerationStatus
+  properties:
+    ReportID:
+      type: integer
+      example: 101
+    SponsorCompanyID:
+      type: integer
+      example: 5
+    ReportType:
+      type: string
+      enum: [driver-applications, point-transactions, orders]
+      example: orders
+    ReportDate:
+      type: string
+      format: date
+      example: "2026-03-25"
+    GeneratedAt:
+      type: string
+      format: date-time
+      example: "2026-03-26T00:00:03Z"
+    SchedulerRunAt:
+      type: string
+      format: date-time
+      example: "2026-03-26T00:00:00Z"
+    GenerationStatus:
+      type: string
+      enum: [success, failed]
+      example: success
+    GenerationError:
+      type: string
+      nullable: true
+      example: null
+
+GeneratedReportList:
+  type: object
+  required:
+    - reports
+    - total
+    - limit
+    - offset
+  properties:
+    reports:
+      type: array
+      items:
+        $ref: '#/GeneratedReport'
+    total:
+      type: integer
+      example: 30
+    limit:
+      type: integer
+      example: 20
+    offset:
+      type: integer
+      example: 0

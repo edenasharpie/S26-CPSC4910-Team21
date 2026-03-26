@@ -20,6 +20,7 @@ import adminRoute from './src/routes/admins.js';
 import driverRoute from './src/routes/drivers.js';
 import accountsRoute from './src/routes/accounts.js';
 import driverOrdersRoutes from './src/routes/driver-orders.js';
+import { startDailyReportScheduler } from './src/services/daily-report-scheduler.js';
 
 
 const app = express();
@@ -57,4 +58,5 @@ app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
+  startDailyReportScheduler();
 });
