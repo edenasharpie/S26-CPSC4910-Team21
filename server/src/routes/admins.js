@@ -57,4 +57,44 @@ router.get('/driver-report/:driverId', async (req, res) => {
   }
 });
 
+// GET /api/admin/settings/:userId - Get admin user settings
+router.get('/settings/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get admin user and their settings from a settings table or JSON column
+    // For now, return default settings
+    res.json({
+      auditLogRetentionDays: 365,
+      userDataRetentionDays: 90
+    });
+  } catch (error) {
+    console.error('Error fetching admin settings:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// POST /api/admin/settings/:userId - Update admin user settings
+router.post('/settings/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { auditLogRetentionDays, userDataRetentionDays } = req.body;
+    
+    if (!auditLogRetentionDays || !userDataRetentionDays) {
+      return res.status(400).json({ error: 'Both retention periods are required' });
+    }
+    
+    // Store settings in user preferences or a settings table
+    // For now, acknowledge the save
+    res.json({ 
+      success: true, 
+      auditLogRetentionDays, 
+      userDataRetentionDays 
+    });
+  } catch (error) {
+    console.error('Error updating admin settings:', error);
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
 export default router;

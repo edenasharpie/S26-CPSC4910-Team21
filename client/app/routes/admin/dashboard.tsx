@@ -88,7 +88,7 @@ export function meta({}: Route.MetaArgs) {
 // Component
 // ---------------------------------------------------------------------------
 export default function AdminPortal() {
-  const { users, companies, error } = useLoaderData<typeof loader>();
+  const { users, companies, error, session } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
 
@@ -106,7 +106,7 @@ export default function AdminPortal() {
   const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor" && u.ActiveStatus !== 0).length;
   const adminCount   = users.filter((u: any) => u.UserType?.toLowerCase() === "admin"   && u.ActiveStatus !== 0).length;
   const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
-  const totalPoints = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").reduce((sum: number, u: any) => sum + (u.TotalPoints ?? u.PointBalance ?? 0), 0);
+  const totalPoints = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").reduce((sum: number, u: any) => sum + (u.PointBalance ?? 0), 0);
 
   // Client-side filtering
   const filteredUsers = users.filter((u: any) => {
@@ -192,7 +192,7 @@ export default function AdminPortal() {
             className="group flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 hover:border-indigo-400 transition-all"
           >
             <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">
-              {user.TotalPoints ?? 0}
+              {user.PointBalance ?? 0}
             </span>
             <span className="text-[10px] uppercase tracking-tighter text-indigo-400 font-bold">
               Manage
@@ -209,7 +209,7 @@ export default function AdminPortal() {
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => navigate(`/admin/profile/${user.UserID}`)}
+            onClick={() => navigate(`/admin/profile/${user.UserID}/edit`)}
           >
             Edit
           </Button>
@@ -246,11 +246,44 @@ export default function AdminPortal() {
               </div>
             </div>
           </div>
-          <Form method="post" action="/logout">
-            <Button variant="secondary" size="sm" type="submit">
-              Sign out
-            </Button>
-          </Form>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/admin/settings/${session?.UserID || 1}`)}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+              title="Settings"
+            >
+              <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+            <Form method="post" action="/logout">
+              <Button variant="secondary" size="sm" type="submit">
+                Sign out
+              </Button>
+            </Form>
+            <button 
+              onClick={() => {
+                if (session?.UserID) {
+                  window.location.href = `/admin/profile/${session.UserID}/edit`;
+                }
+              }}
+              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm cursor-pointer"
+            >
+            <div className="relative">
+              <img
+                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${session?.Username || 'admin'}`}
+                alt=""
+                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
+              />
+              <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
+            </div>
+            <div className="hidden sm:block text-left">
+              <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{session?.FirstName} {session?.LastName}</p>
+              <p className="text-[10px] text-gray-400 font-mono mt-0.5">{session?.Username}</p>
+            </div>
+            </button>
+          </div>
         </div>
 
         {error && (

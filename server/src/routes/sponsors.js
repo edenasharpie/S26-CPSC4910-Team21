@@ -595,4 +595,76 @@ router.put('/user/:id', async (req, res) => {
 });
 
 //module.exports = router;
+
+// GET /api/sponsors/:companyId/settings - Get sponsor company settings
+router.get('/:companyId/settings', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const [rows] = await pool.execute(
+      `SELECT 
+         SponsorCompanyID,
+         CompanyName,
+         COALESCE(JSON_EXTRACT(ContactInfo, '$.dataRetentionDays'), 90) as dataRetentionDays
+       FROM SPONSOR_COMPANIES
+       WHERE SponsorCompanyID = ?`,
+      [companyId]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    res.json({
+      dataRetentionDays: parseInt(rows[0].dataRetentionDays) || 90
+    });
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// POST /api/sponsors/:companyId/settings - Update sponsor company settings
+router.post('/:companyId/settings', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { dataRetentionDays } = req.body;
+    
+    if (!dataRetentionDays) {
+      return res.status(400).json({ error: 'dataRetentionDays is required' });
+    }
+    
+    // Get current ContactInfo
+    const [current] = await pool.execute(
+      `SELECT ContactInfo FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?`,
+      [companyId]
+    );
+    
+    if (current.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    let contactInfo = {};
+    if (current[0].ContactInfo) {
+      try {
+        contactInfo = JSON.parse(current[0].ContactInfo);
+      } catch (e) {
+        contactInfo = {};
+      }
+    }
+    
+    // Update with new retention setting
+    contactInfo.dataRetentionDays = dataRetentionDays;
+    
+    await pool.execute(
+      `UPDATE SPONSOR_COMPANIES SET ContactInfo = ? WHERE SponsorCompanyID = ?`,
+      [JSON.stringify(contactInfo), companyId]
+    );
+    
+    res.json({ success: true, dataRetentionDays });
+  } catch (error) {
+    console.error('Error updating settings:', error);
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
 export default router;

@@ -70,6 +70,8 @@ router.post('/login', async (req, res) => {
     userID: user.UserID,
     userType: user.UserType,
     username: user.Username,
+    firstName: user.FirstName,
+    lastName: user.LastName,
   });
 });
 

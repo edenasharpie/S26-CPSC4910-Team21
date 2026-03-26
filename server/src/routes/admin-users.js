@@ -44,6 +44,7 @@ router.get('/users', async (request, response) => {
         u.ActiveStatus,
         DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
         DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange,
+        COALESCE(d.PointBalance, 0) AS PointBalance,
         CASE
           WHEN u.UserType = 'driver'  THEN COALESCE(sc.CompanyName, 'Unassigned')
           WHEN u.UserType = 'sponsor' THEN COALESCE(sc2.CompanyName, 'N/A')

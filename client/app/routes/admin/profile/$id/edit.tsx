@@ -7,7 +7,7 @@ import { requireAuth } from "~/utils/session.server";
 const BASE_URL = process.env.API_URL ?? 'http://localhost:5000';
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  requireAuth(request, ["admin"]);
+  await requireAuth(request, ["admin"]);
   const res = await fetch(`${BASE_URL}/api/admin/users/${params.id}`);
   if (!res.ok) throw new Response("User not found", { status: 404 });
   const user = await res.json();
@@ -15,6 +15,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
+  await requireAuth(request, ["admin"]);
   const formData = await request.formData();
   const userId = params.id;
   const intent = formData.get("intent");
@@ -65,16 +66,19 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 export default function EditUserProfile() {
   const { id } = useParams();
+  const { user: loaderUser } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(loaderUser ?? null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    fetchUser();
-  }, [id]);
+    setUser(loaderUser ?? null);
+    setLoading(false);
+    setError(null);
+  }, [loaderUser]);
 
   const fetchUser = async () => {
     try {
