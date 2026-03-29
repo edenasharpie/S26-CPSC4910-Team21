@@ -191,6 +191,125 @@ export:
       '500':
         $ref: '../../schemas/common.yaml#/Responses/500Error'
 
+generated:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the sponsor
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - reports
+    summary: List generated daily reports for sponsor
+    description: Returns generated daily report history for the sponsor's company with optional filters.
+    parameters:
+      - name: reportType
+        in: query
+        description: Filter by generated report category
+        schema:
+          type: string
+          enum: [driver-applications, point-transactions, orders]
+      - name: startDate
+        in: query
+        description: Filter reports on or after this report date
+        schema:
+          type: string
+          format: date
+          example: "2026-03-01"
+      - name: endDate
+        in: query
+        description: Filter reports on or before this report date
+        schema:
+          type: string
+          format: date
+          example: "2026-03-31"
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 20
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+    responses:
+      '200':
+        description: Generated reports retrieved successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../../schemas/report.yaml#/GeneratedReportList'
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        description: User is not a sponsor
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Access forbidden: User is not a sponsor"
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+generatedDownload:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the sponsor
+      required: true
+      schema:
+        type: integer
+    - name: reportId
+      in: path
+      description: Generated report ID
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - reports
+    summary: Download a generated daily report as PDF
+    description: Downloads a PDF generated from the persisted daily report payload.
+    responses:
+      '200':
+        description: PDF generated successfully
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '401':
+        $ref: '../../schemas/common.yaml#/Responses/401Error'
+      '403':
+        description: User is not a sponsor
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Access forbidden: User is not a sponsor"
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
 driverApplications:
   parameters:
     - name: userId
