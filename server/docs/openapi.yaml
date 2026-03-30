@@ -118,6 +118,12 @@ paths:
   /sponsor/{userId}/reports/driver-applications:
     $ref: './paths/sponsor/reports.yaml#/driverApplications'
 
+  /sponsor/{userId}/reports/generated:
+    $ref: './paths/sponsor/reports.yaml#/generated'
+
+  /sponsor/{userId}/reports/generated/{reportId}/download:
+    $ref: './paths/sponsor/reports.yaml#/generatedDownload'
+
 components:
 # placeholder security schema for linting purposes
   securitySchemes:

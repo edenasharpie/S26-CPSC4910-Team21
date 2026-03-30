@@ -4,6 +4,7 @@ export default [
   //INFO
   index("routes/home.tsx"),
   route("login",  "routes/login.tsx"),
+  route("register", "routes/register.tsx"),
   route("logout", "routes/logout.tsx"),
   route("about", "routes/about.tsx"),
   route("change-password", "routes/change-password.tsx"),
@@ -13,13 +14,22 @@ export default [
   //DASHBOARDS
   route("admin/dashboard", "routes/admin/dashboard.tsx"),
   route("sponsor/dashboard", "routes/sponsor/dashboard.tsx"),
+  route("driver/dashboard", "routes/driver/dashboard.tsx"),
+
+  //SETTINGS
+  route("sponsor/settings/:userId", "routes/sponsor/settings.$userId.tsx"),
+  route("admin/settings/:userId", "routes/admin/settings.$userId.tsx"),
+
+  //POINTS (must come before generic profile routes)
+  route("admin/profile/:id/points", "routes/admin/profile/$id/points.tsx"),
+  route("sponsor/profile/:id/points", "routes/sponsor/profile/$id/points.tsx"),
 
   //PROFILES
-  route("admin/profile/:id", "routes/admin/profile/$id/edit.tsx"),
+  route("admin/profile/:id/edit", "routes/admin/profile/$id/edit.tsx"),
+  //route("admin/profile/:id", "routes/admin/profile/$id/edit.tsx"),
+  route("sponsor/profile/:id/edit", "routes/sponsor/profile/$id/edit.tsx"),
+  //route("sponsor/profile/:id", "routes/sponsor/profile/$id/edit.tsx"),
   route("profile", "routes/profile.tsx"),
-
-  //POINTS
-  route("admin/profile/:id/points", "routes/admin/profile/$id/points.tsx"),
 
   //INVOICES
   route("admin/invoices", "routes/admin/invoices.tsx"),
@@ -35,6 +45,7 @@ export default [
   //CATALOGS
   route("admin/catalogs", "routes/admin/catalogs.tsx"),
   route("driver/catalogs", "routes/driver/catalogs.tsx"),
+  route("driver/orders", "routes/driver/orders.tsx"),
   route("sponsor/catalogs", "routes/sponsor/catalogs.tsx"),
 
   //ADMIN USER MANAGEMENT (quick-add forms)
@@ -48,7 +59,6 @@ export default [
   route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
 
   // Legacy driver dashboard (accessed by URL param)
-  // TODO: migrate to /driver/dashboard once session-based routing is finalized
   route("driver-dashboard/:id", "routes/driver-dashboard.tsx"),
 
 ] satisfies RouteConfig;

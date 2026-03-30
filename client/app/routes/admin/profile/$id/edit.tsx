@@ -7,7 +7,7 @@ import { requireAuth } from "~/utils/session.server";
 const BASE_URL = process.env.API_URL ?? 'http://localhost:5000';
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  requireAuth(request, ["admin"]);
+  await requireAuth(request, ["admin"]);
   const res = await fetch(`${BASE_URL}/api/admin/users/${params.id}`);
   if (!res.ok) throw new Response("User not found", { status: 404 });
   const user = await res.json();
@@ -15,6 +15,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
+  await requireAuth(request, ["admin"]);
   const formData = await request.formData();
   const userId = params.id;
   const intent = formData.get("intent");
@@ -65,16 +66,23 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 export default function EditUserProfile() {
   const { id } = useParams();
+  const { user: loaderUser } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(normalizeUser(loaderUser));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [profileImageError, setProfileImageError] = useState(false);
+  const [profileImageSourceIndex, setProfileImageSourceIndex] = useState(0);
 
   useEffect(() => {
-    fetchUser();
-  }, [id]);
+    setUser(normalizeUser(loaderUser));
+    setLoading(false);
+    setError(null);
+    setProfileImageError(false);
+    setProfileImageSourceIndex(0);
+  }, [loaderUser]);
 
   const fetchUser = async () => {
     try {
@@ -88,7 +96,9 @@ export default function EditUserProfile() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setUser(data);
+      setUser(normalizeUser(data));
+      setProfileImageError(false);
+      setProfileImageSourceIndex(0);
     } catch (error: any) {
       console.error('Error fetching user:', error);
       setError(error.message || 'Failed to fetch user');
@@ -158,6 +168,16 @@ export default function EditUserProfile() {
     }
   };
 
+  const handleEditSaveClick = () => {
+    if (!isEditing) {
+      setIsEditing(true);
+      return;
+    }
+
+    const form = document.getElementById("edit-form") as HTMLFormElement | null;
+    form?.requestSubmit();
+  };
+
   if (loading) {
     return (
       <div className="p-8 max-w-5xl mx-auto">
@@ -178,6 +198,9 @@ export default function EditUserProfile() {
   }
 
   if (!user) return null;
+
+  const profileImageCandidates = getProfileImageCandidates(user.profilePicture);
+  const activeProfileImage = toRenderableImageUrl(profileImageCandidates[profileImageSourceIndex]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -208,16 +231,26 @@ export default function EditUserProfile() {
 
       <div className="flex items-center gap-8 pb-6 border-b border-gray-100 dark:border-gray-800">
         <div className="relative">
-          <img 
-            key={user.profilePicture}
-            src={
-              user.profilePicture && (user.profilePicture.includes('http') || user.profilePicture.startsWith('data:image'))
-                ? user.profilePicture 
-                : `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}&background=random&size=128`
-            } 
-            alt="Profile" 
-            className="w-24 h-24 rounded-full object-cover border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900"
-          />
+          {activeProfileImage && !profileImageError ? (
+            <img 
+              key={user.profilePicture}
+              src={activeProfileImage}
+              alt="Profile"
+              referrerPolicy="no-referrer"
+              onError={() => {
+                if (profileImageSourceIndex < profileImageCandidates.length - 1) {
+                  setProfileImageSourceIndex((idx) => idx + 1);
+                  return;
+                }
+                setProfileImageError(true);
+              }}
+              className="w-24 h-24 rounded-full object-cover border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900"
+            />
+          ) : (
+            <div className="w-24 h-24 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center justify-center text-2xl font-bold">
+              {`${(user.firstName?.[0] ?? "U").toUpperCase()}${(user.lastName?.[0] ?? "U").toUpperCase()}`}
+            </div>
+          )}
         </div>
         
         <div className="flex-1 text-left">
@@ -228,28 +261,29 @@ export default function EditUserProfile() {
         </div>
 
         <div className="flex gap-2">
-          {!isEditing ? (
-            <Button type="button" onClick={() => setIsEditing(true)} variant="primary">
-              Edit Profile
+          {isEditing && (
+            <Button 
+              type="button" 
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete User
             </Button>
-          ) : (
-            <>
-              <Button 
-                type="button" 
-                onClick={handleDelete}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                Delete User
-              </Button>
-
-              <Button type="button" variant="secondary" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" form="edit-form" variant="primary">
-                Update
-              </Button>
-            </>
           )}
+
+          {isEditing && (
+            <Button type="button" variant="secondary" onClick={() => setIsEditing(false)}>
+              Cancel
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            onClick={handleEditSaveClick}
+            variant="primary"
+          >
+            {isEditing ? "Save" : "Edit"}
+          </Button>
         </div>
       </div>
 
@@ -305,5 +339,70 @@ export default function EditUserProfile() {
 function getFieldClass(isEditing: boolean) {
   return isEditing
     ? "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 shadow-sm text-gray-900 dark:text-gray-100 opacity-100"
-    : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-100 pointer-events-none appearance-none";
+    : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 opacity-100";
+}
+
+function normalizeUser(raw: any) {
+  if (!raw) return null;
+  return {
+    userId: raw.userId ?? raw.UserID,
+    username: raw.username ?? raw.Username ?? "",
+    email: raw.email ?? raw.Email ?? "",
+    phone: raw.phone ?? raw.Phone ?? "",
+    firstName: raw.firstName ?? raw.FirstName ?? "",
+    middleName: raw.middleName ?? raw.MiddleName ?? "",
+    lastName: raw.lastName ?? raw.LastName ?? "",
+    pronouns: raw.pronouns ?? raw.Pronouns ?? "",
+    profilePicture: raw.profilePicture ?? raw.ProfilePicture ?? "",
+    bio: raw.bio ?? raw.Bio ?? "",
+    userType: raw.userType ?? raw.UserType ?? "",
+    accountType: raw.accountType ?? raw.userType ?? raw.UserType ?? "",
+    activeStatus: raw.activeStatus ?? raw.ActiveStatus ?? 1,
+    lastLogin: raw.lastLogin ?? raw.LastLogin ?? null,
+  };
+}
+
+function resolveProfileImageUrl(profilePicture?: string) {
+  if (!profilePicture) return null;
+
+  const trimmed = profilePicture.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "external-content.duckduckgo.com") {
+      const wrapped = url.searchParams.get("u");
+      return wrapped ? decodeURIComponent(wrapped) : trimmed;
+    }
+  } catch {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
+function getProfileImageCandidates(profilePicture?: string) {
+  const trimmed = profilePicture?.trim();
+  if (!trimmed) return [] as string[];
+
+  const candidates = [trimmed];
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "external-content.duckduckgo.com") {
+      const wrapped = url.searchParams.get("u");
+      if (wrapped) candidates.push(decodeURIComponent(wrapped));
+    }
+  } catch {
+    return candidates;
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+function toRenderableImageUrl(profilePicture?: string) {
+  const resolved = resolveProfileImageUrl(profilePicture);
+  if (!resolved) return null;
+  if (resolved.startsWith('data:image')) return resolved;
+  if (resolved.startsWith(`${BASE_URL}/api/images/proxy?url=`)) return resolved;
+  return `${BASE_URL}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
 }

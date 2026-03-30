@@ -1,6 +1,6 @@
-import { useLoaderData } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
-import { Card, Table } from "~/components";
+import { Badge, Card, Table } from "~/components";
 import { requireAuth } from "~/utils/session.server";
 
 const API_URL = process.env.API_URL ?? "http://localhost:5000";
@@ -17,23 +17,36 @@ interface PointData {
   history: PointTransaction[];
 }
 
+interface PerformanceData {
+  performanceStatus?: string;
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const session = await requireAuth(request, ["driver"]);
   const userId = params.id ?? session.UserID;
 
   try {
-    const res = await fetch(`${API_URL}/api/drivers/my-points/${userId}`);
-    
-    if (!res.ok) {
-        // Return a default object if the fetch fails
-        return { balance: 0, history: [] };
-    }
-    
-    const data: PointData = await res.json();
-    return data;
+    const [pointsRes, statusRes] = await Promise.all([
+      fetch(`${API_URL}/api/drivers/my-points/${userId}`),
+      fetch(`${API_URL}/api/drivers/performance/${userId}`),
+    ]);
+
+    const pointsData: PointData = pointsRes.ok
+      ? await pointsRes.json()
+      : { balance: 0, history: [] };
+
+    const statusData: PerformanceData = statusRes.ok
+      ? await statusRes.json()
+      : { performanceStatus: undefined };
+
+    return {
+      balance: pointsData.balance ?? 0,
+      history: pointsData.history ?? [],
+      performanceStatus: statusData.performanceStatus,
+    };
   } catch (error) {
     console.error("Driver Loader Error:", error);
-    return { balance: 0, history: [] };
+    return { balance: 0, history: [], performanceStatus: undefined };
   }
 }
 
@@ -41,7 +54,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function DriverDashboard() {
   const data = useLoaderData<typeof loader>();
   
-  const { balance = 0, history = [] } = data || {};
+  const { balance = 0, history = [], performanceStatus } = data || {};
+  const normalizedPerformanceStatus = (performanceStatus ?? "").toLowerCase();
+  const performanceBadgeVariant =
+    normalizedPerformanceStatus === "excellent"
+      ? "success"
+      : normalizedPerformanceStatus === "good"
+      ? "info"
+      : normalizedPerformanceStatus === "average"
+      ? "warning"
+      : normalizedPerformanceStatus === "poor"
+      ? "danger"
+      : "default";
 
   const columns = [
     { 
@@ -65,13 +89,27 @@ export default function DriverDashboard() {
     <div className="min-h-screen bg-gray-50 p-8 dark:bg-gray-950">
       <div className="max-w-5xl mx-auto">
         <header className="mb-8">
+          <Link
+            to="/"
+            className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            &larr; Debug Menu
+          </Link>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Driver Rewards</h1>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
           <Card className="p-8 bg-indigo-600 text-white shadow-xl">
             <h2 className="text-indigo-100 text-sm font-semibold uppercase">Available Points</h2>
             <div className="text-6xl font-black mt-2">{balance.toLocaleString()}</div>
+          </Card>
+          <Card className="p-8 bg-white dark:bg-gray-900 shadow-xl">
+            <h2 className="text-gray-500 text-sm font-semibold uppercase">Performance Status</h2>
+            <div className="mt-4">
+              <Badge variant={performanceBadgeVariant} size="md" className="capitalize">
+                {performanceStatus ?? "Not set"}
+              </Badge>
+            </div>
           </Card>
         </div>
 

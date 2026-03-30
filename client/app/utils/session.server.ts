@@ -19,6 +19,8 @@ export interface SessionUser {
   UserID: number;
   UserType: UserRole;
   Username: string;
+  FirstName?: string;
+  LastName?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,7 +41,7 @@ const MAX_AGE_SECONDS = 60 * 60 * 24;
 // Single object so future route renames (e.g. /catalogs) are one-line changes.
 // ---------------------------------------------------------------------------
 export const ROLE_HOME: Record<UserRole, string> = {
-  driver: "/driver/catalogs",
+  driver: "/driver/dashboard",
   sponsor: "/sponsor/catalogs",
   admin: "/admin/dashboard",
 };
