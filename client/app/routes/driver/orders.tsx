@@ -157,8 +157,14 @@ export default function DriverOrders() {
         <div className="flex items-center justify-between">
           <div>
             <Link
-              to="/driver/catalogs"
+              to="/"
               className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              &larr; Home
+            </Link>
+            <Link
+              to="/driver/catalogs"
+              className="mt-2 inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
             >
               &larr; Browse Catalogs
             </Link>

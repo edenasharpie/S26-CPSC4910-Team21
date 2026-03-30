@@ -1,4 +1,4 @@
-import { useLoaderData, Form, redirect } from "react-router";
+import { useLoaderData, Form, redirect, Link } from "react-router";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { requireAuth } from "~/utils/session.server";
 
@@ -48,6 +48,9 @@ export default function EditUser() {
   return (
     <div className="min-h-screen bg-[#0f172a] p-12">
       <div className="max-w-2xl mx-auto bg-white rounded-3xl p-10 shadow-2xl">
+        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline mb-4">
+          &larr; Home
+        </Link>
         
         {/* Header - Darkened to Slate-900 */}
         <h1 className="text-3xl font-extrabold text-slate-500 mb-1 border-b pb-4">

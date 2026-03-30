@@ -93,7 +93,7 @@ export default function DriverDashboard() {
             to="/"
             className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
-            &larr; Debug Menu
+            &larr; Home
           </Link>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Driver Rewards</h1>
         </header>

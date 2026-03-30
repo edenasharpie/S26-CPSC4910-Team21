@@ -20,7 +20,10 @@ const NAV_SECTIONS = [
   {
     label: "Driver",
     links: [
+      { to: "/driver/dashboard", label: "Dashboard" },
       { to: "/driver/catalogs", label: "Catalogs" },
+      { to: "/driver/orders", label: "Orders" },
+      { to: "/driver-dashboard/1", label: "Legacy Dashboard (id=1)" },
     ],
   },
   {
@@ -30,6 +33,13 @@ const NAV_SECTIONS = [
       { to: "/sponsor/catalogs", label: "Catalogs" },
       { to: "/sponsor/invoices", label: "Invoices" },
       { to: "/sponsor/reports", label: "Reports" },
+      { to: "/sponsor/manage-users", label: "Manage Users" },
+      { to: "/sponsor/manage-users/1", label: "Edit User (id=1)" },
+      { to: "/sponsor/driver-purchases", label: "Driver Purchases" },
+      { to: "/sponsor/deduct-points", label: "Deduct Points" },
+      { to: "/sponsor/settings/1", label: "Settings (id=1)" },
+      { to: "/sponsor/profile/1/edit", label: "Profile Edit (id=1)" },
+      { to: "/sponsor/profile/1/points", label: "Profile Points (id=1)" },
     ],
   },
   {
@@ -40,7 +50,10 @@ const NAV_SECTIONS = [
       { to: "/admin/catalogs", label: "Catalogs" },
       { to: "/admin/invoices", label: "Invoices" },
       { to: "/admin/reports", label: "Reports" },
-      { to: "/admin/profile/1", label: "Profile (id=1)" },
+      { to: "/admin/add-driver", label: "Add Driver" },
+      { to: "/admin/add-sponsor", label: "Add Sponsor" },
+      { to: "/admin/settings/1", label: "Settings (id=1)" },
+      { to: "/admin/profile/1/edit", label: "Profile Edit (id=1)" },
       { to: "/admin/profile/1/points", label: "Profile Points (id=1)" },
     ],
   },

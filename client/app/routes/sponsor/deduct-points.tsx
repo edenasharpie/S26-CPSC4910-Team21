@@ -1,4 +1,4 @@
-import { Form, useActionData } from "react-router";
+import { Form, Link, useActionData } from "react-router";
 import { Button, Card } from "~/components";
 import { requireAuth } from "~/utils/session.server";
 
@@ -30,9 +30,13 @@ export default function DeductPoints() {
     // The "min-h-screen" ensures the page takes up the full height
     // "p-8" adds breathing room so it's not stuck to the edges
     <div className="min-h-screen bg-gray-50 p-8 flex justify-center items-start">
-      
-      {/* max-w-2xl prevents it from being a tiny sliver */}
-      <Card className="w-full max-w-2xl p-8 shadow-lg border-t-4 border-red-600 bg-white">
+      <div className="w-full max-w-2xl">
+        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline mb-4">
+          &larr; Home
+        </Link>
+
+        {/* max-w-2xl prevents it from being a tiny sliver */}
+        <Card className="w-full p-8 shadow-lg border-t-4 border-red-600 bg-white">
         <h2 className="text-2xl font-bold mb-6 text-gray-800">Deduct Driver Points</h2>
         
         <Form method="post" className="space-y-6">
@@ -80,6 +84,7 @@ export default function DeductPoints() {
           )}
         </Form>
       </Card>
+      </div>
     </div>
   );
 }

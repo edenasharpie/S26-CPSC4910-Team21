@@ -36,6 +36,9 @@ export default function UserDirectory() {
   return (
     <div className="min-h-screen bg-[#0f172a] p-12">
       <div className="max-w-5xl mx-auto">
+        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-300 hover:underline mb-6">
+          &larr; Home
+        </Link>
         
         {/* Header (Text must be white to match screenshot/dark theme) */}
         <h1 className="text-4xl font-extrabold text-white mb-10 tracking-tight">

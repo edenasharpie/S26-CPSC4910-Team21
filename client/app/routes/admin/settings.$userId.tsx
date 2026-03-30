@@ -113,6 +113,12 @@ export default function AdminSettings() {
         {/* Header */}
         <div className="mb-8 border-b pb-6 dark:border-gray-800">
           <Link
+            to="/"
+            className="text-sm font-medium text-blue-600 hover:underline mb-2 block"
+          >
+            ← Home
+          </Link>
+          <Link
             to="/admin/dashboard"
             className="text-sm font-medium text-blue-600 hover:underline mb-2 block"
           >

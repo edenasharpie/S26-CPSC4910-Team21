@@ -172,7 +172,7 @@ export default function SponsorPortal() {
         {/* Header Section */}
         <div className="mb-8 border-b pb-6 dark:border-gray-800 flex justify-between items-end">
           <div className="text-left">
-            <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Return to Home</Link>
+            <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Home</Link>
             <div className="flex items-center gap-4">
               <div>
                 <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>

@@ -1,4 +1,4 @@
-import { useLoaderData } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { Table, Badge } from "~/components";
 import { requireAuth } from "~/utils/session.server";
 
@@ -61,6 +61,12 @@ export default function DriverPurchases() {
       <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
         
         <header style={{ marginBottom: '32px' }}>
+          <Link
+            to="/"
+            className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline mb-3"
+          >
+            &larr; Home
+          </Link>
           <h1 style={{ 
             color: '#1f2937', 
             fontSize: '32px', 

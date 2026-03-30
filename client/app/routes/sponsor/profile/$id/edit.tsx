@@ -71,6 +71,9 @@ export default function SponsorProfileEdit() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 py-8">
       <div className="max-w-2xl mx-auto px-4">
+        <Link to="/" className="text-sm text-blue-600 hover:underline mb-2 block">
+          ← Home
+        </Link>
         <Link to="/sponsor/dashboard" className="text-sm text-blue-600 hover:underline mb-4 block">
           ← Back to Dashboard
         </Link>
