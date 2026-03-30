@@ -739,9 +739,9 @@ router.post('/add-driver', async (req, res) => {
     const permissions = JSON.stringify({});
 
     const [userResult] = await connection.execute(
-      `INSERT INTO USERS
-       (Username, FirstName, LastName, Email, PassHash, UserType, ActiveStatus, LastLogin, LastPasswordChange, Permissions)
-       VALUES (?, ?, ?, ?, ?, 'driver', 1, NOW(), NOW(), ?)`,
+      `INSERT INTO USERS 
+      (Username, FirstName, LastName, Email, PassHash, UserType, ActiveStatus, LastLogin, LastPasswordChange, Permissions) 
+      VALUES (?, ?, ?, ?, ?, 'driver', 0, NOW(), NOW(), ?)`, // Changed status to 0 for 'Pending'
       [username, firstName, lastName, email, passHash, permissions]
     );
 

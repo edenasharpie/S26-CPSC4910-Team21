@@ -599,6 +599,54 @@ router.put('/user/:id', async (req, res) => {
     }
 });
 
+// Sponsors to view Driver Applications
+router.get('/view-applications', async (req, res) => {
+    try {
+        const [rows] = await pool.execute(
+            `SELECT 
+                u.UserID, 
+                u.FirstName, 
+                u.LastName, 
+                u.Email, 
+                u.DateApplied, 
+                d.LicenseNumber
+             FROM USERS u
+             JOIN DRIVERS d ON u.UserID = d.UserID
+             WHERE u.UserType = 'driver' AND u.ActiveStatus = 0
+             ORDER BY u.DateApplied DESC`
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error("View Apps Error:", error);
+        res.status(500).json({ error: "Could not fetch applications" });
+    }
+});
+
+// Sponsors accept or deny application
+router.post('/process-application', async (req, res) => {
+    const { applicationId, status, explanation } = req.body;
+
+    // Validation: Ensure only valid ENUM values are sent
+    const validStatuses = ['accepted', 'rejected', 'pending'];
+    if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+    }
+
+    try {
+        await pool.execute(
+            `UPDATE DRIVER_APPLICATIONS 
+             SET ApplicationStatus = ?, DecisionExplanation = ? 
+             WHERE ApplicationID = ?`,
+            [status, explanation || "", applicationId]
+        );
+
+        res.json({ message: `Application ${status} successfully.` });
+    } catch (error) {
+        console.error("Update Error:", error);
+        res.status(500).json({ error: "Failed to update application status." });
+    }
+});
+
 //module.exports = router;
 
 // GET /api/sponsors/:companyId/settings - Get sponsor company settings

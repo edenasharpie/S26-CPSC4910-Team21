@@ -262,5 +262,54 @@ router.post('/reviews/finalize', async (req, res) => {
     connection.release();
   }
 });
+
+// Drivers create application
+router.post('/submit-application', async (req, res) => {
+  const { driverId, sponsorCompanyId, explanation } = req.body;
+
+  try {
+    // ApplicationStatus defaults to 'pending' based on your ENUM
+    const [result] = await pool.execute(
+      `INSERT INTO DRIVER_APPLICATIONS 
+       (DriverID, SponsorCompanyID, ApplicationStatus, DecisionExplanation, TimeSubmitted)
+       VALUES (?, ?, 'pending', ?, NOW())`,
+      [driverId, sponsorCompanyId, explanation]
+    );
+
+    res.status(201).json({ 
+      message: "Application submitted successfully!", 
+      applicationId: result.insertId 
+    });
+  } catch (error) {
+    console.error("Submission Error:", error);
+    res.status(500).json({ error: "Could not submit application. You may already have a pending request." });
+  }
+});
+
+router.get('/my-applications/:driverId', async (req, res) => {
+    const { driverId } = req.params;
+
+    try {
+        const [rows] = await pool.execute(
+            `SELECT 
+                a.ApplicationID, 
+                a.SponsorCompanyID, 
+                u.FirstName AS SponsorName, 
+                a.ApplicationStatus, 
+                a.DecisionExplanation, 
+                a.TimeSubmitted
+             FROM DRIVER_APPLICATIONS a
+             JOIN USERS u ON a.SponsorCompanyID = u.UserID
+             WHERE a.DriverID = ?
+             ORDER BY a.TimeSubmitted DESC`,
+            [driverId]
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error("Fetch Apps Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 //module.exports = router;
 export default router;
