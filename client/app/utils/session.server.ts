@@ -19,6 +19,8 @@ export interface SessionUser {
   UserID: number;
   UserType: UserRole;
   Username: string;
+  FirstName?: string;
+  LastName?: string;
 }
 
 // ---------------------------------------------------------------------------

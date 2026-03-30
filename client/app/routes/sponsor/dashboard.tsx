@@ -19,8 +19,16 @@ export async function loader({ request }: Route.LoaderArgs) {
     if (!driversRes.ok) throw new Error(`Could not load drivers (${driversRes.status})`);
     const drivers = await driversRes.json();
 
+    const mergedUser = {
+      ...user,
+      FirstName: company.firstName ?? (user as any).FirstName,
+      LastName: company.lastName ?? (user as any).LastName,
+      Username: company.username ?? user.Username,
+      ProfilePicture: company.profilePicture ?? (user as any).ProfilePicture ?? "",
+    };
+
     return {
-      user,
+      user: mergedUser,
       companyId: company.sponsorCompanyId as number,
       companyName: company.companyName as string,
       drivers: Array.isArray(drivers) ? drivers : [],
@@ -79,6 +87,7 @@ export default function SponsorPortal() {
   const totalCount = drivers.length;
   const activeCount = drivers.filter((d: any) => d.ActiveStatus === 1).length;
   const inactiveCount = drivers.filter((d: any) => d.ActiveStatus === 0).length;
+  const totalPoints = drivers.reduce((sum: number, d: any) => sum + (d.PointBalance ?? 0), 0);
 
   useEffect(() => {
     if ((actionData as any)?.success) setIsAddUserOpen(false);
@@ -103,13 +112,17 @@ export default function SponsorPortal() {
     {
       key: "Avatar",
       header: "Avatar",
-      render: (user: any) => (
-        <img
-          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`}
-          alt=""
-          className="w-10 h-10 rounded-full border border-gray-100 dark:border-gray-800"
-        />
-      ),
+      render: (user: any) => {
+        return (
+          <AvatarOrInitials
+            profilePicture={user.ProfilePicture}
+            firstName={user.FirstName}
+            lastName={user.LastName}
+            className="w-10 h-10 rounded-full border border-gray-100 dark:border-gray-800"
+            initialsClassName="text-[11px]"
+          />
+        );
+      },
     },
     {
       key: "Name",
@@ -136,7 +149,7 @@ export default function SponsorPortal() {
           onClick={() => navigate(`/sponsor/profile/${user.UserID}/points`)}
           className="flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 hover:border-indigo-400 transition-all"
         >
-          <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">{user.TotalPoints ?? 0}</span>
+          <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">{user.PointBalance ?? 0}</span>
           <span className="text-[10px] uppercase tracking-tighter text-indigo-400 font-bold">Manage</span>
         </button>
       )
@@ -160,11 +173,29 @@ export default function SponsorPortal() {
         <div className="mb-8 border-b pb-6 dark:border-gray-800 flex justify-between items-end">
           <div className="text-left">
             <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Return to Home</Link>
-            <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>
-            <p className="text-gray-500 text-sm mt-1 font-medium italic">{companyName}</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>
+                <p className="text-gray-500 text-sm mt-1 font-medium italic">{companyName}</p>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
+                <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
+                <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/sponsor/settings/${user.UserID}`)}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+              title="Settings"
+            >
+              <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
             <Form method="post" action="/logout">
               <Button variant="secondary" size="sm" type="submit">Sign out</Button>
             </Form>
@@ -173,10 +204,12 @@ export default function SponsorPortal() {
               className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
             >
             <div className="relative">
-              <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.Username}`}
-                alt=""
+              <AvatarOrInitials
+                profilePicture={user.ProfilePicture}
+                firstName={user.FirstName ?? user.Username}
+                lastName={user.LastName ?? user.Username}
                 className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
+                initialsClassName="text-xs"
               />
               <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
             </div>
@@ -293,5 +326,99 @@ function StatCard({ title, value, color }: { title: string; value: number; color
         {value}
       </div>
     </div>
+  );
+}
+
+function resolveProfileImageUrl(profilePicture?: string) {
+  if (!profilePicture) return null;
+
+  const trimmed = profilePicture.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "external-content.duckduckgo.com") {
+      const wrapped = url.searchParams.get("u");
+      return wrapped ? decodeURIComponent(wrapped) : trimmed;
+    }
+  } catch {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
+function getProfileImageCandidates(profilePicture?: string) {
+  const trimmed = profilePicture?.trim();
+  if (!trimmed) return [] as string[];
+
+  const candidates = [trimmed];
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname === "external-content.duckduckgo.com") {
+      const wrapped = url.searchParams.get("u");
+      if (wrapped) candidates.push(decodeURIComponent(wrapped));
+    }
+  } catch {
+    return candidates;
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+function toRenderableImageUrl(profilePicture?: string) {
+  const resolved = resolveProfileImageUrl(profilePicture);
+  if (!resolved) return null;
+  if (resolved.startsWith('data:image')) return resolved;
+  if (resolved.startsWith(`${API_URL}/api/images/proxy?url=`)) return resolved;
+  return `${API_URL}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
+}
+
+function AvatarOrInitials({
+  profilePicture,
+  firstName,
+  lastName,
+  className,
+  initialsClassName,
+}: {
+  profilePicture?: string;
+  firstName?: string;
+  lastName?: string;
+  className: string;
+  initialsClassName: string;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const sources = getProfileImageCandidates(profilePicture);
+  const imgSrc = toRenderableImageUrl(sources[sourceIndex]);
+  const initials = `${(firstName?.[0] ?? "U").toUpperCase()}${(lastName?.[0] ?? "U").toUpperCase()}`;
+
+  useEffect(() => {
+    setImageError(false);
+    setSourceIndex(0);
+  }, [profilePicture]);
+
+  if (!imgSrc || imageError) {
+    return (
+      <div className={`${className} bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center justify-center font-bold ${initialsClassName}`}>
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imgSrc}
+      alt="avatar"
+      className={`${className} object-cover`}
+      referrerPolicy="no-referrer"
+      onError={() => {
+        if (sourceIndex < sources.length - 1) {
+          setSourceIndex((idx) => idx + 1);
+          return;
+        }
+        setImageError(true);
+      }}
+    />
   );
 }

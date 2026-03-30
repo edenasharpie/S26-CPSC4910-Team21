@@ -125,6 +125,8 @@ export async function action({ request }: Route.ActionArgs) {
       UserID: result.userID!,
       UserType: result.userType! as any,
       Username: result.username!,
+      FirstName: result.firstName,
+      LastName: result.lastName,
     });
 
     const destination = ROLE_HOME[result.userType as keyof typeof ROLE_HOME] ?? "/";
