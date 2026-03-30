@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { data, redirect, Form, useActionData, useNavigation, Link } from "react-router";
 import type { Route } from "./+types/login";
 import { Button } from "~/components/Button";
 import { Input } from "~/components/Input";
 import { Alert } from "~/components/Alert";
+import { Modal } from "~/components/Modal";
 import {
   getSession,
   signToken,
@@ -11,6 +13,13 @@ import {
 } from "~/utils/session.server";
 
 const API_URL = process.env.API_URL ?? 'http://localhost:5000';
+
+type LoginActionData = {
+  error?: string;
+  successMessage?: string;
+  showReactivation?: boolean;
+  reactivationUsername?: string;
+};
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -29,6 +38,55 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "login");
+
+  if (intent === "reactivate") {
+    const username = String(formData.get("reactivationUsername") ?? "").trim();
+    const password = String(formData.get("reactivationPassword") ?? "");
+
+    if (!username || !password) {
+      return data(
+        {
+          error: "Username and password are required to reactivate your account.",
+          showReactivation: true,
+          reactivationUsername: username,
+        },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/reactivate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        return data(
+          {
+            error: result.error ?? "Failed to reactivate account.",
+            showReactivation: true,
+            reactivationUsername: username,
+          },
+          { status: response.status || 400 }
+        );
+      }
+
+      return data({ successMessage: result.message ?? "Account reactivated. Please sign in." }, { status: 200 });
+    } catch {
+      return data(
+        {
+          error: "Could not reach the server. Please try again.",
+          showReactivation: true,
+          reactivationUsername: username,
+        },
+        { status: 503 }
+      );
+    }
+  }
+
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
@@ -45,7 +103,22 @@ export async function action({ request }: Route.ActionArgs) {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      return data({ error: result.error ?? "Login failed." }, { status: 401 });
+      if (
+        response.status === 403 &&
+        result?.errorCode === "ACCOUNT_DEACTIVATED" &&
+        result?.canSelfReactivate
+      ) {
+        return data(
+          {
+            error: result.error ?? "This account is deactivated.",
+            showReactivation: true,
+            reactivationUsername: username,
+          },
+          { status: 403 }
+        );
+      }
+
+      return data({ error: result.error ?? "Login failed." }, { status: response.status || 401 });
     }
 
     const token = signToken({
@@ -65,10 +138,19 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function LoginPage() {
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof action>() as LoginActionData | undefined;
   const navigation = useNavigation();
   const error = actionData?.error;
-  const isSubmitting = navigation.state !== "idle";
+  const successMessage = actionData?.successMessage;
+  const isSubmitting =
+    navigation.state !== "idle" && navigation.formData?.get("intent") !== "reactivate";
+  const isReactivating =
+    navigation.state !== "idle" && navigation.formData?.get("intent") === "reactivate";
+  const [isReactivationOpen, setIsReactivationOpen] = useState(false);
+
+  useEffect(() => {
+    setIsReactivationOpen(Boolean(actionData?.showReactivation));
+  }, [actionData?.showReactivation]);
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-slate-950 dark:to-slate-900 px-4 py-12">
@@ -88,6 +170,9 @@ export default function LoginPage() {
           {/* Error banner */}
           {error && (
             <Alert variant="error" message={error} dismissible={false} />
+          )}
+          {successMessage && (
+            <Alert variant="success" message={successMessage} dismissible={false} />
           )}
 
           <Form method="post" className="space-y-5">
@@ -144,6 +229,53 @@ export default function LoginPage() {
           </Link>
         </p>
       </div>
+
+      <Modal
+        isOpen={isReactivationOpen}
+        onClose={() => setIsReactivationOpen(false)}
+        title="Reactivate Driver Account"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Your driver account is currently deactivated. Confirm your password to reactivate it, then sign in.
+          </p>
+
+          <Form method="post" className="space-y-4">
+            <input type="hidden" name="intent" value="reactivate" />
+            <input
+              type="hidden"
+              name="reactivationUsername"
+              value={actionData?.reactivationUsername ?? ""}
+            />
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Username</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {actionData?.reactivationUsername}
+              </p>
+            </div>
+
+            <Input
+              id="reactivationPassword"
+              name="reactivationPassword"
+              type="password"
+              label="Password"
+              autoComplete="current-password"
+              required
+              placeholder="Enter your password"
+            />
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setIsReactivationOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" isLoading={isReactivating} disabled={isReactivating}>
+                Reactivate Account
+              </Button>
+            </div>
+          </Form>
+        </div>
+      </Modal>
     </div>
   );
 }

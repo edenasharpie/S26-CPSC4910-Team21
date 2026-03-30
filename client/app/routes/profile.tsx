@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useLoaderData, useActionData, Form, useSubmit, Link } from "react-router";
 import type { Route } from "./+types/profile";
-import { Table, Input, Button, Badge, Alert } from "~/components";
+import { Table, Input, Button, Badge, Alert, Modal } from "~/components";
 import { requireAuth } from "~/utils/session.server";
 //import { getUserById } from "../../../server/database/db";
 
@@ -41,6 +41,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     point_to_dollar_ratio: 0,
     profile_picture_url: user.ProfilePicture,
     account_type: accountType,
+    active_status: Boolean(user.ActiveStatus),
     created_at: user.LastLogin || new Date().toISOString(),
     last_password_change: user.LastPasswordChange || user.LastLogin || new Date().toISOString(),
   };
@@ -80,6 +81,9 @@ export default function ProfilePage() {
   // Password States
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [deactivationPassword, setDeactivationPassword] = useState("");
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
 
   const handlePasswordChange = async () => {
     setSuccessMessage("");
@@ -113,6 +117,47 @@ export default function ProfilePage() {
       }
     } catch (err) {
       setErrorMessage("Connection error. Please try again.");
+    }
+  };
+
+  const isDriverAccount = user.account_type === "Driver";
+
+  const openDeactivateModal = () => {
+    setDeactivationPassword("");
+    setErrorMessage("");
+    setIsDeactivateModalOpen(true);
+  };
+
+  const handleDeactivateAccount = async () => {
+    if (!deactivationPassword) {
+      setErrorMessage("Please enter your password to deactivate your account.");
+      return;
+    }
+
+    setIsDeactivating(true);
+    setSuccessMessage("");
+    setErrorMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/api/drivers/deactivate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, currentPassword: deactivationPassword }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setErrorMessage(result.error || "Failed to deactivate account.");
+        setIsDeactivating(false);
+        return;
+      }
+
+      await fetch("/logout", { method: "POST" });
+      window.location.assign("/login");
+    } catch (err) {
+      setErrorMessage("Connection error. Please try again.");
+      setIsDeactivating(false);
     }
   };
 
@@ -192,7 +237,7 @@ export default function ProfilePage() {
           <div className="card p-6">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold">Personal Information</h3>
-              <Button size="sm" onClick={() => setIsEditingProfile(!isEditingProfile)}>
+              <Button type="button" size="sm" onClick={() => setIsEditingProfile(!isEditingProfile)}>
                 {isEditingProfile ? "Cancel" : "Edit"}
               </Button>
             </div>
@@ -212,13 +257,13 @@ export default function ProfilePage() {
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">Security</h3>
               {!isEditingPassword ? (
-                <Button size="sm" variant="secondary" onClick={() => setIsEditingPassword(true)}>
+                <Button type="button" size="sm" variant="secondary" onClick={() => setIsEditingPassword(true)}>
                   Change Password
                 </Button>
               ) : (
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditingPassword(false)}>Cancel</Button>
-                  <Button variant="primary" size="sm" onClick={handlePasswordChange}>Update Password</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditingPassword(false)}>Cancel</Button>
+                  <Button type="button" variant="primary" size="sm" onClick={handlePasswordChange}>Update Password</Button>
                 </div>
               )}
             </div>
@@ -256,15 +301,84 @@ export default function ProfilePage() {
                     onChange={(e) => setPointToDollarRatio(Number(e.target.value))}
                   />
                 </div>
-                <Button variant="secondary">Update Ratio</Button>
+                <Button type="button" variant="secondary">Update Ratio</Button>
               </div>
               <p className="text-sm text-gray-500 mt-2">
                 Currently: {pointToDollarRatio} points = $1.00 USD
               </p>
             </div>
           )}
+
+          {isDriverAccount && (
+            <div className="card p-6 border-l-4 border-red-500">
+              <h3 className="text-xl font-bold mb-2">Account Status</h3>
+              <div className="flex items-center justify-between gap-4 mt-4">
+                <div>
+                  <p className="text-sm text-gray-500">Current status</p>
+                  <Badge variant={user.active_status ? "success" : "danger"} className="mt-1">
+                    {user.active_status ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  onClick={openDeactivateModal}
+                >
+                  Deactivate Account
+                </Button>
+              </div>
+              <p className="text-sm text-gray-500 mt-4">
+                Deactivation signs you out immediately. You can reactivate from the login page by confirming your password.
+              </p>
+            </div>
+          )}
         </div>
       </div>
+
+      <Modal
+        isOpen={isDeactivateModalOpen}
+        onClose={() => {
+          if (!isDeactivating) {
+            setIsDeactivateModalOpen(false);
+          }
+        }}
+        title="Deactivate Account"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            This will deactivate your driver account and sign you out. Enter your current password to confirm.
+          </p>
+          <Input
+            id="deactivationPassword"
+            name="deactivationPassword"
+            type="password"
+            label="Current Password"
+            placeholder="Enter your current password"
+            value={deactivationPassword}
+            onChange={(e) => setDeactivationPassword(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsDeactivateModalOpen(false)}
+              disabled={isDeactivating}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleDeactivateAccount}
+              isLoading={isDeactivating}
+              disabled={isDeactivating}
+            >
+              Confirm Deactivation
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
