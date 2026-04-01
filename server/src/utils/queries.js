@@ -84,9 +84,10 @@ export async function updateUserProfile(userId, updates) {
  * Change user password with history validation
  * @param {number} userId - The user ID
  * @param {string} newPassword - The new password (plain text)
+ * @param {'user_initiated'|'admin_initiated'|'password_reset'} [changeMethod='user_initiated']
  * @returns {Promise<Object>} Result object with success status
  */
-export async function changePasswordWithHistory(userId, newPassword) {
+export async function changePasswordWithHistory(userId, newPassword, changeMethod = 'user_initiated') {
   const connection = await pool.getConnection();
   
   try {
@@ -145,7 +146,7 @@ export async function changePasswordWithHistory(userId, newPassword) {
         'PasswordChange',
         JSON.stringify({
           success: true,
-          changeMethod: 'user_initiated',
+          changeMethod,
           oldHash,
         }),
       ]
