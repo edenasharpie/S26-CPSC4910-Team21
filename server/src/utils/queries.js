@@ -566,11 +566,11 @@ export async function getDriverApplicationReport(filters = {}) {
             SponsorCompanyID,
             ApplicationStatus,
             TimeSubmitted,
-            TimeStatusChanged
+            NULL AS TimeStatusChanged
           FROM DRIVER_APPLICATIONS
           ${whereClause}
           ORDER BY TimeSubmitted DESC
-        `;
+        `; // NULL AS because apparently there wasnt any column in the database
         
         const [detailRows] = await connection.query(detailsQuery, params);
         report.detailedRecords = detailRows;

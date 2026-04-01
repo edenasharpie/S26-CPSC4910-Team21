@@ -5,7 +5,7 @@
 import crypto from 'crypto';
 import { Router } from 'express';
 import { getUserByUsername, logLoginAttempt, pool } from '../db.js';
-import { authenticator } from 'otplib';
+import { generateSecret, generateURI, verify as verifyTotp } from 'otplib';
 import QRCode from 'qrcode';
 import { changePasswordWithHistory } from '../utils/queries.js';
 import { validatePasswordComplexity, verifyPassword } from '../utils/auth.js';
@@ -199,12 +199,12 @@ router.post('/password-reset/request', async (req, res) => {
       });
     }
 
-    const secret = authenticator.generateSecret();
-    const otpauth = authenticator.keyuri(
-      user.Email || user.Username,
-      'FleetScore',
-      secret
-    );
+    const secret = generateSecret();
+    const otpauth = generateURI({
+      issuer: 'FleetScore',
+      label: user.Email || user.Username,
+      secret,
+    });
     const qrCodeDataUrl = await QRCode.toDataURL(otpauth);
 
     const resetRequestId = crypto.randomBytes(24).toString('hex');
@@ -262,7 +262,8 @@ router.post('/password-reset/verify-totp', async (req, res) => {
   challenge.attempts += 1;
   resetChallenges.set(challengeId, challenge);
 
-  const isValid = authenticator.check(code, challenge.secret);
+  const verificationResult = await verifyTotp({ token: code, secret: challenge.secret });
+  const isValid = Boolean(verificationResult?.valid);
   if (!isValid) {
     await logPasswordResetEvent(challenge.userId, 'totp_verify', false);
     return res.status(401).json({ success: false, error: 'Invalid TOTP code.' });
