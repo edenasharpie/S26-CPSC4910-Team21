@@ -201,7 +201,7 @@ export default function LoginPage() {
               />
               <div className="text-right pt-0.5">
                 <Link
-                  to="/change-password"
+                  to="/forgot-password"
                   className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                 >
                   Forgot password?
