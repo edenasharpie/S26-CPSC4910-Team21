@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toApiUrl } from "~/utils/api-url";
 
 export function DriverApplicationForm({ driverId }: { driverId: string }) {
   const [sponsorId, setSponsorId] = useState("");
@@ -10,7 +11,7 @@ export function DriverApplicationForm({ driverId }: { driverId: string }) {
     e.preventDefault();
     setLoading(true);
 
-    const res = await fetch("http://localhost:5001/api/users/submit-application", {
+    const res = await fetch(toApiUrl("/api/users/submit-application"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

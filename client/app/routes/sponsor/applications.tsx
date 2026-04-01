@@ -1,8 +1,9 @@
 import { useLoaderData, useNavigate } from "react-router";
 import { StatusBadge } from "~/components/status-badge"; // Assuming you followed the shared component path
+import { toApiUrl } from "~/utils/api-url";
 
 export async function loader() {
-  const res = await fetch("http://localhost:5001/api/sponsors/driver-applications");
+  const res = await fetch(toApiUrl("/api/sponsors/driver-applications"));
   if (!res.ok) throw new Error("Failed to load applications");
   return await res.json();
 }
@@ -18,7 +19,7 @@ export default function DriverApplications() {
     if (reason === null) return;
 
     try {
-      const res = await fetch("http://localhost:5001/api/sponsors/process-application", {
+      const res = await fetch(toApiUrl("/api/sponsors/process-application"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

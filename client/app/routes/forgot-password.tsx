@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { Alert, Button, Card, Input } from "~/components";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
+import { toApiUrl } from "~/utils/api-url";
 
 type Step = "request" | "verify" | "confirm";
 
@@ -40,7 +39,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/password-reset/request`, {
+      const response = await fetch(toApiUrl("/api/auth/password-reset/request"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier }),
@@ -76,7 +75,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/password-reset/verify-totp`, {
+      const response = await fetch(toApiUrl("/api/auth/password-reset/verify-totp"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetRequestId, totpCode }),
@@ -105,7 +104,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/password-reset/confirm`, {
+      const response = await fetch(toApiUrl("/api/auth/password-reset/confirm"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken, newPassword }),

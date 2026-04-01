@@ -10,17 +10,19 @@ const envPath = join(__dirname, '../../../.fs-env');
 console.log('Looking for .fs-env at:', envPath);
 const result = dotenv.config({ path: envPath });
 if (result.error) {
-  console.error('Error loading .fs-env file:', result.error.message);
+  throw new Error(`Error loading .fs-env file at ${envPath}: ${result.error.message}`);
 } else {
   console.log('Environment variables loaded successfully');
 }
 if (typeof window !== 'undefined') {
   throw new Error("DB.JS IS RUNNING IN THE BROWSER! THIS IS THE PROBLEM.");
 }
-dotenv.config({ path: envPath });
-console.log('--- DB Config Check ---');
-console.log('Host from env:', process.env.DB_HOST);
-console.log('User from env:', process.env.DB_USER);
+
+const requiredDbEnvVars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
+const missingDbEnvVars = requiredDbEnvVars.filter((name) => !process.env[name]);
+if (missingDbEnvVars.length > 0) {
+  throw new Error(`Missing required DB environment variables: ${missingDbEnvVars.join(', ')}`);
+}
 
 //Conection pool to SQL
 const pool = mysql.createPool({
@@ -39,10 +41,17 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle database client:', err);
   if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
     console.log('Database connection was closed or reset. Pool will manage reconnection.');
-  } else {
-    throw err;
   }
 });
+
+export const verifyDatabaseConnection = async () => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.ping();
+  } finally {
+    connection.release();
+  }
+};
 
 export const query = async (sql, params) => {
   try {

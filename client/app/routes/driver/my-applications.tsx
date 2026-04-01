@@ -1,5 +1,6 @@
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import { toApiUrl } from "~/utils/api-url";
 import { requireAuth } from "~/utils/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -10,7 +11,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // 2. Use the real ID from the session (e.g., user.username or user.id)
   const driverId = user.Username || user.UserID; 
 
-  const res = await fetch(`http://localhost:5001/api/users/my-applications/${driverId}`);
+  const res = await fetch(toApiUrl(`/api/users/my-applications/${driverId}`));
   if (!res.ok) throw new Error("Could not load applications");
   
   return await res.json();

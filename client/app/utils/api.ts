@@ -23,6 +23,8 @@
 
 // ─── User types ──────────────────────────────────────────────────────────────
 
+import { getApiBaseUrl } from "~/utils/api-url";
+
 export type UserRole = 'admin' | 'sponsor' | 'driver';
 
 /**
@@ -44,8 +46,7 @@ export interface AuthUser {
  * Override at build time with the VITE_API_URL environment variable.
  */
 const API_BASE_URL: string =
-  (typeof import.meta !== 'undefined' && (import.meta as { env?: Record<string, string> }).env?.VITE_API_URL) ??
-  'http://localhost:5000';
+  getApiBaseUrl();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

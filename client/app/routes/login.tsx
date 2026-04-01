@@ -11,8 +11,7 @@ import {
   buildSetCookieHeader,
   ROLE_HOME,
 } from "~/utils/session.server";
-
-const API_URL = process.env.API_URL ?? 'http://localhost:5000';
+import { toApiUrl } from "~/utils/api-url";
 
 type LoginActionData = {
   error?: string;
@@ -56,7 +55,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/reactivate`, {
+      const response = await fetch(toApiUrl("/api/auth/reactivate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -95,7 +94,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
+    const response = await fetch(toApiUrl("/api/auth/login"), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
