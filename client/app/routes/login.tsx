@@ -138,15 +138,27 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-slate-500 dark:text-slate-300 mt-8 font-medium">
-          New driver?{" "}
-          <Link
-            to="/register"
-            className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
-          >
-            Create an account
-          </Link>
-        </p>
+        <div className="mt-8 space-y-3 text-center">
+          <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">
+            New driver?{" "}
+            <Link
+              to="/register"
+              className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
+            >
+              Create an account
+            </Link>
+          </p>
+          
+          <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">
+            Want to be a sponsor?{" "}
+            <Link
+              to="/sponsor-application"
+              className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
+            >
+              Sponsor Application
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
