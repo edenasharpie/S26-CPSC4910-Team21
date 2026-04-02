@@ -200,13 +200,36 @@ export async function deleteUser(id) {
 // Get specific driver point data
 export async function getDriverPoints(userId) {
   const [rows] = await pool.execute(
-    `SELECT d.UserID, u.FirstName, u.LastName, d.PointBalance 
+    `SELECT 
+        d.UserID, 
+        u.FirstName, 
+        u.LastName, 
+        u.Username,
+        u.ProfilePicture,
+        d.PointBalance,
+        d.PerformanceStatus
      FROM DRIVERS d
      JOIN USERS u ON d.UserID = u.UserID 
      WHERE d.UserID = ?`, 
     [userId]
   );
   return rows[0];
+}
+
+export async function getSponsorsByDriverId(userId) {
+  const [rows] = await pool.execute(`
+    SELECT 
+      s.SponsorID, 
+      s.CompanyName, 
+      s.Description,
+      s.Status
+    FROM SPONSORS s
+    JOIN SPONSOR_DRIVERS sd ON s.SponsorID = sd.SponsorID
+    JOIN DRIVERS d ON sd.DriverID = d.LicenseNumber
+    WHERE d.UserID = ?
+  `, [userId]);
+  
+  return rows;
 }
 
 //Point changing

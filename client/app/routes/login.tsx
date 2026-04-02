@@ -48,15 +48,17 @@ export async function action({ request }: Route.ActionArgs) {
       return data({ error: result.error ?? "Login failed." }, { status: 401 });
     }
 
+    const normalizedUserType = String(result.userType ?? "").trim().toLowerCase();
+
     const token = signToken({
       UserID: result.userID!,
-      UserType: result.userType! as any,
+      UserType: normalizedUserType as any,
       Username: result.username!,
       FirstName: result.firstName,
       LastName: result.lastName,
     });
 
-    const destination = ROLE_HOME[result.userType as keyof typeof ROLE_HOME] ?? "/";
+    const destination = ROLE_HOME[normalizedUserType as keyof typeof ROLE_HOME] ?? "/";
 
     return redirect(destination, {
       headers: { "Set-Cookie": buildSetCookieHeader(token) },

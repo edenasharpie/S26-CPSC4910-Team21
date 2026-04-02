@@ -17,6 +17,7 @@ export default [
   route("driver/dashboard", "routes/driver/dashboard.tsx"),
 
   //SETTINGS
+  //route("sponsor/settings", "routes/sponsor/settings.$userId.tsx"),
   route("sponsor/settings/:userId", "routes/sponsor/settings.$userId.tsx"),
   route("admin/settings/:userId", "routes/admin/settings.$userId.tsx"),
 

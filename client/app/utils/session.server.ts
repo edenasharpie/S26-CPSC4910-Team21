@@ -21,6 +21,7 @@ export interface SessionUser {
   Username: string;
   FirstName?: string;
   LastName?: string;
+  ProfilePicture?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -42,9 +43,18 @@ const MAX_AGE_SECONDS = 60 * 60 * 24;
 // ---------------------------------------------------------------------------
 export const ROLE_HOME: Record<UserRole, string> = {
   driver: "/driver/dashboard",
-  sponsor: "/sponsor/catalogs",
+  sponsor: "/sponsor/dashboard",
   admin: "/admin/dashboard",
 };
+
+function normalizeUserRole(role: unknown): UserRole | null {
+  if (typeof role !== "string") return null;
+  const normalized = role.trim().toLowerCase();
+  if (normalized === "driver" || normalized === "sponsor" || normalized === "admin") {
+    return normalized;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // JWT helpers
@@ -52,13 +62,38 @@ export const ROLE_HOME: Record<UserRole, string> = {
 
 /** Sign a JWT for the given user and return it as a string. */
 export function signToken(user: SessionUser): string {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: MAX_AGE_SECONDS });
+  const normalizedRole = normalizeUserRole(user.UserType);
+  const payload: SessionUser = {
+    ...user,
+    UserType: normalizedRole ?? user.UserType,
+  };
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: MAX_AGE_SECONDS });
 }
 
 /** Verify a JWT string. Returns the decoded payload or null if invalid/expired. */
 export function verifyToken(token: string): SessionUser | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as SessionUser;
+    const decoded = jwt.verify(token, JWT_SECRET) as Record<string, unknown>;
+    const rawUserId = decoded.UserID ?? decoded.userID;
+    const rawUserType = decoded.UserType ?? decoded.userType;
+    const rawUsername = decoded.Username ?? decoded.username;
+
+    const normalizedRole = normalizeUserRole(rawUserType);
+    const userId = typeof rawUserId === "number" ? rawUserId : Number(rawUserId);
+    const username = typeof rawUsername === "string" ? rawUsername : "";
+
+    if (!normalizedRole || !Number.isFinite(userId) || !username) {
+      return null;
+    }
+
+    return {
+      UserID: userId,
+      UserType: normalizedRole,
+      Username: username,
+      FirstName: typeof decoded.FirstName === "string" ? decoded.FirstName : undefined,
+      LastName: typeof decoded.LastName === "string" ? decoded.LastName : undefined,
+      ProfilePicture: typeof decoded.ProfilePicture === "string" ? decoded.ProfilePicture : undefined,
+    };
   } catch {
     return null;
   }
@@ -126,10 +161,18 @@ export function requireAuth(
     throw redirect("/login");
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.UserType)) {
-    // Authenticated but wrong role — redirect to their own dashboard
-    throw redirect(ROLE_HOME[user.UserType] ?? "/login");
+  const normalizedRole = normalizeUserRole(user.UserType);
+  if (!normalizedRole) {
+    throw redirect("/login");
   }
 
-  return user;
+  if (allowedRoles && !allowedRoles.includes(normalizedRole)) {
+    // Authenticated but wrong role — redirect to their own dashboard
+    throw redirect(ROLE_HOME[normalizedRole] ?? "/login");
+  }
+
+  return {
+    ...user,
+    UserType: normalizedRole,
+  };
 }
