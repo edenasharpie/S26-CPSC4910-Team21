@@ -4,8 +4,9 @@ import { useLoaderData, Form, useActionData, Link } from "react-router";
 import { Input, Button } from "~/components";
 import { requireAuth } from "~/utils/session.server";
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from "recharts";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const sessionUser = await requireAuth(request, ["admin"]);

@@ -3,8 +3,9 @@ import { useState, useMemo } from "react";
 import { useLoaderData, Form, useActionData, Link } from "react-router";
 import { Input, Button } from "~/components";
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from "recharts";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 // TEMP: Hardcoded sponsor user ID for testing (auth not yet implemented)
 // Using sponsor user 123456915 (Sam Sponsor) who manages company 78

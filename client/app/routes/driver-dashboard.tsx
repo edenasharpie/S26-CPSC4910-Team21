@@ -2,8 +2,9 @@ import { Link, useLoaderData, Form } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { Badge, Card, Table, Button } from "~/components";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 // 1. Define the Data Structure
 interface PointTransaction {

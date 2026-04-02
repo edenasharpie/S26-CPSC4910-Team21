@@ -1,7 +1,8 @@
 import { Link, useLoaderData } from "react-router";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 interface User {
   UserID: string;

@@ -3,8 +3,9 @@ import { useState } from "react";
 import { Link, useLoaderData, Form } from "react-router";
 import { Table, Button, Badge, Modal } from "~/components";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 // Mirrors the EVENTS table joined with USERS.Username
 interface AuditLogEntry {

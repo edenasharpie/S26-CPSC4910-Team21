@@ -1,8 +1,9 @@
 import type { Route } from "./+types/edit";
 import { useLoaderData, Form, Link, useNavigate } from "react-router";
 import { Button, Input, Card } from "~/components";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 // TEMP: Hardcoded sponsor user ID for testing (auth not yet implemented)
 // In production, this would come from requireAuth(request)

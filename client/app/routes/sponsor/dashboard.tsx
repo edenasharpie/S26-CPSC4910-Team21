@@ -10,8 +10,9 @@ import {
   buildAssumedSession,
   ROLE_HOME,
 } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? 'http://localhost:5000';
+const API_URL = getApiBaseUrl();
 
 // --- LOADER ---
 export async function loader({ request }: Route.LoaderArgs) {

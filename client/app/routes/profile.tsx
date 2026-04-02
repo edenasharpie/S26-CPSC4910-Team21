@@ -4,9 +4,10 @@ import { useLoaderData, useActionData, Form, useSubmit, Link } from "react-route
 import type { Route } from "./+types/profile";
 import { Table, Input, Button, Badge, Alert, Modal } from "~/components";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 //import { getUserById } from "../../../server/database/db";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 // 1. THE LOADER: This pulls real data from the DB before the page renders
 export async function loader({ request }: Route.LoaderArgs) {
