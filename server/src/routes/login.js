@@ -3,10 +3,15 @@
  * Mounted at /api/auth in server/index.js
  */
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import { getUserByUsername, logLoginAttempt } from '../db.js';
 import { verifyPassword } from '../utils/auth.js';
 
 const router = Router();
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production-fleetscore";
+const COOKIE_NAME = "sessionId";
+const MAX_AGE_MS = 24 * 60 * 60 * 1000; 
 
 /**
  * POST /api/auth/login
@@ -30,7 +35,7 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Username and password are required.' });
   }
 
-  // --- Look up user ---
+  // --- 1. Look up user ---
   let user;
   try {
     user = await getUserByUsername(String(username).trim());
@@ -41,11 +46,10 @@ router.post('/login', async (req, res) => {
 
   if (!user) {
     await logLoginAttempt(null, false, 'username_not_found', ip);
-    // Deliberately vague — do not reveal whether the username exists
     return res.status(401).json({ success: false, error: 'Invalid username or password.' });
   }
 
-  // --- Verify password ---
+  // Verify password 
   const passwordMatch = await verifyPassword(String(password), user.PassHash);
 
   if (!passwordMatch) {
@@ -53,7 +57,7 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Invalid username or password.' });
   }
 
-  // --- Check account is active ---
+  // Check account is active 
   if (!user.ActiveStatus) {
     await logLoginAttempt(user.UserID, false, 'failed', ip);
     return res.status(403).json({
@@ -62,14 +66,30 @@ router.post('/login', async (req, res) => {
     });
   }
 
-  // --- Success ---
   await logLoginAttempt(user.UserID, true, 'success', ip);
+
+  // Prepare the data for the JWT (matches SessionUser type in React)
+  const sessionUser = {
+    UserID: user.UserID,
+    UserType: user.UserType.toLowerCase(), 
+    Username: user.Username,
+  };
+
+  // Sign JWT
+  const token = jwt.sign(sessionUser, JWT_SECRET, { expiresIn: '24h' });
+
+  // Set HttpOnly Cookie
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', 
+    sameSite: 'lax',
+    path: '/',
+    maxAge: MAX_AGE_MS
+  });
 
   return res.status(200).json({
     success: true,
-    userID: user.UserID,
-    userType: user.UserType,
-    username: user.Username,
+    user: sessionUser
   });
 });
 

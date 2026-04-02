@@ -19,6 +19,12 @@ export interface SessionUser {
   UserID: number;
   UserType: UserRole;
   Username: string;
+
+  originalUser?: {
+    UserID: number;
+    Username: string;
+    UserType: UserRole;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -130,4 +136,29 @@ export function requireAuth(
   }
 
   return user;
+}
+
+/*
+ * Generates a new JWT that "wraps" the current user's identity around a target driver.
+ */
+export function assumeDriverIdentity(
+  currentUser: SessionUser, 
+  targetDriver: { UserID: number, Username: string }
+): string {
+  if (currentUser.UserType === "driver") {
+    throw new Error("Drivers cannot impersonate others.");
+  }
+
+  const newSession: SessionUser = {
+    UserID: targetDriver.UserID,
+    UserType: "driver", 
+    Username: targetDriver.Username,
+    originalUser: {
+      UserID: currentUser.UserID,
+      Username: currentUser.Username,
+      UserType: currentUser.UserType
+    }
+  };
+
+  return signToken(newSession);
 }

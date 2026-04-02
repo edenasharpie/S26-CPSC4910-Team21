@@ -5,7 +5,7 @@ import type { Route } from "./+types/about";
 export async function loader({ params }: Route.LoaderArgs) {
   // absolute URL for server-side fetches, relative for client-side
   const apiUrl = typeof window === 'undefined' 
-    ? process.env.API_URL || 'http://localhost:5000'
+    ? process.env.API_URL || 'http://localhost:5001'
     : '';
     
   const response = await fetch(`${apiUrl}/api/about`);
