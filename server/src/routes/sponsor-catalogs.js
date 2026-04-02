@@ -3,7 +3,6 @@ import { pool } from '../db.js';
 import store from '../services/fakeStoreService.js';
 import { 
   getSponsorCompanyId, 
-  userExists,
   getCatalogsBySponsorCompany,
   getAllCatalogs,
   verifyCatalogOwnership 
@@ -20,19 +19,16 @@ async function validateSponsorAndGetCompanyId(req, res, next) {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
-    // Check if user exists and get their type
-    const exists = await userExists(userId);
-    if (!exists) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Get user type from database
     const connection = await pool.getConnection();
     try {
       const [userRows] = await connection.query(
-        'SELECT UserType FROM USERS WHERE UserID = ?',
+        'SELECT UserType, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
         [userId]
       );
+
+      if (userRows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
       
       const userType = userRows[0]?.UserType;
       

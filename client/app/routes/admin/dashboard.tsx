@@ -1,8 +1,14 @@
 import type { Route } from "./+types/dashboard";
 import { useEffect, useState } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
-import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
-import { requireAuth } from "~/utils/session.server";
+import { useNavigate, useLoaderData, Form, useActionData, Link, redirect } from "react-router";
+import {
+  requireAuth,
+  signToken,
+  buildSetCookieHeader,
+  buildAssumedSession,
+  ROLE_HOME,
+} from "~/utils/session.server";
 
 const API_URL = process.env.API_URL ?? "http://localhost:5000";
 
@@ -43,8 +49,61 @@ export async function loader({ request }: Route.LoaderArgs) {
 // Action — create a new user via the Express API
 // ---------------------------------------------------------------------------
 export async function action({ request }: Route.ActionArgs) {
-  await requireAuth(request, ["admin"]);
+  const session = await requireAuth(request, ["admin"]);
   const fd = await request.formData();
+  const intent = String(fd.get("intent") ?? "create-user");
+
+  if (intent === "assume") {
+    const targetUserId = Number(fd.get("targetUserId"));
+    const targetRole = String(fd.get("targetRole") ?? "").toLowerCase();
+
+    if (!Number.isInteger(targetUserId) || !["driver", "sponsor"].includes(targetRole)) {
+      return { success: false, error: "Invalid assume target." };
+    }
+
+    const endpoint =
+      targetRole === "driver"
+        ? `${API_URL}/api/admin/assume-driver/${targetUserId}`
+        : `${API_URL}/api/admin/assume-sponsor/${targetUserId}`;
+
+    try {
+      const assumeRes = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requesterUserId: session.OriginalUser?.UserID ?? session.UserID,
+        }),
+      });
+
+      const assumeResult = await assumeRes.json().catch(() => ({}));
+      if (!assumeRes.ok || !assumeResult.success || !assumeResult.assumedUser) {
+        return {
+          success: false,
+          error: assumeResult.error ?? "Failed to assume selected account.",
+        };
+      }
+
+      const originalIdentity = session.OriginalUser ?? {
+        UserID: session.UserID,
+        UserType: session.UserType,
+        Username: session.Username,
+        FirstName: session.FirstName,
+        LastName: session.LastName,
+      };
+
+      const nextSession = buildAssumedSession(originalIdentity, assumeResult.assumedUser);
+      const token = signToken(nextSession);
+      const assumedRole = String(assumeResult.assumedUser.UserType).toLowerCase() as "driver" | "sponsor" | "admin";
+
+      return redirect(ROLE_HOME[assumedRole] ?? "/", {
+        headers: {
+          "Set-Cookie": buildSetCookieHeader(token),
+        },
+      });
+    } catch (error: any) {
+      return { success: false, error: error.message ?? "Failed to assume selected account." };
+    }
+  }
 
   const userType = (fd.get("accountType") as string)?.toLowerCase();
   const payload: Record<string, any> = {
@@ -91,6 +150,7 @@ export default function AdminPortal() {
   const { users, companies, error, session } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
+  const isAssumedMode = Boolean(session?.OriginalUser);
 
   const [searchQuery, setSearchQuery]     = useState("");
   const [typeFilter, setTypeFilter]       = useState("All");
@@ -205,6 +265,29 @@ export default function AdminPortal() {
       },
     },
     {
+      key: "assume",
+      header: "Assume",
+      render: (user: any) => {
+        const role = String(user.UserType ?? "").toLowerCase();
+        const canAssume = user.ActiveStatus !== 0 && ["driver", "sponsor"].includes(role);
+
+        if (!canAssume || isAssumedMode) {
+          return <span className="text-gray-300 pl-4">—</span>;
+        }
+
+        return (
+          <Form method="post" className="pr-2">
+            <input type="hidden" name="intent" value="assume" />
+            <input type="hidden" name="targetUserId" value={user.UserID} />
+            <input type="hidden" name="targetRole" value={role} />
+            <Button type="submit" size="sm" variant="primary">
+              Assume
+            </Button>
+          </Form>
+        );
+      },
+    },
+    {
       key: "edit",
       header: "",
       render: (user: any) => (
@@ -250,6 +333,13 @@ export default function AdminPortal() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {isAssumedMode && (
+              <Form method="post" action="/exit-assumption">
+                <Button variant="primary" size="sm" type="submit">
+                  Exit Assumed View
+                </Button>
+              </Form>
+            )}
             <button
               onClick={() => navigate(`/admin/settings/${session?.UserID || 1}`)}
               className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"

@@ -46,11 +46,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     last_password_change: user.LastPasswordChange || user.LastLogin || new Date().toISOString(),
   };
 
-  return { user: profile, performanceStatus };
+  return { user: profile, performanceStatus, session };
 }
 
 export default function ProfilePage() {
-  const { user, performanceStatus } = useLoaderData<typeof loader>();
+  const { user, performanceStatus, session } = useLoaderData<typeof loader>();
   const normalizedPerformanceStatus = (performanceStatus ?? "").toLowerCase();
   const performanceBadgeVariant =
     normalizedPerformanceStatus === "excellent"
@@ -169,6 +169,13 @@ export default function ProfilePage() {
       >
         ← Home
       </Link>
+      {session?.OriginalUser && (
+        <Form method="post" action="/exit-assumption" className="mb-4">
+          <Button type="submit" variant="primary" size="sm">
+            Exit Assumed View
+          </Button>
+        </Form>
+      )}
       <h1 className="text-3xl font-bold mb-8 text-gray-800 dark:text-white">
         My Profile & Settings
       </h1>

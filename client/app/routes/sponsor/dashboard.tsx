@@ -2,8 +2,14 @@
 import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Modal } from "~/components";
-import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
-import { requireAuth } from "~/utils/session.server";
+import { useNavigate, useLoaderData, Form, useActionData, Link, redirect } from "react-router";
+import {
+  requireAuth,
+  signToken,
+  buildSetCookieHeader,
+  buildAssumedSession,
+  ROLE_HOME,
+} from "~/utils/session.server";
 
 const API_URL = process.env.API_URL ?? 'http://localhost:5000';
 
@@ -43,6 +49,46 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   const user = requireAuth(request, ['sponsor']);
   const formData = await request.formData();
+  const intent = String(formData.get('intent') ?? 'create-driver');
+
+  if (intent === 'assume-driver') {
+    const driverUserId = Number(formData.get('targetUserId'));
+    if (!Number.isInteger(driverUserId)) {
+      return { success: false, error: 'Invalid driver selected for assume view.' };
+    }
+
+    try {
+      const assumeRes = await fetch(`${API_URL}/api/sponsors/${user.UserID}/assume-driver/${driverUserId}`, {
+        method: 'POST',
+      });
+
+      const assumeResult = await assumeRes.json().catch(() => ({}));
+      if (!assumeRes.ok || !assumeResult.success || !assumeResult.assumedUser) {
+        return { success: false, error: assumeResult.error ?? 'Failed to assume selected driver.' };
+      }
+
+      const originalIdentity = user.OriginalUser ?? {
+        UserID: user.UserID,
+        UserType: user.UserType,
+        Username: user.Username,
+        FirstName: user.FirstName,
+        LastName: user.LastName,
+      };
+
+      const nextSession = buildAssumedSession(originalIdentity, assumeResult.assumedUser);
+      const token = signToken(nextSession);
+      const assumedRole = String(assumeResult.assumedUser.UserType).toLowerCase() as 'driver' | 'sponsor' | 'admin';
+
+      return redirect(ROLE_HOME[assumedRole] ?? '/', {
+        headers: {
+          'Set-Cookie': buildSetCookieHeader(token),
+        },
+      });
+    } catch (error: any) {
+      return { success: false, error: error.message ?? 'Failed to assume selected driver.' };
+    }
+  }
+
   const companyRes = await fetch(`${API_URL}/api/sponsors/user/${user.UserID}`);
   if (!companyRes.ok) return { success: false, error: 'Could not determine your company.' };
   const { sponsorCompanyId } = await companyRes.json();
@@ -77,6 +123,8 @@ export async function action({ request }: Route.ActionArgs) {
 export default function SponsorPortal() {
   const { user, companyId, companyName, drivers, error } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const isAssumedMode = Boolean(user?.OriginalUser);
+  const userProfilePicture = (user as any).ProfilePicture ?? "";
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -155,6 +203,24 @@ export default function SponsorPortal() {
       )
     },
     {
+      key: "Assume",
+      header: "Assume",
+      render: (driver: any) => {
+        const isActive = driver.ActiveStatus === 1;
+        if (!isActive || isAssumedMode) {
+          return <span className="text-gray-300 pl-4">—</span>;
+        }
+
+        return (
+          <Form method="post" className="pr-2">
+            <input type="hidden" name="intent" value="assume-driver" />
+            <input type="hidden" name="targetUserId" value={driver.UserID} />
+            <Button type="submit" size="sm" variant="primary">Assume</Button>
+          </Form>
+        );
+      },
+    },
+    {
       key: "edit",
       header: "", 
       render: (user: any) => (
@@ -186,6 +252,11 @@ export default function SponsorPortal() {
           </div>
 
           <div className="flex items-center gap-3">
+            {isAssumedMode && (
+              <Form method="post" action="/exit-assumption">
+                <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
+              </Form>
+            )}
             <button
               onClick={() => navigate(`/sponsor/settings/${user.UserID}`)}
               className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
@@ -205,7 +276,7 @@ export default function SponsorPortal() {
             >
             <div className="relative">
               <AvatarOrInitials
-                profilePicture={user.ProfilePicture}
+                profilePicture={userProfilePicture}
                 firstName={user.FirstName ?? user.Username}
                 lastName={user.LastName ?? user.Username}
                 className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"

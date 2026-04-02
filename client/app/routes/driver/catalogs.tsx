@@ -270,6 +270,11 @@ export default function DriverCatalogs() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-3xl font-bold">Available Catalogs</h1>
         <div className="flex gap-2">
+          {user.OriginalUser && (
+            <Form method="post" action="/exit-assumption">
+              <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
+            </Form>
+          )}
           <Button variant="secondary" onClick={() => setIsCartOpen(true)}>
             Cart ({cartItems.length})
           </Button>

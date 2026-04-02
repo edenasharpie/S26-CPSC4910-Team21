@@ -409,4 +409,33 @@ router.post('/reactivate', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/auth/assumption-exit
+ * Body: { actingUserId: number, originalUserId: number }
+ */
+router.post('/assumption-exit', async (req, res) => {
+  const actingUserId = Number(req.body?.actingUserId);
+  const originalUserId = Number(req.body?.originalUserId);
+
+  if (!Number.isInteger(actingUserId) || !Number.isInteger(originalUserId)) {
+    return res.status(400).json({
+      success: false,
+      error: 'actingUserId and originalUserId are required.',
+    });
+  }
+
+  try {
+    await pool.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('assumedView:exit'), 'isSelfUpdate', false, 'success', true))`,
+      [originalUserId]
+    );
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error logging assumption exit event:', error);
+    return res.status(500).json({ success: false, error: 'Failed to log assumption exit.' });
+  }
+});
+
 export default router;

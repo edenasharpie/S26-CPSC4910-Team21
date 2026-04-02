@@ -2,7 +2,6 @@ import express from 'express';
 import { pool } from '../db.js';
 import { 
   getDriverSponsorCompanyId, 
-  userExists,
   getCatalogsBySponsorCompany 
 } from '../utils/queries.js';
 
@@ -17,10 +16,17 @@ async function validateDriverAndGetSponsorId(req, res, next) {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
-    // Check if user exists
-    const exists = await userExists(userId);
-    if (!exists) {
-      return res.status(404).json({ error: 'User not found' });
+    const [userRows] = await pool.execute(
+      'SELECT UserID, UserType, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
+      [userId]
+    );
+
+    if (userRows.length === 0 || userRows[0].UserType !== 'driver') {
+      return res.status(404).json({ error: 'Driver account not found' });
+    }
+
+    if (!Boolean(userRows[0].ActiveStatus)) {
+      return res.status(403).json({ error: 'Driver account is inactive.' });
     }
 
     // Get driver's sponsor company ID

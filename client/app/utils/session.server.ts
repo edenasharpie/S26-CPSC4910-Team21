@@ -15,12 +15,16 @@ import { redirect } from "react-router";
 
 export type UserRole = "driver" | "sponsor" | "admin";
 
-export interface SessionUser {
+export interface SessionIdentity {
   UserID: number;
   UserType: UserRole;
   Username: string;
   FirstName?: string;
   LastName?: string;
+}
+
+export interface SessionUser extends SessionIdentity {
+  OriginalUser?: SessionIdentity;
 }
 
 // ---------------------------------------------------------------------------
@@ -42,7 +46,7 @@ const MAX_AGE_SECONDS = 60 * 60 * 24;
 // ---------------------------------------------------------------------------
 export const ROLE_HOME: Record<UserRole, string> = {
   driver: "/driver/dashboard",
-  sponsor: "/sponsor/catalogs",
+  sponsor: "/sponsor/dashboard",
   admin: "/admin/dashboard",
 };
 
@@ -132,4 +136,22 @@ export function requireAuth(
   }
 
   return user;
+}
+
+export function isAssumedSession(user: SessionUser | null | undefined): boolean {
+  return Boolean(user?.OriginalUser);
+}
+
+export function buildAssumedSession(
+  original: SessionIdentity,
+  assumed: SessionIdentity
+): SessionUser {
+  return {
+    ...assumed,
+    OriginalUser: { ...original },
+  };
+}
+
+export function getEffectiveRole(user: SessionUser): UserRole {
+  return user.UserType;
 }

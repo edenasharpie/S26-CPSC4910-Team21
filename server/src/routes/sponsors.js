@@ -1,7 +1,18 @@
 import express from 'express';
 import { pool } from '../db.js';
+import { hasBooleanPermission } from '../utils/auth.js';
 
 const router = express.Router();
+
+function normalizeUserForSession(user) {
+  return {
+    UserID: Number(user.UserID),
+    UserType: user.UserType,
+    Username: user.Username,
+    FirstName: user.FirstName ?? null,
+    LastName: user.LastName ?? null,
+  };
+}
 
 // GET /api/sponsors - Get all sponsor companies
 router.get('/', async (req, res) => {
@@ -313,6 +324,84 @@ router.get('/:userId/drivers/:driverId', async (req, res) => {
   } catch (error) {
     console.error('[SPONSOR_GET_DRIVER] Error:', error);
     res.status(500).json({ error: 'Failed to fetch driver' });
+  }
+});
+
+// POST /api/sponsors/:userId/assume-driver/:driverId
+router.post('/:userId/assume-driver/:driverId', async (req, res) => {
+  let connection;
+  try {
+    const sponsorUserId = Number(req.params.userId);
+    const driverUserId = Number(req.params.driverId);
+
+    if (!Number.isInteger(sponsorUserId) || !Number.isInteger(driverUserId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId and driverId must be valid integers.',
+      });
+    }
+
+    connection = await pool.getConnection();
+
+    const [sponsorRows] = await connection.execute(
+      `SELECT u.UserID, u.UserType, u.ActiveStatus, u.Permissions, s.SponsorCompanyID
+       FROM USERS u
+       JOIN SPONSORS s ON s.UserID = u.UserID
+       WHERE u.UserID = ?
+       LIMIT 1`,
+      [sponsorUserId]
+    );
+
+    if (sponsorRows.length === 0 || sponsorRows[0].UserType !== 'sponsor') {
+      return res.status(403).json({ success: false, error: 'Only sponsors can assume driver view.' });
+    }
+
+    const sponsor = sponsorRows[0];
+
+    if (!Boolean(sponsor.ActiveStatus)) {
+      return res.status(403).json({ success: false, error: 'Inactive sponsor accounts cannot assume another view.' });
+    }
+
+    if (!hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canAssumeDriverView')) {
+      return res.status(403).json({ success: false, error: 'Missing canAssumeDriverView permission.' });
+    }
+
+    const [driverRows] = await connection.execute(
+      `SELECT u.UserID, u.UserType, u.Username, u.FirstName, u.LastName, u.ActiveStatus
+       FROM USERS u
+       JOIN DRIVERS d ON d.UserID = u.UserID
+       WHERE u.UserID = ? AND d.SponsorCompanyID = ?
+       LIMIT 1`,
+      [driverUserId, sponsor.SponsorCompanyID]
+    );
+
+    if (driverRows.length === 0 || driverRows[0].UserType !== 'driver') {
+      return res.status(404).json({ success: false, error: 'Driver not found for this sponsor.' });
+    }
+
+    const driver = driverRows[0];
+
+    if (!Boolean(driver.ActiveStatus)) {
+      return res.status(409).json({ success: false, error: 'Cannot assume an inactive driver account.' });
+    }
+
+    await connection.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('assumedView:driver'), 'isSelfUpdate', false, 'success', true))`,
+      [sponsorUserId]
+    );
+
+    return res.json({
+      success: true,
+      assumedUser: normalizeUserForSession(driver),
+    });
+  } catch (error) {
+    console.error('Sponsor assume driver error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
