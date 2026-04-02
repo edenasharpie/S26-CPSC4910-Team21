@@ -8,7 +8,21 @@ router.get('/my-points/:userId', async (req, res) => {
   const { userId } = req.params;
 
   try {
-    // 1. Get current balance and LicenseNumber from DRIVERS table
+    // 1. Verify account is active and load driver context
+    const [accountRows] = await pool.execute(
+      'SELECT ActiveStatus FROM USERS WHERE UserID = ? AND UserType = "driver"',
+      [userId]
+    );
+
+    if (accountRows.length === 0) {
+      return res.status(404).json({ error: 'Driver account not found.' });
+    }
+
+    if (!Boolean(accountRows[0].ActiveStatus)) {
+      return res.status(403).json({ error: 'Driver account is inactive.' });
+    }
+
+    // 2. Get current balance and LicenseNumber from DRIVERS table
     const [driverInfo] = await pool.execute(
       "SELECT PointBalance, LicenseNumber FROM DRIVERS WHERE UserID = ?",
       [userId]
@@ -20,7 +34,7 @@ router.get('/my-points/:userId', async (req, res) => {
 
     const { PointBalance, LicenseNumber } = driverInfo[0];
 
-    // 2. Get transaction history from POINT_TRANSACTIONS
+    // 3. Get transaction history from POINT_TRANSACTIONS
     const [history] = await pool.execute(
       `SELECT PointChange, ReasonForChange, TimeChanged 
        FROM POINT_TRANSACTIONS 
@@ -44,6 +58,19 @@ router.get('/performance/:userId', async (req, res) => {
   const { userId } = req.params;
 
   try {
+    const [accountRows] = await pool.execute(
+      'SELECT ActiveStatus FROM USERS WHERE UserID = ? AND UserType = "driver"',
+      [userId]
+    );
+
+    if (accountRows.length === 0) {
+      return res.status(404).json({ error: 'Driver account not found.' });
+    }
+
+    if (!Boolean(accountRows[0].ActiveStatus)) {
+      return res.status(403).json({ error: 'Driver account is inactive.' });
+    }
+
     const [rows] = await pool.execute(
       'SELECT PerformanceStatus FROM DRIVERS WHERE UserID = ?',
       [userId]

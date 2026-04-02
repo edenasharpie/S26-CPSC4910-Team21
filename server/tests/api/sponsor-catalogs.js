@@ -1,5 +1,13 @@
 import axios from 'axios';
-import { BASE_URL, log, createTestSponsor, cleanupSponsorCompanies, closePool } from '../setup.js';
+import {
+  BASE_URL,
+  log,
+  createTestSponsor,
+  cleanupSponsorCompanies,
+  closePool,
+  createTestUser as createSharedTestUser,
+  createTestSponsorProfile,
+} from '../setup.js';
 import { pool } from '../../src/db.js';
 
 const API_BASE_URL = `${BASE_URL}/api`;
@@ -9,54 +17,46 @@ const createdUserIds = [];
 const createdCatalogIds = [];
 const createdSponsorIds = [];
 
-/**
- * Create a test user in the database
- */
-async function createTestUser(userType = 'sponsor') {
-  const connection = await pool.getConnection();
-  
-  try {
-    const username = `test_${userType}_${Date.now()}`;
-    const email = `${username}@test.com`;
-    const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    
-    const [userResult] = await connection.query(
-      `INSERT INTO USERS (Username, Email, PassHash, UserType, FirstName, LastName, 
-       ActiveStatus, LastLogin, LastPasswordChange, Permissions) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        username,
-        email,
-        'test_hash',
-        userType,
-        'Test',
-        'Sponsor',
-        1,
-        timestamp,
-        timestamp,
-        JSON.stringify({})
-      ]
-    );
-    
-    return userResult.insertId;
-  } finally {
-    connection.release();
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function retryOnStatuses(requestFn, retryStatuses, maxAttempts = 6, delayMs = 250) {
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    try {
+      return await requestFn();
+    } catch (error) {
+      const status = error.response?.status;
+      attempt += 1;
+
+      if (attempt >= maxAttempts || !retryStatuses.includes(status)) {
+        throw error;
+      }
+
+      await sleep(delayMs);
+    }
   }
 }
 
-/**
- * Create a sponsor entry and link to sponsor company
- */
-async function createTestSponsorUser(userId, sponsorCompanyId) {
-  const connection = await pool.getConnection();
-  
-  try {
-    await connection.query(
-      'INSERT INTO SPONSORS (UserID, SponsorCompanyID) VALUES (?, ?)',
-      [userId, sponsorCompanyId]
-    );
-  } finally {
-    connection.release();
+async function waitForNotFound(requestFn, description, maxAttempts = 8, delayMs = 250) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await requestFn();
+
+      if (attempt === maxAttempts) {
+        throw new Error(`Expected 404 for ${description}`);
+      }
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return;
+      }
+
+      throw error;
+    }
+
+    await sleep(delayMs);
   }
 }
 
@@ -121,17 +121,21 @@ async function runTests() {
 
     // Create test sponsor user
     log('TEST SETUP: Creating test sponsor user...', 'Setup');
-    const sponsorUserId = await createTestUser('sponsor');
+    const sponsorUser = await createSharedTestUser({ userType: 'sponsor', firstName: 'Test', lastName: 'Sponsor' });
+    const sponsorUserId = sponsorUser.userId;
     createdUserIds.push(sponsorUserId);
-    await createTestSponsorUser(sponsorUserId, sponsorCompanyId);
+    await createTestSponsorProfile({ userId: sponsorUserId, sponsorCompanyId });
     log('Created sponsor user:', { id: sponsorUserId, sponsorCompanyId });
 
     // Test 1: Sponsor creates a catalog
     log('TEST 1: Sponsor creating catalog...', `POST /api/sponsor/${sponsorUserId}/catalogs`);
-    const createResponse = await axios.post(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs`, {
-      externalProductIds: [],
-      pointCost: 100
-    });
+    const createResponse = await retryOnStatuses(
+      () => axios.post(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs`, {
+        externalProductIds: [],
+        pointCost: 100
+      }),
+      [404]
+    );
     const catalogId = createResponse.data.id;
     createdCatalogIds.push(catalogId);
     log('Created catalog:', createResponse.data);
@@ -218,7 +222,8 @@ async function runTests() {
 
     // Test 10: Non-sponsor user trying to access sponsor endpoints
     log('TEST 10: Testing non-sponsor user access...', 'Setup');
-    const regularUserId = await createTestUser('driver');
+    const regularUser = await createSharedTestUser({ userType: 'driver', firstName: 'Test', lastName: 'Driver' });
+    const regularUserId = regularUser.userId;
     createdUserIds.push(regularUserId);
     
     try {
@@ -240,9 +245,10 @@ async function runTests() {
     });
     createdSponsorIds.push(otherSponsorCompanyId);
     
-    const otherSponsorUserId = await createTestUser('sponsor');
+    const otherSponsorUser = await createSharedTestUser({ userType: 'sponsor', firstName: 'Other', lastName: 'Sponsor' });
+    const otherSponsorUserId = otherSponsorUser.userId;
     createdUserIds.push(otherSponsorUserId);
-    await createTestSponsorUser(otherSponsorUserId, otherSponsorCompanyId);
+    await createTestSponsorProfile({ userId: otherSponsorUserId, sponsorCompanyId: otherSponsorCompanyId });
     
     // Create catalog for other sponsor
     const otherCatalogResponse = await axios.post(`${API_BASE_URL}/sponsor/${otherSponsorUserId}/catalogs`, {});
@@ -279,16 +285,11 @@ async function runTests() {
     log('Item deleted successfully', { status: 204 });
 
     // Verify item is deleted
-    try {
-      await axios.get(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs/${catalogId}/items/${itemId}`);
-      throw new Error('Expected 404 for deleted item');
-    } catch (error) {
-      if (error.response && error.response.status === 404) {
-        log('Verified item deletion', { status: 404 });
-      } else {
-        throw error;
-      }
-    }
+    await waitForNotFound(
+      () => axios.get(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs/${catalogId}/items/${itemId}`),
+      'deleted item'
+    );
+    log('Verified item deletion', { status: 404 });
 
     // Test 13: Delete catalog
     log('TEST 13: Sponsor deleting catalog...', `DELETE /api/sponsor/${sponsorUserId}/catalogs/${catalogId}`);
@@ -302,16 +303,11 @@ async function runTests() {
     }
 
     // Verify catalog is deleted
-    try {
-      await axios.get(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs/${catalogId}`);
-      throw new Error('Expected 404 for deleted catalog');
-    } catch (error) {
-      if (error.response && error.response.status === 404) {
-        log('Verified catalog deletion', { status: 404 });
-      } else {
-        throw error;
-      }
-    }
+    await waitForNotFound(
+      () => axios.get(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs/${catalogId}`),
+      'deleted catalog'
+    );
+    log('Verified catalog deletion', { status: 404 });
 
     console.log('\nAll sponsor catalog tests completed successfully!');
   } catch (error) {

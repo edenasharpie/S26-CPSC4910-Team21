@@ -171,11 +171,20 @@ export default function DriverOrders() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-3">Your Orders</h1>
             <p className="text-gray-600 dark:text-gray-400">Track recent purchases and update confirmed orders.</p>
           </div>
-          <Form method="post" action="/logout">
-            <Button variant="secondary" size="sm" type="submit">
-              Sign out
-            </Button>
-          </Form>
+          <div className="flex items-center gap-2">
+            {user.OriginalUser && (
+              <Form method="post" action="/exit-assumption">
+                <Button variant="primary" size="sm" type="submit">
+                  Exit Assumed View
+                </Button>
+              </Form>
+            )}
+            <Form method="post" action="/logout">
+              <Button variant="secondary" size="sm" type="submit">
+                Sign out
+              </Button>
+            </Form>
+          </div>
         </div>
 
         {error && <Alert message={error} onDismiss={() => setError(null)} />}
