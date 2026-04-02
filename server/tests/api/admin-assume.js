@@ -6,6 +6,8 @@ import {
   cleanupSponsorCompanies,
   closePool,
   createTestUser,
+  createTestDriverProfile,
+  createTestSponsorProfile,
   setUserActiveStatus,
   setUserPermissions,
   getEventsByUserId,
@@ -60,19 +62,21 @@ async function runTests() {
     const admin = await createTestUser({ userType: 'admin' });
     const driver = await createTestUser({ userType: 'driver' });
     const sponsor = await createTestUser({ userType: 'sponsor' });
+    const sponsorWithoutProfile = await createTestUser({ userType: 'sponsor' });
 
-    createdUserIds.push(admin.userId, driver.userId, sponsor.userId);
+    createdUserIds.push(admin.userId, driver.userId, sponsor.userId, sponsorWithoutProfile.userId);
 
-    const connection = await pool.getConnection();
-    try {
-      await connection.query(
-        `INSERT INTO DRIVERS (LicenseNumber, UserID, SponsorCompanyID, PointBalance, PerformanceStatus, AlertPoints, AlertOrders)
-         VALUES (?, ?, ?, 0, 'good', 1, 1)`,
-        [`ASSUME_DL_${driver.userId}`, driver.userId, sponsorCompanyId]
-      );
-    } finally {
-      connection.release();
-    }
+    await createTestSponsorProfile({
+      userId: sponsor.userId,
+      sponsorCompanyId,
+    });
+
+    await createTestDriverProfile({
+      userId: driver.userId,
+      sponsorCompanyId,
+      licenseNumber: `ASSUME_DL_${driver.userId}`,
+      pointBalance: 0,
+    });
 
     // Test 1: Admin assumes driver view
     log('TEST 1: Admin assume driver success', `POST /api/admin/assume-driver/${driver.userId}`);
@@ -92,8 +96,85 @@ async function runTests() {
       throw new Error('Expected admin assume sponsor success with sponsor payload');
     }
 
-    // Test 3: Missing permission blocks assume-driver
-    log('TEST 3: Missing assume permission returns 403', 'POST /api/admin/assume-driver/:targetUserId');
+    // Test 3: Admin-assumed sponsor can load downstream sponsor data used by dashboard/invoices/profile pages
+    log('TEST 3: Assumed sponsor downstream data loads', 'GET /api/sponsors/user/:userId, /my-drivers/:companyId, /point-transactions, /api/user/profile/:id');
+    const assumedSponsorUserId = assumeSponsorRes.data.assumedUser.UserID;
+    const sponsorContextRes = await axios.get(`${API_BASE_URL}/sponsors/user/${assumedSponsorUserId}`);
+    if (sponsorContextRes.status !== 200 || !sponsorContextRes.data?.sponsorCompanyId) {
+      throw new Error('Expected sponsor context with sponsorCompanyId for assumed sponsor');
+    }
+
+    const driversRes = await axios.get(`${API_BASE_URL}/sponsors/my-drivers/${sponsorContextRes.data.sponsorCompanyId}`);
+    if (driversRes.status !== 200 || !Array.isArray(driversRes.data)) {
+      throw new Error('Expected sponsor driver list for assumed sponsor');
+    }
+
+    const invoicesRes = await axios.get(`${API_BASE_URL}/sponsors/${assumedSponsorUserId}/point-transactions`);
+    if (invoicesRes.status !== 200 || !Array.isArray(invoicesRes.data)) {
+      throw new Error('Expected sponsor point-transactions list for assumed sponsor invoices');
+    }
+
+    const profileRes = await axios.get(`${API_BASE_URL}/user/profile/${assumedSponsorUserId}`);
+    if (profileRes.status !== 200 || Number(profileRes.data?.UserID) !== Number(assumedSponsorUserId)) {
+      throw new Error('Expected assumed sponsor profile data to load');
+    }
+
+    // Test 3b: Assumed sponsor can mutate sponsor-owned driver profile fields
+    log('TEST 3b: Assumed sponsor can update driver profile', 'PATCH /api/sponsors/:userId/drivers/:driverId');
+    const sponsorPatchRes = await axios.patch(
+      `${API_BASE_URL}/sponsors/${assumedSponsorUserId}/drivers/${driver.userId}`,
+      {
+        firstName: 'AssumedSponsor',
+        lastName: 'DriverEdit',
+        email: `assumed-sponsor-driver-${Date.now()}@example.com`,
+        phone: '5551002000',
+      }
+    );
+
+    if (
+      sponsorPatchRes.status !== 200 ||
+      sponsorPatchRes.data?.FirstName !== 'AssumedSponsor' ||
+      sponsorPatchRes.data?.LastName !== 'DriverEdit'
+    ) {
+      throw new Error('Expected assumed sponsor to update sponsor-owned driver profile fields');
+    }
+
+    // Test 3c: Assumed driver can mutate own profile fields
+    log('TEST 3c: Assumed driver can update own profile', 'PATCH /api/user/profile/:id');
+    const assumedDriverUserId = assumeDriverRes.data.assumedUser.UserID;
+    const driverPatchRes = await axios.patch(
+      `${API_BASE_URL}/user/profile/${assumedDriverUserId}`,
+      {
+        firstName: 'AssumedDriver',
+        lastName: 'ProfileEdit',
+        email: `assumed-driver-${Date.now()}@example.com`,
+        phone: '5553004000',
+      }
+    );
+
+    if (
+      driverPatchRes.status !== 200 ||
+      driverPatchRes.data?.FirstName !== 'AssumedDriver' ||
+      driverPatchRes.data?.LastName !== 'ProfileEdit'
+    ) {
+      throw new Error('Expected assumed driver to update own profile fields');
+    }
+
+    // Test 4: Missing sponsor profile linkage blocks assume-sponsor
+    log('TEST 4: Missing sponsor profile linkage returns 409', 'POST /api/admin/assume-sponsor/:targetUserId');
+    try {
+      await axios.post(`${API_BASE_URL}/admin/assume-sponsor/${sponsorWithoutProfile.userId}`, {
+        requesterUserId: admin.userId,
+      });
+      throw new Error('Expected 409 for sponsor target missing sponsor-company linkage');
+    } catch (error) {
+      if (!error.response || error.response.status !== 409) {
+        throw error;
+      }
+    }
+
+    // Test 5: Missing permission blocks assume-driver
+    log('TEST 5: Missing assume permission returns 403', 'POST /api/admin/assume-driver/:targetUserId');
     await setUserPermissions(admin.userId, { canAssumeDriverView: false, canAssumeSponsorView: false });
     try {
       await axios.post(`${API_BASE_URL}/admin/assume-driver/${driver.userId}`, {
@@ -108,8 +189,8 @@ async function runTests() {
 
     await setUserPermissions(admin.userId, {});
 
-    // Test 4: Inactive admin cannot assume
-    log('TEST 4: Inactive admin requester returns 403', 'POST /api/admin/assume-driver/:targetUserId');
+    // Test 6: Inactive admin cannot assume
+    log('TEST 6: Inactive admin requester returns 403', 'POST /api/admin/assume-driver/:targetUserId');
     await setUserActiveStatus(admin.userId, 0);
     try {
       await axios.post(`${API_BASE_URL}/admin/assume-driver/${driver.userId}`, {
@@ -123,8 +204,8 @@ async function runTests() {
     }
     await setUserActiveStatus(admin.userId, 1);
 
-    // Test 5: Non-admin requester rejected
-    log('TEST 5: Non-admin requester returns 403', 'POST /api/admin/assume-driver/:targetUserId');
+    // Test 7: Non-admin requester rejected
+    log('TEST 7: Non-admin requester returns 403', 'POST /api/admin/assume-driver/:targetUserId');
     try {
       await axios.post(`${API_BASE_URL}/admin/assume-driver/${driver.userId}`, {
         requesterUserId: sponsor.userId,
@@ -136,8 +217,8 @@ async function runTests() {
       }
     }
 
-    // Test 6: Missing target returns 404
-    log('TEST 6: Missing target returns 404', 'POST /api/admin/assume-driver/:targetUserId');
+    // Test 8: Missing target returns 404
+    log('TEST 8: Missing target returns 404', 'POST /api/admin/assume-driver/:targetUserId');
     try {
       await axios.post(`${API_BASE_URL}/admin/assume-driver/99999999`, {
         requesterUserId: admin.userId,
@@ -149,8 +230,8 @@ async function runTests() {
       }
     }
 
-    // Test 7: Inactive target returns 409
-    log('TEST 7: Inactive driver target returns 409', 'POST /api/admin/assume-driver/:targetUserId');
+    // Test 9: Inactive target returns 409
+    log('TEST 9: Inactive driver target returns 409', 'POST /api/admin/assume-driver/:targetUserId');
     await setUserActiveStatus(driver.userId, 0);
     try {
       await axios.post(`${API_BASE_URL}/admin/assume-driver/${driver.userId}`, {
@@ -164,8 +245,8 @@ async function runTests() {
     }
     await setUserActiveStatus(driver.userId, 1);
 
-    // Test 8: Soft delete writes audit event
-    log('TEST 8: Soft delete records AccountStatusChange event', `DELETE /api/admin/users/${driver.userId}`);
+    // Test 10: Soft delete writes audit event
+    log('TEST 10: Soft delete records AccountStatusChange event', `DELETE /api/admin/users/${driver.userId}`);
     const deleteRes = await axios.delete(`${API_BASE_URL}/admin/users/${driver.userId}`);
     if (deleteRes.status !== 204) {
       throw new Error('Expected 204 on soft delete');

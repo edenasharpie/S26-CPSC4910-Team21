@@ -692,6 +692,13 @@ router.post('/assume-sponsor/:targetUserId', async (request, response) => {
       return response.status(404).json({ success: false, error: 'Sponsor target not found.' });
     }
 
+    if (!targetUser.SponsorCompanyID) {
+      return response.status(409).json({
+        success: false,
+        error: 'Sponsor target is missing sponsor-company linkage.',
+      });
+    }
+
     if (!Boolean(targetUser.ActiveStatus)) {
       return response.status(409).json({ success: false, error: 'Cannot assume an inactive sponsor account.' });
     }

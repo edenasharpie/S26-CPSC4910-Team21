@@ -22,6 +22,7 @@ import accountsRoute from './src/routes/accounts.js';
 import driverOrdersRoutes from './src/routes/driver-orders.js';
 import imagesRoutes from './src/routes/images.js';
 import { startDailyReportScheduler } from './src/services/daily-report-scheduler.js';
+import { attachSessionContext } from './src/middleware/session-context.js';
 
 
 const app = express();
@@ -36,6 +37,7 @@ app.use(cors({
   credentials: true 
 }));
 app.use(express.json());
+app.use(attachSessionContext);
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });

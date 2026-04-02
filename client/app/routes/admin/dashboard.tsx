@@ -559,7 +559,6 @@ export default function AdminPortal() {
             <Button
               type="submit"
               variant="primary"
-              onClick={() => setIsAuditOpen(false)}
             >
               Generate
             </Button>

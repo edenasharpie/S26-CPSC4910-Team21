@@ -226,7 +226,7 @@ export default function SponsorPortal() {
       header: "", 
       render: (user: any) => (
         <div className="flex justify-end pr-4">
-          <Button size="sm" variant="secondary" onClick={() => navigate(`/sponsor/profile/${user.UserID}`)}>View Profile</Button>
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/sponsor/profile/${user.UserID}/edit`)}>View Profile</Button>
         </div>
       ),
     },
@@ -272,7 +272,7 @@ export default function SponsorPortal() {
               <Button variant="secondary" size="sm" type="submit">Sign out</Button>
             </Form>
             <button 
-              onClick={() => navigate(`/sponsor/profile/${user.UserID}`)}
+              onClick={() => navigate(`/sponsor/profile/${user.UserID}/edit`)}
               className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
             >
             <div className="relative">

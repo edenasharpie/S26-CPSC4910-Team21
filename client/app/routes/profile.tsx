@@ -68,6 +68,7 @@ export default function ProfilePage() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isEditingPassword, setIsEditingPassword] = useState(false);
   const [isEditingOrg, setIsEditingOrg] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   
   // Success/Error Message States
   const [successMessage, setSuccessMessage] = useState("");
@@ -85,6 +86,51 @@ export default function ProfilePage() {
   const [deactivationPassword, setDeactivationPassword] = useState("");
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
+
+  const handleSaveProfile = async () => {
+    setSuccessMessage("");
+    setErrorMessage("");
+
+    const trimmedDisplayName = displayName.trim();
+    const nameParts = trimmedDisplayName.length > 0 ? trimmedDisplayName.split(/\s+/) : [];
+    const firstName = nameParts.length > 0 ? nameParts[0] : '';
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
+    if (!firstName || !lastName) {
+      setErrorMessage("Please provide both first and last name in Display Name.");
+      return;
+    }
+
+    try {
+      setIsSavingProfile(true);
+
+      const response = await fetch(`${API_URL}/api/user/profile/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          phone,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setErrorMessage(result.error || 'Failed to update profile');
+        return;
+      }
+
+      setSuccessMessage('✅ Profile updated successfully!');
+      setIsEditingProfile(false);
+      setTimeout(() => setSuccessMessage(''), 5000);
+    } catch (err) {
+      setErrorMessage('Connection error. Please try again.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   const handlePasswordChange = async () => {
     setSuccessMessage("");
@@ -245,9 +291,27 @@ export default function ProfilePage() {
           <div className="card p-6">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold">Personal Information</h3>
-              <Button type="button" size="sm" onClick={() => setIsEditingProfile(!isEditingProfile)}>
-                {isEditingProfile ? "Cancel" : "Edit"}
-              </Button>
+              {!isEditingProfile ? (
+                <Button type="button" size="sm" onClick={() => setIsEditingProfile(true)}>
+                  Edit
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditingProfile(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleSaveProfile}
+                    isLoading={isSavingProfile}
+                    disabled={isSavingProfile}
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

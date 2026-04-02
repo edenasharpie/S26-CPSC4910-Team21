@@ -1,18 +1,28 @@
 import { useLoaderData, useNavigate, Link } from "react-router";
 import type { Route } from "./+types/invoices";
 import { Table, Button, Badge } from "~/components";
-//import { getAllPointTransactions } from "../../../../server/src/db.js"; // TODO: WE CANNOT HAVE THIS PATTERN IN OUR CODE
+import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
 // also, TODO: this page still lists that it connect to the Admin Dashboard
 // and has variables in it named relating to admin functionality, not sponsors.
 
-export async function loader() {
+const API_URL = getApiBaseUrl();
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const user = requireAuth(request, ["sponsor"]);
+
   try {
-    const transactions = await getAllPointTransactions(); // TODO: REPLACE WITH API
+    const response = await fetch(`${API_URL}/api/sponsors/${user.UserID}/point-transactions`);
+    if (!response.ok) {
+      throw new Error(`Failed to load transactions (${response.status})`);
+    }
+
+    const transactions = await response.json();
     return { 
       transactions: Array.isArray(transactions) ? transactions : [] 
     };
-  } catch (error) {
+  } catch (error: any) {
     return { transactions: [], error: "Failed to load transactions" };
   }
 }

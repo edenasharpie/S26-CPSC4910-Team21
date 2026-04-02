@@ -1,5 +1,9 @@
 import express from 'express';
 import { pool } from '../db.js';
+import {
+  getEffectiveSessionUser,
+  routeUserMatchesEffectiveSession,
+} from '../middleware/session-context.js';
 import { 
   getDriverSponsorCompanyId, 
   getCatalogsBySponsorCompany 
@@ -16,12 +20,28 @@ async function validateDriverAndGetSponsorId(req, res, next) {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
-    const [userRows] = await pool.execute(
-      'SELECT UserID, UserType, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
-      [userId]
-    );
+    if (!routeUserMatchesEffectiveSession(req, userId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
 
-    if (userRows.length === 0 || userRows[0].UserType !== 'driver') {
+    const effectiveSessionUser = getEffectiveSessionUser(req);
+    const effectiveRole = effectiveSessionUser?.UserType;
+
+    if (effectiveRole && effectiveRole !== 'driver') {
+      return res.status(404).json({ error: 'Driver account not found' });
+    }
+
+    const [userRows] = effectiveRole
+      ? await pool.execute(
+          'SELECT UserID, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
+          [userId]
+        )
+      : await pool.execute(
+          'SELECT UserID, UserType, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
+          [userId]
+        );
+
+    if (userRows.length === 0 || (!effectiveRole && userRows[0].UserType !== 'driver')) {
       return res.status(404).json({ error: 'Driver account not found' });
     }
 

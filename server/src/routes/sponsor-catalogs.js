@@ -1,6 +1,10 @@
 import express from 'express';
 import { pool } from '../db.js';
 import store from '../services/fakeStoreService.js';
+import {
+  getEffectiveSessionUser,
+  routeUserMatchesEffectiveSession,
+} from '../middleware/session-context.js';
 import { 
   getSponsorCompanyId, 
   getCatalogsBySponsorCompany,
@@ -19,18 +23,36 @@ async function validateSponsorAndGetCompanyId(req, res, next) {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
+    if (!routeUserMatchesEffectiveSession(req, userId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    const effectiveSessionUser = getEffectiveSessionUser(req);
+    const effectiveRole = effectiveSessionUser?.UserType;
+
+    if (effectiveRole && !['admin', 'sponsor'].includes(effectiveRole)) {
+      return res.status(403).json({
+        error: 'Access forbidden: Only sponsors and admins can access catalogs'
+      });
+    }
+
     const connection = await pool.getConnection();
     try {
-      const [userRows] = await connection.query(
-        'SELECT UserType, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
-        [userId]
-      );
+      const [userRows] = effectiveRole
+        ? await connection.query(
+            'SELECT ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
+            [userId]
+          )
+        : await connection.query(
+            'SELECT UserType, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
+            [userId]
+          );
 
       if (userRows.length === 0) {
         return res.status(404).json({ error: 'User not found' });
       }
       
-      const userType = userRows[0]?.UserType;
+      const userType = effectiveRole ?? String(userRows[0]?.UserType ?? '').toLowerCase();
       
       if (userType === 'admin') {
         // Admins can view all catalogs

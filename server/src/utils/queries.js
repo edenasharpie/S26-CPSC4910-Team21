@@ -812,14 +812,23 @@ export async function getOrdersReport(filters = {}) {
 
 /**
  * Get audit log entries from the EVENTS table.
- * @param {string[]} filters - Optional array of EventType values to filter by
- *                             (e.g. ['LoginAttempt', 'PasswordChange']).
- *                             Pass an empty array to return all event types.
+ * @param {Object|string[]} filters - Optional filter object or legacy event-type array.
+ * @param {string[]} [filters.eventTypes] - EventType values to include.
+ * @param {Date} [filters.startDate] - Lower timestamp bound.
+ * @param {Date} [filters.endDate] - Upper timestamp bound.
+ * @param {number} [filters.targetUserId] - Specific user to include.
  * @returns {Promise<Object[]>} Array of event rows joined with username.
  */
 export async function getAuditLogs(filters = []) {
   const connection = await pool.getConnection();
   try {
+    const normalizedFilters = Array.isArray(filters)
+      ? { eventTypes: filters }
+      : filters ?? {};
+    const eventTypes = Array.isArray(normalizedFilters.eventTypes)
+      ? normalizedFilters.eventTypes
+      : [];
+
     let query = `
       SELECT
         e.EventID,
@@ -831,12 +840,32 @@ export async function getAuditLogs(filters = []) {
       FROM EVENTS e
       LEFT JOIN USERS u ON e.UserID = u.UserID
     `;
+    const whereClauses = [];
     const params = [];
 
-    if (filters.length > 0) {
-      const placeholders = filters.map(() => '?').join(', ');
-      query += ` WHERE e.EventType IN (${placeholders})`;
-      params.push(...filters);
+    if (eventTypes.length > 0) {
+      const placeholders = eventTypes.map(() => '?').join(', ');
+      whereClauses.push(`e.EventType IN (${placeholders})`);
+      params.push(...eventTypes);
+    }
+
+    if (normalizedFilters.startDate) {
+      whereClauses.push('e.Timestamp >= ?');
+      params.push(normalizedFilters.startDate);
+    }
+
+    if (normalizedFilters.endDate) {
+      whereClauses.push('e.Timestamp <= ?');
+      params.push(normalizedFilters.endDate);
+    }
+
+    if (normalizedFilters.targetUserId) {
+      whereClauses.push('e.UserID = ?');
+      params.push(normalizedFilters.targetUserId);
+    }
+
+    if (whereClauses.length > 0) {
+      query += ` WHERE ${whereClauses.join(' AND ')}`;
     }
 
     query += ' ORDER BY e.Timestamp DESC LIMIT 500';

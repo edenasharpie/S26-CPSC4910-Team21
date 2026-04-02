@@ -1,6 +1,9 @@
 import express from 'express';
 import { pool } from '../db.js';
 import { hasBooleanPermission } from '../utils/auth.js';
+import {
+  routeUserMatchesEffectiveSession,
+} from '../middleware/session-context.js';
 
 const router = express.Router();
 
@@ -142,23 +145,68 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
     
     const companyId = sponsorRows[0].SponsorCompanyID;
     
-    // Get point history for this driver from this sponsor company
+     // Get point history for this driver from this sponsor company.
     const [history] = await pool.execute(
       `SELECT
          pt.TransactionID, pt.DriverID, pt.UserChanged, pt.PointChange, 
          pt.ReasonForChange, pt.TimeChanged, u.Username as ChangedByUsername
        FROM POINT_TRANSACTIONS pt
-       JOIN USERS u ON pt.UserChanged = u.UserID
-       WHERE pt.DriverID = ?
+       JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
+       LEFT JOIN USERS u ON pt.UserChanged = u.UserID
+       WHERE d.UserID = ? AND d.SponsorCompanyID = ?
        ORDER BY pt.TimeChanged DESC
        LIMIT 100`,
-      [driverId]
+      [driverId, companyId]
     );
     
     res.json(history);
   } catch (error) {
     console.error('[SPONSOR_GET_HISTORY] Error:', error);
     res.status(500).json({ error: 'Failed to fetch point history' });
+  }
+});
+
+// GET /api/sponsors/:userId/point-transactions - Get sponsor-scoped point transactions for invoices
+router.get('/:userId/point-transactions', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const [sponsorRows] = await pool.execute(
+      `SELECT sc.SponsorCompanyID
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?`,
+      [userId]
+    );
+
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+
+    const companyId = sponsorRows[0].SponsorCompanyID;
+    const [transactions] = await pool.execute(
+      `SELECT
+         pt.TransactionID,
+         pt.DriverID,
+         d.UserID AS DriverUserID,
+         u.FirstName,
+         u.LastName,
+         pt.UserChanged AS AdminUserID,
+         pt.PointChange,
+         pt.ReasonForChange,
+         DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
+       FROM POINT_TRANSACTIONS pt
+       JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
+       JOIN USERS u ON d.UserID = u.UserID
+       WHERE d.SponsorCompanyID = ?
+       ORDER BY pt.TimeChanged DESC`,
+      [companyId]
+    );
+
+    return res.json(transactions);
+  } catch (error) {
+    console.error('Error fetching sponsor point transactions:', error);
+    return res.status(500).json({ error: 'Failed to fetch sponsor point transactions' });
   }
 });
 
@@ -273,6 +321,130 @@ router.put('/:userId/point-transactions/:tId', async (req, res) => {
   } catch (error) {
     console.error('Error updating transaction:', error);
     res.status(500).json({ error: 'Failed to update transaction' });
+  }
+});
+
+// PATCH /api/sponsors/:userId/drivers/:driverId - Update sponsor-owned driver profile fields
+router.patch('/:userId/drivers/:driverId', async (req, res) => {
+  let connection;
+  try {
+    const sponsorUserId = Number(req.params.userId);
+    const driverUserId = Number(req.params.driverId);
+
+    if (!Number.isInteger(sponsorUserId) || !Number.isInteger(driverUserId)) {
+      return res.status(400).json({ error: 'Invalid user ID or driver ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    const firstName = typeof req.body?.firstName === 'string' ? req.body.firstName.trim() : undefined;
+    const lastName = typeof req.body?.lastName === 'string' ? req.body.lastName.trim() : undefined;
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : undefined;
+    const phoneRaw = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
+    const phone = phoneRaw === '' ? null : phoneRaw;
+
+    const userUpdates = [];
+    const updateValues = [];
+
+    if (firstName !== undefined) {
+      if (!firstName) {
+        return res.status(400).json({ error: 'firstName cannot be empty' });
+      }
+      userUpdates.push('FirstName = ?');
+      updateValues.push(firstName);
+    }
+
+    if (lastName !== undefined) {
+      if (!lastName) {
+        return res.status(400).json({ error: 'lastName cannot be empty' });
+      }
+      userUpdates.push('LastName = ?');
+      updateValues.push(lastName);
+    }
+
+    if (email !== undefined) {
+      if (!email) {
+        return res.status(400).json({ error: 'email cannot be empty' });
+      }
+      userUpdates.push('Email = ?');
+      updateValues.push(email);
+    }
+
+    if (phone !== undefined) {
+      userUpdates.push('Phone = ?');
+      updateValues.push(phone);
+    }
+
+    if (userUpdates.length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided for update' });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [sponsorRows] = await connection.execute(
+      `SELECT sc.SponsorCompanyID
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?
+       LIMIT 1`,
+      [sponsorUserId]
+    );
+
+    if (sponsorRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+
+    const sponsorCompanyId = sponsorRows[0].SponsorCompanyID;
+
+    const [driverRows] = await connection.execute(
+      `SELECT u.UserID
+       FROM USERS u
+       JOIN DRIVERS d ON d.UserID = u.UserID
+       WHERE u.UserID = ? AND d.SponsorCompanyID = ?
+       LIMIT 1`,
+      [driverUserId, sponsorCompanyId]
+    );
+
+    if (driverRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Driver not found for this sponsor' });
+    }
+
+    await connection.execute(
+      `UPDATE USERS
+       SET ${userUpdates.join(', ')}
+       WHERE UserID = ?`,
+      [...updateValues, driverUserId]
+    );
+
+    const [updatedRows] = await connection.execute(
+      `SELECT
+         u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
+         d.PerformanceStatus, d.PointBalance, u.ActiveStatus
+       FROM USERS u
+       JOIN DRIVERS d ON u.UserID = d.UserID
+       WHERE u.UserID = ? AND d.SponsorCompanyID = ?
+       LIMIT 1`,
+      [driverUserId, sponsorCompanyId]
+    );
+
+    await connection.commit();
+
+    return res.status(200).json(updatedRows[0]);
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error('[SPONSOR_UPDATE_DRIVER] Error:', error);
+    return res.status(500).json({ error: 'Failed to update driver profile' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
