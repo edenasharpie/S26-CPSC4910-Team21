@@ -152,7 +152,7 @@ export default function LoginPage() {
           <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">
             Want to be a sponsor?{" "}
             <Link
-              to="/sponsor-application"
+              to="/apply"
               className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
             >
               Sponsor Application
