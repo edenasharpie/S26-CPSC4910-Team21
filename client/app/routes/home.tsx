@@ -16,59 +16,64 @@ export function meta(_: Route.MetaArgs) {
   ];
 }
 
-const NAV_SECTIONS = [
-  {
-    label: "Driver",
-    links: [
-      { to: "/driver/dashboard", label: "Dashboard" },
-      { to: "/driver/catalogs", label: "Catalogs" },
-      { to: "/driver/orders", label: "Orders" },
-      { to: "/driver-dashboard/1", label: "Legacy Dashboard (id=1)" },
-    ],
-  },
-  {
-    label: "Sponsor",
-    links: [
-      { to: "/sponsor/dashboard", label: "Dashboard" },
-      { to: "/sponsor/catalogs", label: "Catalogs" },
-      { to: "/sponsor/invoices", label: "Invoices" },
-      { to: "/sponsor/reports", label: "Reports" },
-      { to: "/sponsor/manage-users", label: "Manage Users" },
-      { to: "/sponsor/manage-users/1", label: "Edit User (id=1)" },
-      { to: "/sponsor/driver-purchases", label: "Driver Purchases" },
-      { to: "/sponsor/deduct-points", label: "Deduct Points" },
-      { to: "/sponsor/settings/1", label: "Settings (id=1)" },
-      { to: "/sponsor/profile/1/edit", label: "Profile Edit (id=1)" },
-      { to: "/sponsor/profile/1/points", label: "Profile Points (id=1)" },
-    ],
-  },
-  {
-    label: "Admin",
-    links: [
-      { to: "/admin/dashboard", label: "Dashboard" },
-      { to: "/admin/audit-logs", label: "Audit Logs" },
-      { to: "/admin/catalogs", label: "Catalogs" },
-      { to: "/admin/invoices", label: "Invoices" },
-      { to: "/admin/reports", label: "Reports" },
-      { to: "/admin/add-driver", label: "Add Driver" },
-      { to: "/admin/add-sponsor", label: "Add Sponsor" },
-      { to: "/admin/settings/1", label: "Settings (id=1)" },
-      { to: "/admin/profile/1/edit", label: "Profile Edit (id=1)" },
-      { to: "/admin/profile/1/points", label: "Profile Points (id=1)" },
-    ],
-  },
-  {
-    label: "General",
-    links: [
-      { to: "/about", label: "About" },
-      { to: "/profile", label: "Profile" },
-      { to: "/components-demo", label: "Components Demo" },
-    ],
-  },
-];
+function buildNavSections(user: { UserID: number; UserType: string } | null) {
+  const userId = user?.UserID;
+
+  return [
+    {
+      label: "Driver",
+      links: [
+        { to: "/driver/dashboard", label: "Dashboard" },
+        { to: "/driver/catalogs", label: "Catalogs" },
+        { to: "/driver/orders", label: "Orders" },
+      ],
+    },
+    {
+      label: "Sponsor",
+      links: [
+        { to: "/sponsor/dashboard", label: "Dashboard" },
+        { to: "/sponsor/catalogs", label: "Catalogs" },
+        { to: "/sponsor/invoices", label: "Invoices" },
+        { to: "/sponsor/reports", label: "Reports" },
+        { to: "/sponsor/manage-users", label: "Manage Users" },
+        { to: "/sponsor/driver-purchases", label: "Driver Purchases" },
+        { to: "/sponsor/deduct-points", label: "Deduct Points" },
+        ...(userId ? [{ to: `/sponsor/settings/${userId}`, label: "My Settings" }] : []),
+      ],
+    },
+    {
+      label: "Admin",
+      links: [
+        { to: "/admin/dashboard", label: "Dashboard" },
+        { to: "/admin/audit-logs", label: "Audit Logs" },
+        { to: "/admin/catalogs", label: "Catalogs" },
+        { to: "/admin/invoices", label: "Invoices" },
+        { to: "/admin/reports", label: "Reports" },
+        { to: "/admin/add-driver", label: "Add Driver" },
+        { to: "/admin/add-sponsor", label: "Add Sponsor" },
+        ...(userId
+          ? [
+              { to: `/admin/settings/${userId}`, label: "My Settings" },
+              { to: `/admin/profile/${userId}/edit`, label: "My Profile Edit" },
+              { to: `/admin/profile/${userId}/points`, label: "My Profile Points" },
+            ]
+          : []),
+      ],
+    },
+    {
+      label: "General",
+      links: [
+        { to: "/about", label: "About" },
+        { to: "/profile", label: "Profile" },
+        { to: "/components-demo", label: "Components Demo" },
+      ],
+    },
+  ];
+}
 
 export default function Home() {
   const { user } = useLoaderData<typeof loader>();
+  const navSections = buildNavSections(user ?? null);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -100,7 +105,7 @@ export default function Home() {
               Debug Navigation
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {NAV_SECTIONS.map((section) => (
+              {navSections.map((section) => (
                 <Card key={section.label} className="p-4 space-y-2">
                   <h2 className="font-semibold text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     {section.label}

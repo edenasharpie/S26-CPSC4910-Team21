@@ -32,7 +32,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     return { 
       driver, 
       history: Array.isArray(historyData) ? historyData : [], 
-      sponsorUserId: TEMP_SPONSOR_USER_ID 
+      sponsorUserId 
     };
   } catch (err) {
     console.error("Loader error:", err);
