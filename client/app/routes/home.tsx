@@ -21,12 +21,13 @@ const NAV_SECTIONS = [
     label: "Driver",
     links: [
       { to: "/driver/catalogs", label: "Catalogs" },
+      { to: "/driver/dashboard", label: "Dashboard" },
     ],
   },
   {
     label: "Sponsor",
     links: [
-      { to: "/sponsor/catalogs", label: "Dashboard" },
+      { to: "/sponsor/dashboard", label: "Dashboard" },
       { to: "/sponsor/catalogs", label: "Catalogs" },
       { to: "/sponsor/invoices", label: "Invoices" },
       { to: "/sponsor/reports", label: "Reports" },

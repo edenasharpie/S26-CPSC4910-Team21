@@ -216,7 +216,7 @@ export default function DriverDashboard() {
                             color: '#fff' 
                             }}
                             itemStyle={{ color: '#fff', fontWeight: 'bold' }}
-                            formatter={(value: number) => [Number(value).toLocaleString(), "Balance"]}
+                            formatter={(value: number | undefined) => [Number(value ?? 0).toLocaleString(), "Balance"]}
                             labelFormatter={(label) => `Date: ${label}`}
                         />
 
