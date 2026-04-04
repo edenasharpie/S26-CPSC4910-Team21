@@ -1,14 +1,19 @@
 import {
+  Form,
   isRouteErrorResponse,
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { Badge } from "~/components/Badge";
+import { Button } from "~/components/Button";
+import { getSession, isAssumedSession } from "~/utils/session.server";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -22,6 +27,66 @@ export const links: Route.LinksFunction = () => [
     href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
   },
 ];
+
+export function loader({ request }: Route.LoaderArgs) {
+  const session = getSession(request);
+  const assumed = isAssumedSession(session);
+
+  return {
+    session,
+    assumed,
+    originalRole: session?.OriginalUser?.UserType ?? null,
+  };
+}
+
+function AssumptionTopBanner({
+  session,
+  originalRole,
+}: {
+  session: ReturnType<typeof getSession>;
+  originalRole: "driver" | "sponsor" | "admin" | null;
+}) {
+  if (!session?.OriginalUser || !originalRole) {
+    return null;
+  }
+
+  const roleAccent =
+    originalRole === "admin"
+      ? {
+          shell: "border-red-200 bg-gradient-to-r from-red-50 via-amber-50 to-red-50 text-red-900 dark:border-red-800 dark:from-red-950/70 dark:via-red-900/40 dark:to-red-950/70 dark:text-red-100",
+          note: "Administrative Assumed View",
+          badge: "danger" as const,
+        }
+      : {
+          shell: "border-cyan-200 bg-gradient-to-r from-cyan-50 via-sky-50 to-cyan-50 text-cyan-900 dark:border-cyan-800 dark:from-cyan-950/70 dark:via-cyan-900/40 dark:to-cyan-950/70 dark:text-cyan-100",
+          note: "Sponsor Assumed View",
+          badge: "info" as const,
+        };
+
+  return (
+    <div className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/80 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-950/70">
+      <div className="container-padding py-2">
+        <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 shadow-sm ${roleAccent.shell}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <Badge variant={roleAccent.badge} size="sm">
+              {roleAccent.note}
+            </Badge>
+            <p className="truncate text-sm sm:text-base">
+              Acting as <span className="font-semibold">{session.Username}</span> ({session.UserType})
+              <span className="mx-2 text-gray-400 dark:text-gray-500">•</span>
+              Original user: <span className="font-semibold">{session.OriginalUser.Username}</span> ({session.OriginalUser.UserType})
+            </p>
+          </div>
+          <Form method="post" action="/exit-assumption">
+            <Button type="submit" size="sm" variant="secondary" className="border border-black/10 dark:border-white/20">
+              Exit Assumed View
+            </Button>
+          </Form>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -42,7 +107,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  const { session, assumed, originalRole } = useLoaderData<typeof loader>();
+
+  return (
+    <>
+      {assumed ? (
+        <AssumptionTopBanner session={session} originalRole={originalRole} />
+      ) : null}
+      <Outlet />
+    </>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
