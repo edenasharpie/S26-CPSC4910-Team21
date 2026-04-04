@@ -120,15 +120,17 @@ export async function action({ request }: Route.ActionArgs) {
       return data({ error: result.error ?? "Login failed." }, { status: response.status || 401 });
     }
 
+    const normalizedUserType = String(result.userType ?? "").trim().toLowerCase();
+
     const token = signToken({
       UserID: result.userID!,
-      UserType: result.userType! as any,
+      UserType: normalizedUserType as any,
       Username: result.username!,
       FirstName: result.firstName,
       LastName: result.lastName,
     });
 
-    const destination = ROLE_HOME[result.userType as keyof typeof ROLE_HOME] ?? "/";
+    const destination = ROLE_HOME[normalizedUserType as keyof typeof ROLE_HOME] ?? "/";
 
     return redirect(destination, {
       headers: { "Set-Cookie": buildSetCookieHeader(token) },
@@ -220,15 +222,27 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-slate-500 dark:text-slate-300 mt-8 font-medium">
-          New driver?{" "}
-          <Link
-            to="/register"
-            className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
-          >
-            Create an account
-          </Link>
-        </p>
+        <div className="mt-8 space-y-3 text-center">
+          <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">
+            New driver?{" "}
+            <Link
+              to="/register"
+              className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
+            >
+              Create an account
+            </Link>
+          </p>
+          
+          <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">
+            Want to be a sponsor?{" "}
+            <Link
+              to="/apply"
+              className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
+            >
+              Sponsor Application
+            </Link>
+          </p>
+        </div>
       </div>
 
       <Modal

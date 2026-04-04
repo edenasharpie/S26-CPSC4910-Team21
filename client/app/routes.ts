@@ -5,6 +5,7 @@ export default [
   index("routes/home.tsx"),
   route("login",  "routes/login.tsx"),
   route("register", "routes/register.tsx"),
+  route("apply", "routes/apply.tsx"),
   route("logout", "routes/logout.tsx"),
   route("forgot-password", "routes/forgot-password.tsx"),
   route("exit-assumption", "routes/exit-assumption.tsx"),
@@ -19,6 +20,7 @@ export default [
   route("driver/dashboard", "routes/driver/dashboard.tsx"),
 
   //SETTINGS
+  //route("sponsor/settings", "routes/sponsor/settings.$userId.tsx"),
   route("sponsor/settings/:userId", "routes/sponsor/settings.$userId.tsx"),
   route("admin/settings/:userId", "routes/admin/settings.$userId.tsx"),
 

@@ -10,7 +10,7 @@ const API_URL = getApiBaseUrl();
 // --- LOADER ---
 export async function loader({ request, params }: Route.LoaderArgs) {
   const user = requireAuth(request, ["sponsor"]);
-  const { userId } = params;
+  const userId = params.userId ?? String(user.UserID);
 
   try {
     // Get sponsor company info
@@ -44,8 +44,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 // --- ACTION ---
 export async function action({ request, params }: Route.ActionArgs) {
-  await requireAuth(request, ["sponsor"]);
-  const { userId } = params;
+  const user = requireAuth(request, ["sponsor"]);
+  const userId = params.userId ?? String(user.UserID);
   const formData = await request.formData();
 
   if (request.method !== "POST") {
