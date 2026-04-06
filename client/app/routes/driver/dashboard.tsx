@@ -15,36 +15,61 @@ import {
 } from "recharts";
 
 const API_URL = process.env.API_URL ?? "http://localhost:5000";
-const TARGET_USER_ID = "123456916"; 
 
 export async function loader({ request }: Route.LoaderArgs) {
-  // 1. Authenticate the driver
   const session = await requireAuth(request, ["driver", "admin"]);
-  
-  // 2. Fetch data from your API exactly like the Points Page
-  const [driverRes, historyRes, sponsorsRes] = await Promise.all([
-    fetch(`${API_URL}/api/admin/drivers/${TARGET_USER_ID}/points`),
-    fetch(`${API_URL}/api/admin/drivers/${TARGET_USER_ID}/point-history`),
-    fetch(`${API_URL}/api/drivers/${TARGET_USER_ID}/sponsors`),
-  ]);
+  const effectiveUserId = String(session.UserID);
 
-  // 3. Parse JSON results
-  const [driver, history, sponsors] = await Promise.all([
-    driverRes.json(),
-    historyRes.ok ? historyRes.json() : [],
-    sponsorsRes.ok ? sponsorsRes.json() : [],
-  ]);
+  try {
+    // Use the existing driver endpoints and gracefully degrade on partial failures.
+    const [pointsRes, performanceRes] = await Promise.all([
+      fetch(`${API_URL}/api/drivers/my-points/${effectiveUserId}`),
+      fetch(`${API_URL}/api/drivers/performance/${effectiveUserId}`),
+    ]);
 
-  return { 
-    driver, 
-    history: Array.isArray(history) ? history : [], 
-    sponsors: Array.isArray(sponsors) ? sponsors : [],
-    session 
-  };
+    const pointsPayload = pointsRes.ok ? await pointsRes.json() : null;
+    const performancePayload = performanceRes.ok ? await performanceRes.json() : null;
+
+    const history = Array.isArray(pointsPayload?.history) ? pointsPayload.history : [];
+    const pointBalance = Number(pointsPayload?.balance ?? 0);
+
+    const driver = {
+      UserID: session.UserID,
+      Username: session.Username,
+      FirstName: session.FirstName,
+      LastName: session.LastName,
+      PointBalance: Number.isFinite(pointBalance) ? pointBalance : 0,
+      PerformanceStatus: performancePayload?.performanceStatus,
+    };
+
+    return {
+      driver,
+      history,
+      sponsors: [],
+      session,
+      effectiveUserId,
+    };
+  } catch (error) {
+    console.error("driver/dashboard loader error:", error);
+    return {
+      driver: {
+        UserID: session.UserID,
+        Username: session.Username,
+        FirstName: session.FirstName,
+        LastName: session.LastName,
+        PointBalance: 0,
+        PerformanceStatus: undefined,
+      },
+      history: [],
+      sponsors: [],
+      session,
+      effectiveUserId,
+    };
+  }
 }
 
 export default function DriverDashboard() {
-  const { driver, history, sponsors } = useLoaderData<typeof loader>();
+  const { driver, history, sponsors, effectiveUserId } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
   // Performance status logic
@@ -100,7 +125,7 @@ export default function DriverDashboard() {
                   Driver Dashboard
                 </h1>
                 <p className="text-gray-500 text-sm mt-1 font-medium italic">
-                  ID: <span className="font-mono text-indigo-500">{TARGET_USER_ID}</span>
+                  ID: <span className="font-mono text-indigo-500">{effectiveUserId}</span>
                 </p>
               </div>
               
