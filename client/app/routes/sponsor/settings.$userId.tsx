@@ -3,13 +3,14 @@ import { useState } from "react";
 import { Button, Card, Input } from "~/components";
 import { useNavigate, useLoaderData, Form, useActionData, Link } from "react-router";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 // --- LOADER ---
 export async function loader({ request, params }: Route.LoaderArgs) {
   const user = requireAuth(request, ["sponsor"]);
-  const { userId } = params;
+  const userId = params.userId ?? String(user.UserID);
 
   try {
     // Get sponsor company info
@@ -43,8 +44,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 // --- ACTION ---
 export async function action({ request, params }: Route.ActionArgs) {
-  await requireAuth(request, ["sponsor"]);
-  const { userId } = params;
+  const user = requireAuth(request, ["sponsor"]);
+  const userId = params.userId ?? String(user.UserID);
   const formData = await request.formData();
 
   if (request.method !== "POST") {
@@ -111,6 +112,12 @@ export default function SponsorSettings() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8 border-b pb-6 dark:border-gray-800">
+          <Link
+            to="/"
+            className="text-sm font-medium text-blue-600 hover:underline mb-2 block"
+          >
+            ← Home
+          </Link>
           <Link
             to="/sponsor/dashboard"
             className="text-sm font-medium text-blue-600 hover:underline mb-2 block"

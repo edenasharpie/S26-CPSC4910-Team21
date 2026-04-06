@@ -3,8 +3,9 @@ import { useState } from "react";
 import { Link, useLoaderData, Form } from "react-router";
 import { Table, Button, Badge, Modal } from "~/components";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 // Mirrors the EVENTS table joined with USERS.Username
 interface AuditLogEntry {
@@ -17,17 +18,26 @@ interface AuditLogEntry {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  requireAuth(request, ["admin"]);
+  await requireAuth(request, ["admin"]);
 
   const url = new URL(request.url);
-  const filterParam = url.searchParams.get("filter");
-  const filters = filterParam
-    ? filterParam.split(",").map((f) => f.trim()).filter(Boolean)
-    : [];
+  const rawFilterParams = url.searchParams.getAll("filter");
+  const filters = rawFilterParams
+    .flatMap((value) => value.split(","))
+    .map((f) => f.trim())
+    .filter(Boolean);
+  const startDate = url.searchParams.get("startDate")?.trim();
+  const endDate = url.searchParams.get("endDate")?.trim();
+  const targetUserId = url.searchParams.get("targetUserId")?.trim();
 
   try {
     const params = new URLSearchParams();
-    if (filters.length > 0) params.set("filter", filters.join(","));
+    for (const filter of filters) {
+      params.append("filter", filter);
+    }
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+    if (targetUserId) params.set("targetUserId", targetUserId);
     const res = await fetch(`${API_URL}/api/admin/audit-logs?${params}`);
     if (!res.ok) throw new Error(`API returned ${res.status}`);
     const logs: AuditLogEntry[] = await res.json();

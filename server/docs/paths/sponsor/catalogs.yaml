@@ -280,6 +280,68 @@ catalogItemsById:
         $ref: '../../schemas/common.yaml#/Responses/404Error'
       '500':
         $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+assumeDriver:
+  parameters:
+    - name: userId
+      in: path
+      description: The sponsor user ID initiating assume view.
+      required: true
+      schema:
+        type: integer
+    - name: driverId
+      in: path
+      description: The driver user ID to assume.
+      required: true
+      schema:
+        type: integer
+  post:
+    tags:
+      - views
+    summary: Sponsor assume driver view
+    description: Switch to a driver view context for an active driver belonging to the sponsor's company. Requires canAssumeDriverView permission.
+    responses:
+      '200':
+        description: Assume driver view started successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                assumedUser:
+                  type: object
+                  properties:
+                    UserID:
+                      type: integer
+                      example: 27
+                    UserType:
+                      type: string
+                      enum: [driver]
+                      example: driver
+                    Username:
+                      type: string
+                      example: driver_jdoe
+                    FirstName:
+                      type: string
+                      nullable: true
+                      example: John
+                    LastName:
+                      type: string
+                      nullable: true
+                      example: Doe
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
   patch:
     tags:
       - catalog

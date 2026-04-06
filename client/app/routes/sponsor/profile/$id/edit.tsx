@@ -1,20 +1,19 @@
 import type { Route } from "./+types/edit";
 import { useLoaderData, Form, Link, useNavigate } from "react-router";
 import { Button, Input, Card } from "~/components";
+import { getApiBaseUrl } from "~/utils/api-url";
+import { requireAuth } from "~/utils/session.server";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
-
-// TEMP: Hardcoded sponsor user ID for testing (auth not yet implemented)
-// In production, this would come from requireAuth(request)
-// Using sponsor user 123456915 (Sam Sponsor) who manages company 78
-const TEMP_SPONSOR_USER_ID = 123456915;
+const API_URL = getApiBaseUrl();
 
 export async function loader({ request, params }: Route.LoaderArgs) {
+  const user = requireAuth(request, ["sponsor"]);
+  const sponsorUserId = user.UserID;
   const driverId = params.id;
 
   try {
     // First, get the sponsor's company
-    const companyRes = await fetch(`${API_URL}/api/sponsors/user/${TEMP_SPONSOR_USER_ID}`);
+    const companyRes = await fetch(`${API_URL}/api/sponsors/user/${sponsorUserId}`);
     if (!companyRes.ok) {
       throw new Response("Could not determine sponsor company", { status: 500 });
     }
@@ -22,7 +21,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     const companyId = company.sponsorCompanyId;
 
     // Now fetch the driver
-    const res = await fetch(`${API_URL}/api/sponsors/${TEMP_SPONSOR_USER_ID}/drivers/${driverId}`);
+    const res = await fetch(`${API_URL}/api/sponsors/${sponsorUserId}/drivers/${driverId}`);
     if (!res.ok) {
       const errorText = await res.text();
       console.error(`Failed to load driver ${driverId}:`, res.status, errorText);
@@ -30,7 +29,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     }
 
     const driver = await res.json();
-    return { driver, sponsorUserId: TEMP_SPONSOR_USER_ID, companyId };
+    return { driver, sponsorUserId, companyId };
   } catch (error) {
     console.error('Loader error:', error);
     throw error;
@@ -38,11 +37,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
+  const user = requireAuth(request, ["sponsor"]);
+  const sponsorUserId = user.UserID;
   const formData = await request.formData();
   const driverId = params.id;
 
   try {
-    const res = await fetch(`${API_URL}/api/sponsors/${TEMP_SPONSOR_USER_ID}/drivers/${driverId}`, {
+    const res = await fetch(`${API_URL}/api/sponsors/${sponsorUserId}/drivers/${driverId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -71,6 +72,9 @@ export default function SponsorProfileEdit() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 py-8">
       <div className="max-w-2xl mx-auto px-4">
+        <Link to="/" className="text-sm text-blue-600 hover:underline mb-2 block">
+          ← Home
+        </Link>
         <Link to="/sponsor/dashboard" className="text-sm text-blue-600 hover:underline mb-4 block">
           ← Back to Dashboard
         </Link>

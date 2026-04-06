@@ -2,6 +2,9 @@ import express from 'express';
 import { validatePasswordComplexity, hashPassword } from '../utils/auth.js';
 import { changePasswordWithHistory, getUserById } from '../utils/queries.js';
 import { pool } from '../db.js';
+import {
+  routeUserMatchesEffectiveSession,
+} from '../middleware/session-context.js';
 
 const router = express.Router();
 
@@ -19,6 +22,100 @@ router.get('/profile/:id', async (req, res) => {
   } catch (error) {
     console.error('Profile Route Error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * PATCH /api/user/profile/:id
+ */
+router.patch('/profile/:id', async (req, res) => {
+  let connection;
+  try {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'Invalid user id.' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, userId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    const firstName = typeof req.body?.firstName === 'string' ? req.body.firstName.trim() : undefined;
+    const lastName = typeof req.body?.lastName === 'string' ? req.body.lastName.trim() : undefined;
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : undefined;
+    const phoneRaw = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
+    const phone = phoneRaw === '' ? null : phoneRaw;
+
+    const updates = [];
+    const values = [];
+
+    if (firstName !== undefined) {
+      if (!firstName) {
+        return res.status(400).json({ error: 'firstName cannot be empty.' });
+      }
+      updates.push('FirstName = ?');
+      values.push(firstName);
+    }
+
+    if (lastName !== undefined) {
+      if (!lastName) {
+        return res.status(400).json({ error: 'lastName cannot be empty.' });
+      }
+      updates.push('LastName = ?');
+      values.push(lastName);
+    }
+
+    if (email !== undefined) {
+      if (!email) {
+        return res.status(400).json({ error: 'email cannot be empty.' });
+      }
+      updates.push('Email = ?');
+      values.push(email);
+    }
+
+    if (phone !== undefined) {
+      updates.push('Phone = ?');
+      values.push(phone);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No valid profile fields provided for update.' });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [updateResult] = await connection.execute(
+      `UPDATE USERS SET ${updates.join(', ')} WHERE UserID = ?`,
+      [...values, userId]
+    );
+
+    if (updateResult.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const [rows] = await connection.execute(
+      `SELECT UserID, Username, Email, Phone, UserType, FirstName, LastName, ActiveStatus, ProfilePicture, Bio
+       FROM USERS
+       WHERE UserID = ?
+       LIMIT 1`,
+      [userId]
+    );
+
+    await connection.commit();
+
+    return res.status(200).json(rows[0]);
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error('Profile Update Route Error:', error);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
@@ -262,5 +359,54 @@ router.post('/reviews/finalize', async (req, res) => {
     connection.release();
   }
 });
+
+// Drivers create application
+router.post('/submit-application', async (req, res) => {
+  const { driverId, sponsorCompanyId, explanation } = req.body;
+
+  try {
+    // ApplicationStatus defaults to 'pending' based on your ENUM
+    const [result] = await pool.execute(
+      `INSERT INTO DRIVER_APPLICATIONS 
+       (DriverID, SponsorCompanyID, ApplicationStatus, DecisionExplanation, TimeSubmitted)
+       VALUES (?, ?, 'pending', ?, NOW())`,
+      [driverId, sponsorCompanyId, explanation]
+    );
+
+    res.status(201).json({ 
+      message: "Application submitted successfully!", 
+      applicationId: result.insertId 
+    });
+  } catch (error) {
+    console.error("Submission Error:", error);
+    res.status(500).json({ error: "Could not submit application. You may already have a pending request." });
+  }
+});
+
+router.get('/my-applications/:driverId', async (req, res) => {
+    const { driverId } = req.params;
+
+    try {
+        const [rows] = await pool.execute(
+            `SELECT 
+                a.ApplicationID, 
+                a.SponsorCompanyID, 
+                u.FirstName AS SponsorName, 
+                a.ApplicationStatus, 
+                a.DecisionExplanation, 
+                a.TimeSubmitted
+             FROM DRIVER_APPLICATIONS a
+             JOIN USERS u ON a.SponsorCompanyID = u.UserID
+             WHERE a.DriverID = ?
+             ORDER BY a.TimeSubmitted DESC`,
+            [driverId]
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error("Fetch Apps Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 //module.exports = router;
 export default router;

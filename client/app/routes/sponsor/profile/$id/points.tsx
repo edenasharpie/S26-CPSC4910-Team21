@@ -3,35 +3,26 @@ import { useState, useMemo } from "react";
 import { useLoaderData, Form, useActionData, Link } from "react-router";
 import { Input, Button } from "~/components";
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from "recharts";
+import { getApiBaseUrl } from "~/utils/api-url";
+import { requireAuth } from "~/utils/session.server";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
-
-// TEMP: Hardcoded sponsor user ID for testing (auth not yet implemented)
-// Using sponsor user 123456915 (Sam Sponsor) who manages company 78
-const TEMP_SPONSOR_USER_ID = 123456915;
+const API_URL = getApiBaseUrl();
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  console.log("LOADER IS RUNNING FOR ID:", params.id);
+  const user = requireAuth(request, ["sponsor"]);
   const driverId = params.id;
+  const sponsorUserId = user.UserID;
 
   try {
-    const pointsUrl = `${API_URL}/api/sponsors/${TEMP_SPONSOR_USER_ID}/drivers/${driverId}/points`;
-    const historyUrl = `${API_URL}/api/sponsors/${TEMP_SPONSOR_USER_ID}/drivers/${driverId}/point-history`;
-    
-    console.log("Fetching:", pointsUrl);
-    console.log("Fetching:", historyUrl);
+    const pointsUrl = `${API_URL}/api/sponsors/${sponsorUserId}/drivers/${driverId}/points`;
+    const historyUrl = `${API_URL}/api/sponsors/${sponsorUserId}/drivers/${driverId}/point-history`;
 
     const [driverRes, historyRes] = await Promise.all([
       fetch(pointsUrl),
       fetch(historyUrl),
     ]);
 
-    console.log("Driver response status:", driverRes.status);
-    console.log("History response status:", historyRes.status);
-
     if (!driverRes.ok) {
-      const errorText = await driverRes.text();
-      console.error("Driver response error:", errorText);
       throw new Response(`Driver not found for this sponsor. Status: ${driverRes.status}`, { status: 404 });
     }
 
@@ -41,7 +32,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     return { 
       driver, 
       history: Array.isArray(historyData) ? historyData : [], 
-      sponsorUserId: TEMP_SPONSOR_USER_ID 
+      sponsorUserId 
     };
   } catch (err) {
     console.error("Loader error:", err);
@@ -50,10 +41,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
+  const user = requireAuth(request, ["sponsor"]);
   const formData = await request.formData();
   const intent = formData.get("intent");
   const driverUserId = params.id;
-  const sponsorUserId = TEMP_SPONSOR_USER_ID;
+  const sponsorUserId = user.UserID;
 
   try {
     if (intent === "edit") {

@@ -1,0 +1,237 @@
+orders:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver.
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - orders
+    summary: List driver orders
+    description: Retrieve all orders for the given driver account.
+    responses:
+      '200':
+        description: Driver order list.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  orderId:
+                    type: integer
+                  orderDate:
+                    type: string
+                    format: date-time
+                  orderPointsSpent:
+                    type: integer
+                  orderDollarsSpent:
+                    type: number
+                  orderStatus:
+                    type: string
+                    enum: [confirmed, shipped, delivered, cancelled]
+                  sponsorCompanyId:
+                    type: integer
+                  sponsorCompanyName:
+                    type: string
+                    nullable: true
+                  items:
+                    type: array
+                    items:
+                      type: object
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Driver account is inactive.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Driver account is inactive."
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+  post:
+    tags:
+      - orders
+    summary: Create driver order
+    description: Create a confirmed order using catalog items from the driver's sponsor company.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - items
+            properties:
+              items:
+                type: array
+                minItems: 1
+                items:
+                  type: object
+                  required:
+                    - itemId
+                    - quantity
+                  properties:
+                    itemId:
+                      type: integer
+                    quantity:
+                      type: integer
+                      minimum: 1
+    responses:
+      '201':
+        description: Order created successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: integer
+                orderPointsSpent:
+                  type: integer
+                orderDollarsSpent:
+                  type: number
+                orderStatus:
+                  type: string
+                  enum: [confirmed]
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Driver account is inactive.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Driver account is inactive."
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+ordersById:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver.
+      required: true
+      schema:
+        type: integer
+    - name: orderId
+      in: path
+      description: The order ID.
+      required: true
+      schema:
+        type: integer
+  patch:
+    tags:
+      - orders
+    summary: Update confirmed driver order
+    description: Replace order items for a confirmed order and recalculate point totals.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - items
+            properties:
+              items:
+                type: array
+                minItems: 1
+                items:
+                  type: object
+                  required:
+                    - itemId
+                    - quantity
+                  properties:
+                    itemId:
+                      type: integer
+                    quantity:
+                      type: integer
+                      minimum: 1
+    responses:
+      '200':
+        description: Order updated successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: integer
+                orderPointsSpent:
+                  type: integer
+                orderDollarsSpent:
+                  type: number
+                orderStatus:
+                  type: string
+                  enum: [confirmed]
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Driver account is inactive.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Driver account is inactive."
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+  delete:
+    tags:
+      - orders
+    summary: Cancel confirmed driver order
+    description: Cancel a confirmed order and refund spent points.
+    responses:
+      '200':
+        description: Order cancelled successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: integer
+                orderStatus:
+                  type: string
+                  enum: [cancelled]
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Driver account is inactive.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Driver account is inactive."
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'

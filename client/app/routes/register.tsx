@@ -1,9 +1,8 @@
 import { data, redirect, Form, Link, useActionData, useNavigation } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Alert, Button, Input } from "~/components";
+import { toApiUrl } from "~/utils/api-url";
 import { getSession, ROLE_HOME } from "~/utils/session.server";
-
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const user = getSession(request);
@@ -31,7 +30,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	}
 
 	try {
-		const response = await fetch(`${API_URL}/api/user/register-driver`, {
+		const response = await fetch(toApiUrl("/api/user/register-driver"), {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(payload),

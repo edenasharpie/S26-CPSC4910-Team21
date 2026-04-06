@@ -1,11 +1,15 @@
 import express from 'express';
+import { pool } from '../db.js';
 import { 
   getAvailableReports,
   generateReport
 } from '../services/report-service.js';
+import {
+  getEffectiveSessionUser,
+  routeUserMatchesEffectiveSession,
+} from '../middleware/session-context.js';
 import { 
   getSponsorCompanyId,
-  userExists,
   listGeneratedReportsForSponsor,
   getGeneratedReportByIdForSponsor,
 } from '../utils/queries.js';
@@ -22,10 +26,37 @@ async function validateSponsorAndGetCompanyId(req, res, next) {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
-    // Check if user exists
-    const exists = await userExists(userId);
-    if (!exists) {
+    if (!routeUserMatchesEffectiveSession(req, userId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    const effectiveSessionUser = getEffectiveSessionUser(req);
+    const effectiveRole = effectiveSessionUser?.UserType;
+
+    if (effectiveRole && effectiveRole !== 'sponsor') {
+      return res.status(403).json({
+        error: 'Access forbidden: User is not a sponsor'
+      });
+    }
+
+    const [userRows] = effectiveRole
+      ? await pool.execute(
+          'SELECT UserID, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
+          [userId]
+        )
+      : await pool.execute(
+          'SELECT UserID, UserType, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
+          [userId]
+        );
+
+    if (userRows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!effectiveRole && userRows[0].UserType !== 'sponsor') {
+      return res.status(403).json({
+        error: 'Access forbidden: User is not a sponsor'
+      });
     }
 
     // Get sponsor's company ID

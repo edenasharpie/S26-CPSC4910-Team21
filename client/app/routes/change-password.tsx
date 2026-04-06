@@ -1,5 +1,6 @@
 import { data } from "react-router";
 import type { Route } from "./+types/change-password";
+import { getApiBaseUrl } from "~/utils/api-url";
 //import { getUserById, getPasswordHistory, changePassword } from "../../../server/database/db";
 
 // Type definitions for database objects
@@ -26,6 +27,8 @@ interface PasswordHistoryRecord {
   changed_at: string;
 }
 
+const API_URL = getApiBaseUrl();
+
 export async function action({ request }: { request: Request }) {
   const formData = await request.formData();
   const userId = formData.get("userId");
@@ -33,7 +36,7 @@ export async function action({ request }: { request: Request }) {
   const newPassword = formData.get("newPassword");
 
   // ✅ REPLACE the old function calls with a FETCH request
-  const response = await fetch('/api/user/change-password', {
+  const response = await fetch(`${API_URL}/api/user/change-password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

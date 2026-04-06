@@ -3,8 +3,9 @@ import { useParams, useLoaderData, Form, useActionData, Link, useNavigate, redir
 import type { Route } from "./+types/edit";
 import { Input, Button, Alert } from "~/components";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const BASE_URL = process.env.API_URL ?? 'http://localhost:5000';
+const BASE_URL = getApiBaseUrl();
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   await requireAuth(request, ["admin"]);

@@ -1,9 +1,10 @@
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, Form } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
-import { Badge, Card, Table } from "~/components";
+import { Badge, Card, Table, Button } from "~/components";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 // 1. Define the Data Structure
 interface PointTransaction {
@@ -40,13 +41,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : { performanceStatus: undefined };
 
     return {
+      session,
       balance: pointsData.balance ?? 0,
       history: pointsData.history ?? [],
       performanceStatus: statusData.performanceStatus,
     };
   } catch (error) {
     console.error("Driver Loader Error:", error);
-    return { balance: 0, history: [], performanceStatus: undefined };
+    return { session, balance: 0, history: [], performanceStatus: undefined };
   }
 }
 
@@ -54,7 +56,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function DriverDashboard() {
   const data = useLoaderData<typeof loader>();
   
-  const { balance = 0, history = [], performanceStatus } = data || {};
+  const { session, balance = 0, history = [], performanceStatus } = data || {};
   const normalizedPerformanceStatus = (performanceStatus ?? "").toLowerCase();
   const performanceBadgeVariant =
     normalizedPerformanceStatus === "excellent"
@@ -93,8 +95,15 @@ export default function DriverDashboard() {
             to="/"
             className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
-            &larr; Debug Menu
+            &larr; Home
           </Link>
+          {session?.OriginalUser && (
+            <Form method="post" action="/exit-assumption" className="mt-3">
+              <Button type="submit" variant="primary" size="sm">
+                Exit Assumed View
+              </Button>
+            </Form>
+          )}
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Driver Rewards</h1>
         </header>
 

@@ -1,16 +1,24 @@
+import { useEffect, useState } from "react";
 import { data, redirect, Form, useActionData, useNavigation, Link } from "react-router";
 import type { Route } from "./+types/login";
 import { Button } from "~/components/Button";
 import { Input } from "~/components/Input";
 import { Alert } from "~/components/Alert";
+import { Modal } from "~/components/Modal";
 import {
   getSession,
   signToken,
   buildSetCookieHeader,
   ROLE_HOME,
 } from "~/utils/session.server";
+import { toApiUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? 'http://localhost:5000';
+type LoginActionData = {
+  error?: string;
+  successMessage?: string;
+  showReactivation?: boolean;
+  reactivationUsername?: string;
+};
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -29,6 +37,55 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "login");
+
+  if (intent === "reactivate") {
+    const username = String(formData.get("reactivationUsername") ?? "").trim();
+    const password = String(formData.get("reactivationPassword") ?? "");
+
+    if (!username || !password) {
+      return data(
+        {
+          error: "Username and password are required to reactivate your account.",
+          showReactivation: true,
+          reactivationUsername: username,
+        },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const response = await fetch(toApiUrl("/api/auth/reactivate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        return data(
+          {
+            error: result.error ?? "Failed to reactivate account.",
+            showReactivation: true,
+            reactivationUsername: username,
+          },
+          { status: response.status || 400 }
+        );
+      }
+
+      return data({ successMessage: result.message ?? "Account reactivated. Please sign in." }, { status: 200 });
+    } catch {
+      return data(
+        {
+          error: "Could not reach the server. Please try again.",
+          showReactivation: true,
+          reactivationUsername: username,
+        },
+        { status: 503 }
+      );
+    }
+  }
+
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
@@ -37,7 +94,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
+    const response = await fetch(toApiUrl("/api/auth/login"), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
@@ -45,18 +102,35 @@ export async function action({ request }: Route.ActionArgs) {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      return data({ error: result.error ?? "Login failed." }, { status: 401 });
+      if (
+        response.status === 403 &&
+        result?.errorCode === "ACCOUNT_DEACTIVATED" &&
+        result?.canSelfReactivate
+      ) {
+        return data(
+          {
+            error: result.error ?? "This account is deactivated.",
+            showReactivation: true,
+            reactivationUsername: username,
+          },
+          { status: 403 }
+        );
+      }
+
+      return data({ error: result.error ?? "Login failed." }, { status: response.status || 401 });
     }
+
+    const normalizedUserType = String(result.userType ?? "").trim().toLowerCase();
 
     const token = signToken({
       UserID: result.userID!,
-      UserType: result.userType! as any,
+      UserType: normalizedUserType as any,
       Username: result.username!,
       FirstName: result.firstName,
       LastName: result.lastName,
     });
 
-    const destination = ROLE_HOME[result.userType as keyof typeof ROLE_HOME] ?? "/";
+    const destination = ROLE_HOME[normalizedUserType as keyof typeof ROLE_HOME] ?? "/";
 
     return redirect(destination, {
       headers: { "Set-Cookie": buildSetCookieHeader(token) },
@@ -67,10 +141,19 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function LoginPage() {
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof action>() as LoginActionData | undefined;
   const navigation = useNavigation();
   const error = actionData?.error;
-  const isSubmitting = navigation.state !== "idle";
+  const successMessage = actionData?.successMessage;
+  const isSubmitting =
+    navigation.state !== "idle" && navigation.formData?.get("intent") !== "reactivate";
+  const isReactivating =
+    navigation.state !== "idle" && navigation.formData?.get("intent") === "reactivate";
+  const [isReactivationOpen, setIsReactivationOpen] = useState(false);
+
+  useEffect(() => {
+    setIsReactivationOpen(Boolean(actionData?.showReactivation));
+  }, [actionData?.showReactivation]);
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-slate-950 dark:to-slate-900 px-4 py-12">
@@ -90,6 +173,9 @@ export default function LoginPage() {
           {/* Error banner */}
           {error && (
             <Alert variant="error" message={error} dismissible={false} />
+          )}
+          {successMessage && (
+            <Alert variant="success" message={successMessage} dismissible={false} />
           )}
 
           <Form method="post" className="space-y-5">
@@ -116,7 +202,7 @@ export default function LoginPage() {
               />
               <div className="text-right pt-0.5">
                 <Link
-                  to="/change-password"
+                  to="/forgot-password"
                   className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                 >
                   Forgot password?
@@ -136,16 +222,75 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-slate-500 dark:text-slate-300 mt-8 font-medium">
-          New driver?{" "}
-          <Link
-            to="/register"
-            className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
-          >
-            Create an account
-          </Link>
-        </p>
+        <div className="mt-8 space-y-3 text-center">
+          <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">
+            New driver?{" "}
+            <Link
+              to="/register"
+              className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
+            >
+              Create an account
+            </Link>
+          </p>
+          
+          <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">
+            Want to be a sponsor?{" "}
+            <Link
+              to="/apply"
+              className="text-blue-600 dark:text-blue-400 font-bold hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-4"
+            >
+              Sponsor Application
+            </Link>
+          </p>
+        </div>
       </div>
+
+      <Modal
+        isOpen={isReactivationOpen}
+        onClose={() => setIsReactivationOpen(false)}
+        title="Reactivate Driver Account"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Your driver account is currently deactivated. Confirm your password to reactivate it, then sign in.
+          </p>
+
+          <Form method="post" className="space-y-4">
+            <input type="hidden" name="intent" value="reactivate" />
+            <input
+              type="hidden"
+              name="reactivationUsername"
+              value={actionData?.reactivationUsername ?? ""}
+            />
+
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Username</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {actionData?.reactivationUsername}
+              </p>
+            </div>
+
+            <Input
+              id="reactivationPassword"
+              name="reactivationPassword"
+              type="password"
+              label="Password"
+              autoComplete="current-password"
+              required
+              placeholder="Enter your password"
+            />
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setIsReactivationOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" isLoading={isReactivating} disabled={isReactivating}>
+                Reactivate Account
+              </Button>
+            </div>
+          </Form>
+        </div>
+      </Modal>
     </div>
   );
 }

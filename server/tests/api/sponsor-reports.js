@@ -1,11 +1,42 @@
 import axios from 'axios';
-import { BASE_URL, log, createTestSponsor, closePool } from '../setup.js';
+import {
+  BASE_URL,
+  log,
+  createTestSponsor,
+  closePool,
+  createTestUser as createSharedTestUser,
+  createTestSponsorProfile,
+  createTestDriverProfile,
+} from '../setup.js';
 import { pool } from '../../src/db.js';
 
 // Track created resources for cleanup
 const createdUserIds = [];
 const createdSponsorIds = [];
 const createdApplicationIds = [];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function retryOnStatuses(requestFn, retryStatuses, maxAttempts = 6, delayMs = 250) {
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    try {
+      return await requestFn();
+    } catch (error) {
+      const status = error.response?.status;
+      attempt += 1;
+
+      if (attempt >= maxAttempts || !retryStatuses.includes(status)) {
+        throw error;
+      }
+
+      await sleep(delayMs);
+    }
+  }
+}
 
 /**
  * Cleanup created test data
@@ -35,69 +66,6 @@ async function cleanupTestData() {
     }
   } catch (error) {
     console.error('Error cleaning up test data:', error.message);
-  } finally {
-    connection.release();
-  }
-}
-
-/**
- * Create a test sponsor user
- */
-async function createTestSponsorUser(sponsorCompanyId) {
-  const connection = await pool.getConnection();
-  
-  try {
-    const username = `testsponsor_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const email = `${username}@example.com`;
-    
-    // Create user
-    const [userResult] = await connection.query(
-      `INSERT INTO USERS (Username, Email, PassHash, FirstName, LastName, UserType, ActiveStatus) 
-       VALUES (?, ?, ?, ?, ?, 'sponsor', 1)`,
-      [username, email, 'hash', 'Test', 'Sponsor']
-    );
-    
-    const userId = userResult.insertId;
-    
-    // Create sponsor
-    await connection.query(
-      `INSERT INTO SPONSORS (UserID, SponsorCompanyID) VALUES (?, ?)`,
-      [userId, sponsorCompanyId]
-    );
-    
-    return userId;
-  } finally {
-    connection.release();
-  }
-}
-
-/**
- * Create a test driver user
- */
-async function createTestDriver(sponsorCompanyId, licenseNumber) {
-  const connection = await pool.getConnection();
-  
-  try {
-    const username = `testdriver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const email = `${username}@example.com`;
-    
-    // Create user
-    const [userResult] = await connection.query(
-      `INSERT INTO USERS (Username, Email, PassHash, FirstName, LastName, UserType, ActiveStatus) 
-       VALUES (?, ?, ?, ?, ?, 'driver', 1)`,
-      [username, email, 'hash', 'Test', 'Driver']
-    );
-    
-    const userId = userResult.insertId;
-    
-    // Create driver
-    await connection.query(
-      `INSERT INTO DRIVERS (LicenseNumber, UserID, SponsorCompanyID, PointBalance, PerformanceStatus, AlertPoints, AlertOrders) 
-       VALUES (?, ?, ?, 100, 'good', 1, 1)`,
-      [licenseNumber, userId, sponsorCompanyId]
-    );
-    
-    return { userId, licenseNumber };
   } finally {
     connection.release();
   }
@@ -147,22 +115,50 @@ async function runTests() {
 
     // Create sponsor users
     log('TEST SETUP: Creating sponsor users...', 'Setup');
-    const sponsor1UserId = await createTestSponsorUser(sponsorCompany1);
+    const sponsor1 = await createSharedTestUser({ userType: 'sponsor', firstName: 'Test', lastName: 'Sponsor' });
+    const sponsor1UserId = sponsor1.userId;
+    await createTestSponsorProfile({ userId: sponsor1UserId, sponsorCompanyId: sponsorCompany1 });
     createdUserIds.push(sponsor1UserId);
     
-    const sponsor2UserId = await createTestSponsorUser(sponsorCompany2);
+    const sponsor2 = await createSharedTestUser({ userType: 'sponsor', firstName: 'Test', lastName: 'Sponsor' });
+    const sponsor2UserId = sponsor2.userId;
+    await createTestSponsorProfile({ userId: sponsor2UserId, sponsorCompanyId: sponsorCompany2 });
     createdUserIds.push(sponsor2UserId);
     log('Created sponsor users:', { sponsor1: sponsor1UserId, sponsor2: sponsor2UserId });
 
     // Create test drivers
     log('TEST SETUP: Creating test drivers...', 'Setup');
-    const driver1 = await createTestDriver(sponsorCompany1, `DL${Date.now()}A`);
+    const driver1User = await createSharedTestUser({ userType: 'driver', firstName: 'Test', lastName: 'Driver' });
+    const driver1 = await createTestDriverProfile({
+      userId: driver1User.userId,
+      sponsorCompanyId: sponsorCompany1,
+      licenseNumber: `DL${Date.now()}A`,
+      pointBalance: 100,
+      performanceStatus: 'good',
+    });
+    driver1.userId = driver1User.userId;
     createdUserIds.push(driver1.userId);
     
-    const driver2 = await createTestDriver(sponsorCompany1, `DL${Date.now()}B`);
+    const driver2User = await createSharedTestUser({ userType: 'driver', firstName: 'Test', lastName: 'Driver' });
+    const driver2 = await createTestDriverProfile({
+      userId: driver2User.userId,
+      sponsorCompanyId: sponsorCompany1,
+      licenseNumber: `DL${Date.now()}B`,
+      pointBalance: 100,
+      performanceStatus: 'good',
+    });
+    driver2.userId = driver2User.userId;
     createdUserIds.push(driver2.userId);
     
-    const driver3 = await createTestDriver(sponsorCompany2, `DL${Date.now()}C`);
+    const driver3User = await createSharedTestUser({ userType: 'driver', firstName: 'Test', lastName: 'Driver' });
+    const driver3 = await createTestDriverProfile({
+      userId: driver3User.userId,
+      sponsorCompanyId: sponsorCompany2,
+      licenseNumber: `DL${Date.now()}C`,
+      pointBalance: 100,
+      performanceStatus: 'good',
+    });
+    driver3.userId = driver3User.userId;
     createdUserIds.push(driver3.userId);
     log('Created drivers:', { driver1: driver1.licenseNumber, driver2: driver2.licenseNumber, driver3: driver3.licenseNumber });
 
@@ -193,7 +189,10 @@ async function runTests() {
 
     // Test 1: Get sponsor 1 applications report (no additional filters)
     log('TEST 1: Getting sponsor 1 applications report...', `GET /api/sponsor/${sponsor1UserId}/reports/driver-applications`);
-    const sponsor1Report = await axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`);
+    const sponsor1Report = await retryOnStatuses(
+      () => axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`),
+      [404]
+    );
     log('Sponsor 1 applications report:', sponsor1Report.data);
     console.log('Status:', sponsor1Report.status);
     console.log('Total:', sponsor1Report.data.totalApplications, '(should be 4 for company 1)');
@@ -204,7 +203,10 @@ async function runTests() {
 
     // Test 2: Get sponsor 2 applications report
     log('TEST 2: Getting sponsor 2 applications report...', `GET /api/sponsor/${sponsor2UserId}/reports/driver-applications`);
-    const sponsor2Report = await axios.get(`${BASE_URL}/api/sponsor/${sponsor2UserId}/reports/driver-applications`);
+    const sponsor2Report = await retryOnStatuses(
+      () => axios.get(`${BASE_URL}/api/sponsor/${sponsor2UserId}/reports/driver-applications`),
+      [404]
+    );
     log('Sponsor 2 applications report:', sponsor2Report.data);
     console.log('Total:', sponsor2Report.data.totalApplications, '(should be 2 for company 2)');
     console.log('Pending:', sponsor2Report.data.pendingCount);
@@ -212,18 +214,24 @@ async function runTests() {
 
     // Test 3: Filter by status = pending
     log('TEST 3: Getting sponsor 1 report filtered by status=pending...', `GET /api/sponsor/${sponsor1UserId}/reports/driver-applications?status=pending`);
-    const pendingReport = await axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`, {
-      params: { status: 'pending' }
-    });
+    const pendingReport = await retryOnStatuses(
+      () => axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`, {
+        params: { status: 'pending' }
+      }),
+      [404]
+    );
     log('Pending applications report:', pendingReport.data);
     console.log('Total:', pendingReport.data.totalApplications, '(should only include pending from company 1)');
     console.log('Pending:', pendingReport.data.pendingCount);
 
     // Test 4: Filter by status = accepted
     log('TEST 4: Getting sponsor 1 report filtered by status=accepted...', `GET /api/sponsor/${sponsor1UserId}/reports/driver-applications?status=accepted`);
-    const acceptedReport = await axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`, {
-      params: { status: 'accepted' }
-    });
+    const acceptedReport = await retryOnStatuses(
+      () => axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`, {
+        params: { status: 'accepted' }
+      }),
+      [404]
+    );
     log('Accepted applications report:', acceptedReport.data);
     console.log('Total:', acceptedReport.data.totalApplications);
     console.log('Accepted:', acceptedReport.data.acceptedCount);
@@ -232,12 +240,15 @@ async function runTests() {
     log('TEST 5: Getting sponsor 1 report filtered by date range...', 'GET /api/sponsor/:userId/reports/driver-applications?startDate=...&endDate=...');
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const dateRangeReport = await axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`, {
-      params: {
-        startDate: sevenDaysAgo.toISOString(),
-        endDate: now.toISOString()
-      }
-    });
+    const dateRangeReport = await retryOnStatuses(
+      () => axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`, {
+        params: {
+          startDate: sevenDaysAgo.toISOString(),
+          endDate: now.toISOString()
+        }
+      }),
+      [404]
+    );
     log('Date range applications report:', dateRangeReport.data);
     console.log('Total:', dateRangeReport.data.totalApplications);
     console.log('DateRangeStart:', dateRangeReport.data.dateRangeStart);
@@ -245,12 +256,15 @@ async function runTests() {
 
     // Test 6: Multiple filters combined
     log('TEST 6: Getting report with multiple filters...', 'GET /api/sponsor/:userId/reports/driver-applications?status=pending&startDate=...');
-    const multiFilterReport = await axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`, {
-      params: {
-        status: 'pending',
-        startDate: sevenDaysAgo.toISOString()
-      }
-    });
+    const multiFilterReport = await retryOnStatuses(
+      () => axios.get(`${BASE_URL}/api/sponsor/${sponsor1UserId}/reports/driver-applications`, {
+        params: {
+          status: 'pending',
+          startDate: sevenDaysAgo.toISOString()
+        }
+      }),
+      [404]
+    );
     log('Multi-filter applications report:', multiFilterReport.data);
     console.log('Total:', multiFilterReport.data.totalApplications);
 

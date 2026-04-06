@@ -1,0 +1,39 @@
+assumptionExit:
+  post:
+    tags:
+      - security
+    summary: Exit assumed view
+    description: Record an assumed-view exit action before the client restores the original user session context.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - actingUserId
+              - originalUserId
+            properties:
+              actingUserId:
+                type: integer
+                description: User ID of the currently assumed account.
+                example: 27
+              originalUserId:
+                type: integer
+                description: User ID of the original account that initiated assume mode.
+                example: 1
+    responses:
+      '200':
+        description: Assumption exit logged successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+      '400':
+        $ref: '../schemas/common.yaml#/Responses/400Error'
+      '500':
+        $ref: '../schemas/common.yaml#/Responses/500Error'

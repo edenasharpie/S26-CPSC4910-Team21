@@ -1,7 +1,21 @@
 import express from 'express';
 import { pool } from '../db.js';
+import { hasBooleanPermission } from '../utils/auth.js';
+import {
+  routeUserMatchesEffectiveSession,
+} from '../middleware/session-context.js';
 
 const router = express.Router();
+
+function normalizeUserForSession(user) {
+  return {
+    UserID: Number(user.UserID),
+    UserType: user.UserType,
+    Username: user.Username,
+    FirstName: user.FirstName ?? null,
+    LastName: user.LastName ?? null,
+  };
+}
 
 // GET /api/sponsors - Get all sponsor companies
 router.get('/', async (req, res) => {
@@ -131,23 +145,68 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
     
     const companyId = sponsorRows[0].SponsorCompanyID;
     
-    // Get point history for this driver from this sponsor company
+     // Get point history for this driver from this sponsor company.
     const [history] = await pool.execute(
       `SELECT
          pt.TransactionID, pt.DriverID, pt.UserChanged, pt.PointChange, 
          pt.ReasonForChange, pt.TimeChanged, u.Username as ChangedByUsername
        FROM POINT_TRANSACTIONS pt
-       JOIN USERS u ON pt.UserChanged = u.UserID
-       WHERE pt.DriverID = ?
+       JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
+       LEFT JOIN USERS u ON pt.UserChanged = u.UserID
+       WHERE d.UserID = ? AND d.SponsorCompanyID = ?
        ORDER BY pt.TimeChanged DESC
        LIMIT 100`,
-      [driverId]
+      [driverId, companyId]
     );
     
     res.json(history);
   } catch (error) {
     console.error('[SPONSOR_GET_HISTORY] Error:', error);
     res.status(500).json({ error: 'Failed to fetch point history' });
+  }
+});
+
+// GET /api/sponsors/:userId/point-transactions - Get sponsor-scoped point transactions for invoices
+router.get('/:userId/point-transactions', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const [sponsorRows] = await pool.execute(
+      `SELECT sc.SponsorCompanyID
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?`,
+      [userId]
+    );
+
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+
+    const companyId = sponsorRows[0].SponsorCompanyID;
+    const [transactions] = await pool.execute(
+      `SELECT
+         pt.TransactionID,
+         pt.DriverID,
+         d.UserID AS DriverUserID,
+         u.FirstName,
+         u.LastName,
+         pt.UserChanged AS AdminUserID,
+         pt.PointChange,
+         pt.ReasonForChange,
+         DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
+       FROM POINT_TRANSACTIONS pt
+       JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
+       JOIN USERS u ON d.UserID = u.UserID
+       WHERE d.SponsorCompanyID = ?
+       ORDER BY pt.TimeChanged DESC`,
+      [companyId]
+    );
+
+    return res.json(transactions);
+  } catch (error) {
+    console.error('Error fetching sponsor point transactions:', error);
+    return res.status(500).json({ error: 'Failed to fetch sponsor point transactions' });
   }
 });
 
@@ -265,6 +324,130 @@ router.put('/:userId/point-transactions/:tId', async (req, res) => {
   }
 });
 
+// PATCH /api/sponsors/:userId/drivers/:driverId - Update sponsor-owned driver profile fields
+router.patch('/:userId/drivers/:driverId', async (req, res) => {
+  let connection;
+  try {
+    const sponsorUserId = Number(req.params.userId);
+    const driverUserId = Number(req.params.driverId);
+
+    if (!Number.isInteger(sponsorUserId) || !Number.isInteger(driverUserId)) {
+      return res.status(400).json({ error: 'Invalid user ID or driver ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    const firstName = typeof req.body?.firstName === 'string' ? req.body.firstName.trim() : undefined;
+    const lastName = typeof req.body?.lastName === 'string' ? req.body.lastName.trim() : undefined;
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : undefined;
+    const phoneRaw = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
+    const phone = phoneRaw === '' ? null : phoneRaw;
+
+    const userUpdates = [];
+    const updateValues = [];
+
+    if (firstName !== undefined) {
+      if (!firstName) {
+        return res.status(400).json({ error: 'firstName cannot be empty' });
+      }
+      userUpdates.push('FirstName = ?');
+      updateValues.push(firstName);
+    }
+
+    if (lastName !== undefined) {
+      if (!lastName) {
+        return res.status(400).json({ error: 'lastName cannot be empty' });
+      }
+      userUpdates.push('LastName = ?');
+      updateValues.push(lastName);
+    }
+
+    if (email !== undefined) {
+      if (!email) {
+        return res.status(400).json({ error: 'email cannot be empty' });
+      }
+      userUpdates.push('Email = ?');
+      updateValues.push(email);
+    }
+
+    if (phone !== undefined) {
+      userUpdates.push('Phone = ?');
+      updateValues.push(phone);
+    }
+
+    if (userUpdates.length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided for update' });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [sponsorRows] = await connection.execute(
+      `SELECT sc.SponsorCompanyID
+       FROM SPONSORS s
+       JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE s.UserID = ?
+       LIMIT 1`,
+      [sponsorUserId]
+    );
+
+    if (sponsorRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+
+    const sponsorCompanyId = sponsorRows[0].SponsorCompanyID;
+
+    const [driverRows] = await connection.execute(
+      `SELECT u.UserID
+       FROM USERS u
+       JOIN DRIVERS d ON d.UserID = u.UserID
+       WHERE u.UserID = ? AND d.SponsorCompanyID = ?
+       LIMIT 1`,
+      [driverUserId, sponsorCompanyId]
+    );
+
+    if (driverRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Driver not found for this sponsor' });
+    }
+
+    await connection.execute(
+      `UPDATE USERS
+       SET ${userUpdates.join(', ')}
+       WHERE UserID = ?`,
+      [...updateValues, driverUserId]
+    );
+
+    const [updatedRows] = await connection.execute(
+      `SELECT
+         u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
+         d.PerformanceStatus, d.PointBalance, u.ActiveStatus
+       FROM USERS u
+       JOIN DRIVERS d ON u.UserID = d.UserID
+       WHERE u.UserID = ? AND d.SponsorCompanyID = ?
+       LIMIT 1`,
+      [driverUserId, sponsorCompanyId]
+    );
+
+    await connection.commit();
+
+    return res.status(200).json(updatedRows[0]);
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error('[SPONSOR_UPDATE_DRIVER] Error:', error);
+    return res.status(500).json({ error: 'Failed to update driver profile' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
 // ============================================================================
 // GENERIC ROUTES (come AFTER specific routes)
 // ============================================================================
@@ -313,6 +496,84 @@ router.get('/:userId/drivers/:driverId', async (req, res) => {
   } catch (error) {
     console.error('[SPONSOR_GET_DRIVER] Error:', error);
     res.status(500).json({ error: 'Failed to fetch driver' });
+  }
+});
+
+// POST /api/sponsors/:userId/assume-driver/:driverId
+router.post('/:userId/assume-driver/:driverId', async (req, res) => {
+  let connection;
+  try {
+    const sponsorUserId = Number(req.params.userId);
+    const driverUserId = Number(req.params.driverId);
+
+    if (!Number.isInteger(sponsorUserId) || !Number.isInteger(driverUserId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'userId and driverId must be valid integers.',
+      });
+    }
+
+    connection = await pool.getConnection();
+
+    const [sponsorRows] = await connection.execute(
+      `SELECT u.UserID, u.UserType, u.ActiveStatus, u.Permissions, s.SponsorCompanyID
+       FROM USERS u
+       JOIN SPONSORS s ON s.UserID = u.UserID
+       WHERE u.UserID = ?
+       LIMIT 1`,
+      [sponsorUserId]
+    );
+
+    if (sponsorRows.length === 0 || sponsorRows[0].UserType !== 'sponsor') {
+      return res.status(403).json({ success: false, error: 'Only sponsors can assume driver view.' });
+    }
+
+    const sponsor = sponsorRows[0];
+
+    if (!Boolean(sponsor.ActiveStatus)) {
+      return res.status(403).json({ success: false, error: 'Inactive sponsor accounts cannot assume another view.' });
+    }
+
+    if (!hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canAssumeDriverView')) {
+      return res.status(403).json({ success: false, error: 'Missing canAssumeDriverView permission.' });
+    }
+
+    const [driverRows] = await connection.execute(
+      `SELECT u.UserID, u.UserType, u.Username, u.FirstName, u.LastName, u.ActiveStatus
+       FROM USERS u
+       JOIN DRIVERS d ON d.UserID = u.UserID
+       WHERE u.UserID = ? AND d.SponsorCompanyID = ?
+       LIMIT 1`,
+      [driverUserId, sponsor.SponsorCompanyID]
+    );
+
+    if (driverRows.length === 0 || driverRows[0].UserType !== 'driver') {
+      return res.status(404).json({ success: false, error: 'Driver not found for this sponsor.' });
+    }
+
+    const driver = driverRows[0];
+
+    if (!Boolean(driver.ActiveStatus)) {
+      return res.status(409).json({ success: false, error: 'Cannot assume an inactive driver account.' });
+    }
+
+    await connection.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('assumedView:driver'), 'isSelfUpdate', false, 'success', true))`,
+      [sponsorUserId]
+    );
+
+    return res.json({
+      success: true,
+      assumedUser: normalizeUserForSession(driver),
+    });
+  } catch (error) {
+    console.error('Sponsor assume driver error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
@@ -596,6 +857,54 @@ router.put('/user/:id', async (req, res) => {
     } catch (error) {
         console.error("Update Error:", error);
         res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// Sponsors to view Driver Applications
+router.get('/view-applications', async (req, res) => {
+    try {
+        const [rows] = await pool.execute(
+            `SELECT 
+                u.UserID, 
+                u.FirstName, 
+                u.LastName, 
+                u.Email, 
+                u.DateApplied, 
+                d.LicenseNumber
+             FROM USERS u
+             JOIN DRIVERS d ON u.UserID = d.UserID
+             WHERE u.UserType = 'driver' AND u.ActiveStatus = 0
+             ORDER BY u.DateApplied DESC`
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error("View Apps Error:", error);
+        res.status(500).json({ error: "Could not fetch applications" });
+    }
+});
+
+// Sponsors accept or deny application
+router.post('/process-application', async (req, res) => {
+    const { applicationId, status, explanation } = req.body;
+
+    // Validation: Ensure only valid ENUM values are sent
+    const validStatuses = ['accepted', 'rejected', 'pending'];
+    if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+    }
+
+    try {
+        await pool.execute(
+            `UPDATE DRIVER_APPLICATIONS 
+             SET ApplicationStatus = ?, DecisionExplanation = ? 
+             WHERE ApplicationID = ?`,
+            [status, explanation || "", applicationId]
+        );
+
+        res.json({ message: `Application ${status} successfully.` });
+    } catch (error) {
+        console.error("Update Error:", error);
+        res.status(500).json({ error: "Failed to update application status." });
     }
 });
 

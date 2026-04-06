@@ -1,9 +1,33 @@
+//import dotenv from 'dotenv';
+//dotenv.config({ path: '../../.fs-env' });
+
 import dotenv from 'dotenv';
-dotenv.config({ path: '../../.fs-env' });
+dotenv.config();
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production-fleetscore";
+
+// Define Middleware 
+const authenticateToken = (req, res, next) => {
+  const token = req.cookies.sessionId; 
+
+  if (!token) {
+    return res.status(401).json({ success: false, error: "Authentication required." });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ success: false, error: "Invalid or expired session." });
+    }
+    
+    req.user = user; 
+    next();
+  });
+};
 
 import express from 'express';
 import cors from 'cors';
-import { pool } from './src/db.js';
+import { pool, verifyDatabaseConnection } from './src/db.js';
 import aboutRoutes from './src/routes/about.js';
 import loginRoutes from './src/routes/login.js';
 import adminCatalogsRoutes from './src/routes/admin-catalogs.js';
@@ -22,6 +46,8 @@ import accountsRoute from './src/routes/accounts.js';
 import driverOrdersRoutes from './src/routes/driver-orders.js';
 import imagesRoutes from './src/routes/images.js';
 import { startDailyReportScheduler } from './src/services/daily-report-scheduler.js';
+import { attachSessionContext } from './src/middleware/session-context.js';
+import reviewRoutes from './src/routes/reviews.js';
 
 
 const app = express();
@@ -36,6 +62,10 @@ app.use(cors({
   credentials: true 
 }));
 app.use(express.json());
+app.use(attachSessionContext);
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
 
 // TODO: Make sure that all client files are using a consistent API route scheme and that both the client and server schemes match.
 app.use('/api/about', aboutRoutes);
@@ -54,11 +84,28 @@ app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/driver/:userId/orders', driverOrdersRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
+app.use('/api/reviews', authenticateToken, reviewRoutes);
 //app.use('/api/admin', adminRoute);
+
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled server error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
 
 // Start the server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
-  startDailyReportScheduler();
+const HOST = process.env.HOST || '0.0.0.0';
+
+const startServer = async () => {
+  await verifyDatabaseConnection();
+
+  app.listen(PORT, HOST, () => {
+    console.log(`Backend running on ${HOST}:${PORT}`);
+    startDailyReportScheduler();
+  });
+};
+
+startServer().catch((error) => {
+  console.error('Failed to start backend server:', error);
+  process.exit(1);
 });

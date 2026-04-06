@@ -84,9 +84,10 @@ export async function updateUserProfile(userId, updates) {
  * Change user password with history validation
  * @param {number} userId - The user ID
  * @param {string} newPassword - The new password (plain text)
+ * @param {'user_initiated'|'admin_initiated'|'password_reset'} [changeMethod='user_initiated']
  * @returns {Promise<Object>} Result object with success status
  */
-export async function changePasswordWithHistory(userId, newPassword) {
+export async function changePasswordWithHistory(userId, newPassword, changeMethod = 'user_initiated') {
   const connection = await pool.getConnection();
   
   try {
@@ -145,7 +146,7 @@ export async function changePasswordWithHistory(userId, newPassword) {
         'PasswordChange',
         JSON.stringify({
           success: true,
-          changeMethod: 'user_initiated',
+          changeMethod,
           oldHash,
         }),
       ]
@@ -565,11 +566,11 @@ export async function getDriverApplicationReport(filters = {}) {
             SponsorCompanyID,
             ApplicationStatus,
             TimeSubmitted,
-            TimeStatusChanged
+            NULL AS TimeStatusChanged
           FROM DRIVER_APPLICATIONS
           ${whereClause}
           ORDER BY TimeSubmitted DESC
-        `;
+        `; // NULL AS because apparently there wasnt any column in the database
         
         const [detailRows] = await connection.query(detailsQuery, params);
         report.detailedRecords = detailRows;
@@ -811,14 +812,23 @@ export async function getOrdersReport(filters = {}) {
 
 /**
  * Get audit log entries from the EVENTS table.
- * @param {string[]} filters - Optional array of EventType values to filter by
- *                             (e.g. ['LoginAttempt', 'PasswordChange']).
- *                             Pass an empty array to return all event types.
+ * @param {Object|string[]} filters - Optional filter object or legacy event-type array.
+ * @param {string[]} [filters.eventTypes] - EventType values to include.
+ * @param {Date} [filters.startDate] - Lower timestamp bound.
+ * @param {Date} [filters.endDate] - Upper timestamp bound.
+ * @param {number} [filters.targetUserId] - Specific user to include.
  * @returns {Promise<Object[]>} Array of event rows joined with username.
  */
 export async function getAuditLogs(filters = []) {
   const connection = await pool.getConnection();
   try {
+    const normalizedFilters = Array.isArray(filters)
+      ? { eventTypes: filters }
+      : filters ?? {};
+    const eventTypes = Array.isArray(normalizedFilters.eventTypes)
+      ? normalizedFilters.eventTypes
+      : [];
+
     let query = `
       SELECT
         e.EventID,
@@ -830,12 +840,32 @@ export async function getAuditLogs(filters = []) {
       FROM EVENTS e
       LEFT JOIN USERS u ON e.UserID = u.UserID
     `;
+    const whereClauses = [];
     const params = [];
 
-    if (filters.length > 0) {
-      const placeholders = filters.map(() => '?').join(', ');
-      query += ` WHERE e.EventType IN (${placeholders})`;
-      params.push(...filters);
+    if (eventTypes.length > 0) {
+      const placeholders = eventTypes.map(() => '?').join(', ');
+      whereClauses.push(`e.EventType IN (${placeholders})`);
+      params.push(...eventTypes);
+    }
+
+    if (normalizedFilters.startDate) {
+      whereClauses.push('e.Timestamp >= ?');
+      params.push(normalizedFilters.startDate);
+    }
+
+    if (normalizedFilters.endDate) {
+      whereClauses.push('e.Timestamp <= ?');
+      params.push(normalizedFilters.endDate);
+    }
+
+    if (normalizedFilters.targetUserId) {
+      whereClauses.push('e.UserID = ?');
+      params.push(normalizedFilters.targetUserId);
+    }
+
+    if (whereClauses.length > 0) {
+      query += ` WHERE ${whereClauses.join(' AND ')}`;
     }
 
     query += ' ORDER BY e.Timestamp DESC LIMIT 500';

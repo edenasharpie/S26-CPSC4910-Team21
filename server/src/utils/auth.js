@@ -81,6 +81,45 @@ export async function isOldPassword(newPassword, oldHashes) {
     return false;
 }
 
+const ROLE_PERMISSION_DEFAULTS = {
+  driver: {
+    canAssumeDriverView: false,
+    canAssumeSponsorView: false,
+  },
+  sponsor: {
+    canAssumeDriverView: true,
+    canAssumeSponsorView: false,
+  },
+  admin: {
+    canAssumeDriverView: true,
+    canAssumeSponsorView: true,
+  },
+};
+
+export function parsePermissions(rawPermissions) {
+  if (!rawPermissions) return {};
+  if (typeof rawPermissions === 'object') return rawPermissions;
+  if (typeof rawPermissions !== 'string') return {};
+
+  try {
+    const parsed = JSON.parse(rawPermissions);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function hasBooleanPermission(userType, rawPermissions, permissionKey) {
+  const normalizedRole = String(userType || '').toLowerCase();
+  const parsedPermissions = parsePermissions(rawPermissions);
+
+  if (typeof parsedPermissions[permissionKey] === 'boolean') {
+    return parsedPermissions[permissionKey];
+  }
+
+  return Boolean(ROLE_PERMISSION_DEFAULTS[normalizedRole]?.[permissionKey]);
+}
+
 // TODO: this code may be dubious, and already done somewhere else
 //export async function authenticateUser(
 //    pool: any, 
