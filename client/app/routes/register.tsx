@@ -1,3 +1,5 @@
+//***************FULLY FUNCTIONAL DRIVER REGISTRATION PAGE***************
+//Imports
 import { data, redirect, Form, Link, useActionData, useNavigation } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useState } from "react";
@@ -5,6 +7,7 @@ import { Alert, Button, Input } from "~/components";
 import { toApiUrl } from "~/utils/api-url";
 import { getSession, ROLE_HOME } from "~/utils/session.server";
 
+//Session Loader
 export async function loader({ request }: LoaderFunctionArgs) {
     const user = getSession(request);
     if (user) {
@@ -13,9 +16,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return {};
 }
 
+//Creating account action
 export async function action({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
 
+    //Account information
     const payload = {
         username: String(formData.get("username") ?? "").trim(),
         email: String(formData.get("email") ?? "").trim(),
@@ -27,14 +32,17 @@ export async function action({ request }: ActionFunctionArgs) {
         phone: String(formData.get("phone") ?? "").trim(),
     };
 
+    //Required information
     if (!payload.username || !payload.email || !payload.password || !payload.firstName || !payload.lastName || !payload.licenseNumber) {
         return data({ error: "Please fill in all required fields." }, { status: 400 });
     }
 
+    //Password match validation
     if (payload.password !== payload.confirmPassword) {
         return data({ error: "Passwords do not match." }, { status: 400 });
     }
 
+    //Connection to backend API
     try {
         const response = await fetch(toApiUrl("/api/user/register-driver"), {
             method: "POST",
@@ -50,17 +58,20 @@ export async function action({ request }: ActionFunctionArgs) {
             }),
         });
 
+        //Fail
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
             return data({ error: result.error ?? "Could not create account." }, { status: response.status });
         }
-
+        //Success
         return data({ success: "Account created. You can now sign in." });
     } catch {
+        //Server Error
         return data({ error: "Could not reach the server. Please try again." }, { status: 503 });
     }
 }
 
+//Page Visuals & Interaction
 export default function RegisterPage() {
     const actionData = useActionData<typeof action>();
     const navigation = useNavigation();
@@ -68,13 +79,15 @@ export default function RegisterPage() {
     const errorMessage = actionData && "error" in actionData ? actionData.error : undefined;
     const successMessage = actionData && "success" in actionData ? actionData.success : undefined;
 
+    //View password setup
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     return (
-        <div className="min-h-screen w-full px-4 sm:px-6 py-12 bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center">
+        <div className="min-h-screen w-full px-4 sm:px-6 py-12 bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] flex items-center justify-center">
             <div className="w-full max-w-3xl">
                 <div className="w-full bg-white dark:bg-slate-900 rounded-3xl shadow-xl shadow-blue-200/50 dark:shadow-black/30 p-6 sm:p-8 md:p-10 space-y-6 border border-white dark:border-slate-800">
+                    {/*Page Header*/}
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Create Driver Account</h1>
                     <p className="text-sm text-slate-500 dark:text-slate-300">
                         Self-registration is available for drivers only. Sponsor and admin accounts are pre-created.
@@ -85,11 +98,13 @@ export default function RegisterPage() {
 
                     <Form method="post" className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/*Name Entry*/}
                             <Input name="firstName" label="First Name" required />
                             <Input name="lastName" label="Last Name" required />
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/*Account Information*/}
                             <Input name="username" label="Username" required autoComplete="username" />
                             <Input name="email" label="Email" type="email" required autoComplete="email" />
                             <Input name="phone" label="Phone (optional)" type="tel" autoComplete="tel" />
@@ -99,6 +114,7 @@ export default function RegisterPage() {
                         <div className="space-y-1.5">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="relative flex flex-col">
+                                    {/* Password Input */}
                                     <Input
                                         name="password"
                                         label="Password"
@@ -108,10 +124,11 @@ export default function RegisterPage() {
                                         placeholder="Enter password"
                                     />
                                     <div className="absolute top-0 bottom-0 right-3 flex items-center">
+                                      {/*Password Visibilty*/}
                                       <button
                                           type="button"
                                           onClick={() => setShowPassword(!showPassword)}
-                                          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-6" // mt-6 to align with input area, not label
+                                          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-6" 
                                           tabIndex={-1}
                                       >
                                           {showPassword ? (
@@ -128,6 +145,7 @@ export default function RegisterPage() {
                                     </div>
                                 </div>
                                 <div className="relative flex flex-col">
+                                    {/*Password Confirmation*/}
                                     <Input
                                         name="confirmPassword"
                                         label="Confirm Password"
@@ -140,7 +158,7 @@ export default function RegisterPage() {
                                       <button
                                           type="button"
                                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-6" // mt-6 to align with input area, not label
+                                          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-6"
                                           tabIndex={-1}
                                       >
                                           {showConfirmPassword ? (
@@ -157,17 +175,19 @@ export default function RegisterPage() {
                                     </div>
                                 </div>
                             </div>
+                            {/*Password Requirements*/}
                             <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium px-1">
                                 Password must be at least 10 characters and include uppercase, lowercase, and a special character.
                             </p>
                         </div>
-
                         <Button type="submit" isLoading={isSubmitting} disabled={isSubmitting} className="w-full">
+                            {/*Input Completion*/}
                             Create Driver Account
                         </Button>
                     </Form>
 
                     <p className="text-sm text-center text-slate-500 dark:text-slate-300">
+                        {/*Route to Login*/}
                         Already have an account?{" "}
                         <Link to="/login" className="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
                             Sign in
