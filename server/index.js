@@ -3,27 +3,6 @@
 
 import dotenv from 'dotenv';
 dotenv.config();
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production-fleetscore";
-
-// Define Middleware 
-const authenticateToken = (req, res, next) => {
-  const token = req.cookies.sessionId; 
-
-  if (!token) {
-    return res.status(401).json({ success: false, error: "Authentication required." });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ success: false, error: "Invalid or expired session." });
-    }
-    
-    req.user = user; 
-    next();
-  });
-};
 
 import express from 'express';
 import cors from 'cors';
@@ -84,7 +63,7 @@ app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/driver/:userId/orders', driverOrdersRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
-app.use('/api/reviews', authenticateToken, reviewRoutes);
+app.use('/api/sponsor/:userId/reviews', reviewRoutes);
 //app.use('/api/admin', adminRoute);
 
 app.use((err, _req, res, _next) => {
