@@ -84,6 +84,26 @@ async function runTests() {
       throw new Error('Expected sponsor assume success with driver payload');
     }
 
+    // Test 1b: Sponsor-assumed driver can load dashboard points widgets
+    log('TEST 1b: Assumed driver dashboard points data loads', 'GET /api/drivers/my-points/:userId, /api/drivers/performance/:userId');
+    const assumedDriverUserId = happyPathRes.data.assumedUser.UserID;
+    const pointsWidgetRes = await axios.get(`${API_BASE_URL}/drivers/my-points/${assumedDriverUserId}`);
+    if (
+      pointsWidgetRes.status !== 200 ||
+      typeof pointsWidgetRes.data?.balance !== 'number' ||
+      !Array.isArray(pointsWidgetRes.data?.history)
+    ) {
+      throw new Error('Expected assumed driver points payload with numeric balance and history array');
+    }
+
+    const performanceWidgetRes = await axios.get(`${API_BASE_URL}/drivers/performance/${assumedDriverUserId}`);
+    if (
+      performanceWidgetRes.status !== 200 ||
+      typeof performanceWidgetRes.data?.performanceStatus !== 'string'
+    ) {
+      throw new Error('Expected assumed driver performance payload with performanceStatus');
+    }
+
     // Test 2: missing permission returns 403
     log('TEST 2: Missing canAssumeDriverView returns 403', 'POST /api/sponsors/:userId/assume-driver/:driverId');
     await setUserPermissions(sponsorUser.userId, { canAssumeDriverView: false });

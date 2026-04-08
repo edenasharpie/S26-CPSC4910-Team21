@@ -12,14 +12,46 @@ import {
 import { getApiBaseUrl } from "~/utils/api-url";
 
 const API_URL = getApiBaseUrl();
+const ADMIN_USERS_PAGE_SIZE = 25;
+
+function normalizeFilterValue(value: string | null, allowed: string[], fallback: string): string {
+  const normalized = (value ?? fallback).trim().toLowerCase();
+  return allowed.includes(normalized) ? normalized : fallback;
+}
+
+function parsePage(value: string | null): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
 
 // ---------------------------------------------------------------------------
 // Loader — fetch all users from the Express API
 // ---------------------------------------------------------------------------
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireAuth(request, ["admin"]);
+  const requestUrl = new URL(request.url);
+  const page = parsePage(requestUrl.searchParams.get("page"));
+  const search = (requestUrl.searchParams.get("search") ?? "").trim();
+  const userType = normalizeFilterValue(requestUrl.searchParams.get("userType"), ["all", "driver", "sponsor", "admin"], "all");
+  const activeStatus = normalizeFilterValue(requestUrl.searchParams.get("activeStatus"), ["all", "1", "0"], "all");
+
+  const offset = (page - 1) * ADMIN_USERS_PAGE_SIZE;
+  const userParams = new URLSearchParams({
+    limit: String(ADMIN_USERS_PAGE_SIZE),
+    offset: String(offset),
+    activeStatus,
+  });
+
+  if (search) {
+    userParams.set("search", search);
+  }
+
+  if (userType !== "all") {
+    userParams.set("userType", userType);
+  }
+
   try {
-    const res = await fetch(`${API_URL}/api/admin/users?activeStatus=all`);
+    const res = await fetch(`${API_URL}/api/admin/users?${userParams.toString()}`);
     if (!res.ok) throw new Error(`API returned ${res.status}`);
     const data = await res.json();
     
@@ -37,12 +69,33 @@ export async function loader({ request }: Route.LoaderArgs) {
     
     return {
       users: Array.isArray(data.users) ? data.users : [],
+      totalCount: Number(data.totalCount ?? 0),
+      page,
+      pageSize: Number(data.limit ?? ADMIN_USERS_PAGE_SIZE),
+      filters: {
+        search,
+        userType,
+        activeStatus,
+      },
       companies: Array.isArray(companies) ? companies : [],
       session,
       error: null as string | null,
     };
   } catch (error: any) {
-    return { users: [] as any[], session, companies: [] as any[], error: error.message as string };
+    return {
+      users: [] as any[],
+      totalCount: 0,
+      page,
+      pageSize: ADMIN_USERS_PAGE_SIZE,
+      filters: {
+        search,
+        userType,
+        activeStatus,
+      },
+      session,
+      companies: [] as any[],
+      error: error.message as string,
+    };
   }
 }
 
@@ -148,21 +201,45 @@ export function meta({}: Route.MetaArgs) {
 // Component
 // ---------------------------------------------------------------------------
 export default function AdminPortal() {
-  const { users, companies, error, session } = useLoaderData<typeof loader>();
+  const { users, totalCount, page, pageSize, filters, companies, error, session } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
   const isAssumedMode = Boolean(session?.OriginalUser);
 
-  const [searchQuery, setSearchQuery]     = useState("");
-  const [typeFilter, setTypeFilter]       = useState("All");
-  const [statusFilter, setStatusFilter]   = useState("All");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isAuditOpen, setIsAuditOpen]     = useState(false);
   const [selectedType, setSelectedType]   = useState("driver");
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
 
+  const totalPages = Math.max(1, Math.ceil(totalCount / Math.max(pageSize, 1)));
+  const hasPrevPage = page > 1;
+  const hasNextPage = page < totalPages;
+  const pageStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const pageEnd = totalCount === 0 ? 0 : pageStart + users.length - 1;
+
+  const navigateToPage = (nextPage: number) => {
+    if (nextPage < 1 || nextPage > totalPages) return;
+
+    const query = new URLSearchParams();
+    query.set("page", String(nextPage));
+
+    if (filters.search) {
+      query.set("search", filters.search);
+    }
+
+    if (filters.userType !== "all") {
+      query.set("userType", filters.userType);
+    }
+
+    if (filters.activeStatus !== "all") {
+      query.set("activeStatus", filters.activeStatus);
+    }
+
+    navigate(`?${query.toString()}`);
+  };
+
   // Count stats
-  const totalUsers   = users.length;
+  const totalUsers   = totalCount;
   const driverCount  = users.filter((u: any) => u.UserType?.toLowerCase() === "driver"  && u.ActiveStatus !== 0).length;
   const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor" && u.ActiveStatus !== 0).length;
   const adminCount   = users.filter((u: any) => u.UserType?.toLowerCase() === "admin"   && u.ActiveStatus !== 0).length;
@@ -173,21 +250,6 @@ export default function AdminPortal() {
   const adminLastName = session?.LastName ?? currentAdmin?.LastName ?? "User";
   const adminUsername = session?.Username ?? currentAdmin?.Username ?? "admin";
   const adminProfilePicture = currentAdmin?.ProfilePicture ?? "";
-
-  // Client-side filtering
-  const filteredUsers = users.filter((u: any) => {
-    const matchesSearch =
-      u.Username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.FirstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.LastName?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType =
-      typeFilter === "All" || u.UserType?.toLowerCase() === typeFilter.toLowerCase();
-    const matchesStatus =
-      statusFilter === "All" ||
-      (statusFilter === "Active"   && u.ActiveStatus !== 0) ||
-      (statusFilter === "Inactive" && u.ActiveStatus === 0);
-    return matchesSearch && matchesType && matchesStatus;
-  });
 
   // Close add-user modal on successful action
   const addUserSuccess = (actionData as any)?.success === true;
@@ -435,21 +497,22 @@ export default function AdminPortal() {
           {/* Main Content */}
           <main className="lg:col-span-9 space-y-6">
             {/* Filters row */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <Form method="get" className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+              <input type="hidden" name="page" value="1" />
               <div className="md:col-span-4">
                 <Input
+                  name="search"
                   placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  defaultValue={filters.search}
                 />
               </div>
               <div className="md:col-span-3">
                 <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
+                  name="userType"
+                  defaultValue={filters.userType}
                   className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="All">All Types</option>
+                  <option value="all">All Types</option>
                   <option value="driver">Drivers</option>
                   <option value="sponsor">Sponsors</option>
                   <option value="admin">Admins</option>
@@ -457,17 +520,27 @@ export default function AdminPortal() {
               </div>
               <div className="md:col-span-3">
                 <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  name="activeStatus"
+                  defaultValue={filters.activeStatus}
                   className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="All">All Statuses</option>
-                  <option value="Active">Active Only</option>
-                  <option value="Inactive">Inactive Only</option>
+                  <option value="all">All Statuses</option>
+                  <option value="1">Active Only</option>
+                  <option value="0">Inactive Only</option>
                 </select>
               </div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-1">
                 <Button
+                  type="submit"
+                  variant="secondary"
+                  className="w-full h-10"
+                >
+                  Apply
+                </Button>
+              </div>
+              <div className="md:col-span-1">
+                <Button
+                  type="button"
                   variant="primary"
                   className="w-full h-10"
                   onClick={() => setIsAddUserOpen(true)}
@@ -475,16 +548,45 @@ export default function AdminPortal() {
                   Add User
                 </Button>
               </div>
-            </div>
+            </Form>
 
             {/* Users table */}
             <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl border dark:border-gray-800 overflow-hidden text-left">
-              <Table data={filteredUsers} columns={columns} />
-              {filteredUsers.length === 0 && (
+              <Table data={users} columns={columns} />
+              {users.length === 0 && (
                 <div className="p-8 text-center text-gray-500 italic">
                   No users found matching your criteria.
                 </div>
               )}
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Showing {pageStart}-{pageEnd} of {totalCount}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={!hasPrevPage}
+                    onClick={() => navigateToPage(page - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-300 min-w-20 text-center">
+                    Page {page} / {totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={!hasNextPage}
+                    onClick={() => navigateToPage(page + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
             </div>
           </main>
         </div>

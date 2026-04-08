@@ -87,6 +87,26 @@ async function runTests() {
       throw new Error('Expected admin assume driver success with driver payload');
     }
 
+    // Test 1b: Admin-assumed driver can load dashboard points widgets
+    log('TEST 1b: Assumed driver dashboard points data loads', 'GET /api/drivers/my-points/:userId, /api/drivers/performance/:userId');
+    const assumedDriverUserId = assumeDriverRes.data.assumedUser.UserID;
+    const pointsWidgetRes = await axios.get(`${API_BASE_URL}/drivers/my-points/${assumedDriverUserId}`);
+    if (
+      pointsWidgetRes.status !== 200 ||
+      typeof pointsWidgetRes.data?.balance !== 'number' ||
+      !Array.isArray(pointsWidgetRes.data?.history)
+    ) {
+      throw new Error('Expected assumed driver points payload with numeric balance and history array');
+    }
+
+    const performanceWidgetRes = await axios.get(`${API_BASE_URL}/drivers/performance/${assumedDriverUserId}`);
+    if (
+      performanceWidgetRes.status !== 200 ||
+      typeof performanceWidgetRes.data?.performanceStatus !== 'string'
+    ) {
+      throw new Error('Expected assumed driver performance payload with performanceStatus');
+    }
+
     // Test 2: Admin assumes sponsor view
     log('TEST 2: Admin assume sponsor success', `POST /api/admin/assume-sponsor/${sponsor.userId}`);
     const assumeSponsorRes = await axios.post(`${API_BASE_URL}/admin/assume-sponsor/${sponsor.userId}`, {
@@ -141,7 +161,6 @@ async function runTests() {
 
     // Test 3c: Assumed driver can mutate own profile fields
     log('TEST 3c: Assumed driver can update own profile', 'PATCH /api/user/profile/:id');
-    const assumedDriverUserId = assumeDriverRes.data.assumedUser.UserID;
     const driverPatchRes = await axios.patch(
       `${API_BASE_URL}/user/profile/${assumedDriverUserId}`,
       {

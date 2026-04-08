@@ -602,7 +602,9 @@ export async function getPointTransactionsReport(filters = {}) {
     
     try {
       // Build dynamic WHERE clause
-      let whereClause = 'WHERE 1=1';
+      let whereClause = `WHERE 1=1
+        AND TimeChanged IS NOT NULL
+        AND TimeChanged >= '2000-01-01 00:00:00'`;
       const params = [];
 
       if (filters.startDate) {
@@ -707,7 +709,9 @@ export async function getOrdersReport(filters = {}) {
     
     try {
       // Build dynamic WHERE clause
-      let whereClause = 'WHERE 1=1';
+      let whereClause = `WHERE 1=1
+        AND OrderDate IS NOT NULL
+        AND OrderDate >= '2000-01-01 00:00:00'`;
       const params = [];
 
       if (filters.startDate) {

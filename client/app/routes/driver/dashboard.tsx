@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { Table, Button } from "~/components";
 import { useNavigate, useLoaderData, Link, Form } from "react-router";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 import { 
   Line, 
   XAxis, 
@@ -14,7 +15,33 @@ import {
   Area 
 } from "recharts";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
+
+function normalizePointChange(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseDateValue(value: unknown): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value as string | number | Date);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateDisplay(value: unknown): string {
+  const parsed = parseDateValue(value);
+  return parsed ? parsed.toLocaleDateString() : "Unknown";
+}
+
+function formatChartDate(value: unknown): string {
+  const parsed = parseDateValue(value);
+  if (!parsed) return "Unknown";
+
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireAuth(request, ["driver", "admin"]);
@@ -82,32 +109,41 @@ export default function DriverDashboard() {
   
   const currentStatus = statusConfig[driver?.PerformanceStatus?.toLowerCase() as keyof typeof statusConfig] || statusConfig.good;
 
+  const validHistory = useMemo(() => {
+    if (!Array.isArray(history)) return [];
+
+    return history
+      .map((item: any) => {
+        const pointChange = normalizePointChange(item?.PointChange);
+        const parsedDate = parseDateValue(item?.TimeChanged);
+        return {
+          ...item,
+          PointChange: pointChange,
+          parsedDate,
+        };
+      })
+      .filter((item: any) => item.parsedDate && item.parsedDate.getFullYear() >= 2000);
+  }, [history]);
+
   // Compute chart data exactly like the Points Page logic
   const chartData = useMemo(() => {
-  if (!history || history.length === 0) return [];
+      if (validHistory.length === 0) return [];
 
-  // 1. Sort history from OLDEST to NEWEST
-  const sortedHistory = [...history].sort((a: any, b: any) =>
-    new Date(a.TimeChanged).getTime() - new Date(b.TimeChanged).getTime()
-  );
+      const sortedHistory = [...validHistory].sort(
+        (a: any, b: any) => a.parsedDate.getTime() - b.parsedDate.getTime()
+      );
 
-  // 2. Calculate the "Starting Balance" 
-  // We take the current total and subtract every change that ever happened
-  const totalChange = history.reduce((sum: number, item: any) => sum + Number(item.PointChange), 0);
-  let runningBalance = (driver?.PointBalance ?? 0) - totalChange;
+      const totalChange = validHistory.reduce((sum: number, item: any) => sum + item.PointChange, 0);
+      let runningBalance = (driver?.PointBalance ?? 0) - totalChange;
 
-  // 3. Build the chart points by adding changes back in one by one
-  return sortedHistory.map((item: any) => {
-    runningBalance += Number(item.PointChange);
-    return {
-      date: new Date(item.TimeChanged).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      }),
-      balance: runningBalance,
-    };
-  });
-}, [history, driver?.PointBalance]);
+      return sortedHistory.map((item: any) => {
+        runningBalance += item.PointChange;
+        return {
+          date: formatChartDate(item.TimeChanged),
+          balance: runningBalance,
+        };
+      });
+    }, [validHistory, driver?.PointBalance]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -277,12 +313,12 @@ export default function DriverDashboard() {
 
             <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl border dark:border-gray-800 overflow-hidden text-left">
               <Table 
-                data={history} 
+                data={validHistory} 
                 columns={[
                   {
                     key: "Date",
                     header: "Date",
-                    render: (t: any) => <span className="text-xs text-gray-500 font-mono">{new Date(t.TimeChanged).toLocaleDateString()}</span>,
+                    render: (t: any) => <span className="text-xs text-gray-500 font-mono">{formatDateDisplay(t.TimeChanged)}</span>,
                   },
                   {
                     key: "Reason",
@@ -292,11 +328,14 @@ export default function DriverDashboard() {
                   {
                     key: "Change",
                     header: "Points",
-                    render: (t: any) => (
-                      <span className={`font-bold ${t.PointChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {t.PointChange >= 0 ? `+${t.PointChange}` : t.PointChange}
+                    render: (t: any) => {
+                      const pointChange = normalizePointChange(t.PointChange);
+                      return (
+                      <span className={`font-bold ${pointChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {pointChange >= 0 ? `+${pointChange}` : pointChange}
                       </span>
-                    ),
+                    );
+                    },
                   },
                 ]} 
               />

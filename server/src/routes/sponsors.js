@@ -170,11 +170,15 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
     const [history] = await pool.execute(
       `SELECT
          pt.TransactionID, pt.DriverID, pt.UserChanged, pt.PointChange, 
-         pt.ReasonForChange, pt.TimeChanged, u.Username as ChangedByUsername
+         pt.ReasonForChange,
+         DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged,
+         u.Username as ChangedByUsername
        FROM POINT_TRANSACTIONS pt
        JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
        LEFT JOIN USERS u ON pt.UserChanged = u.UserID
        WHERE d.UserID = ? AND d.SponsorCompanyID = ?
+         AND pt.TimeChanged IS NOT NULL
+         AND pt.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY pt.TimeChanged DESC
        LIMIT 100`,
       [driverId, companyId]
@@ -229,6 +233,8 @@ router.get('/:userId/point-transactions', async (req, res) => {
        JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
        JOIN USERS u ON d.UserID = u.UserID
        WHERE d.SponsorCompanyID = ?
+         AND pt.TimeChanged IS NOT NULL
+         AND pt.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY pt.TimeChanged DESC`,
       [companyId]
     );
@@ -822,13 +828,15 @@ router.get('/driver-purchases/:companyId', async (req, res) => {
           t.TransactionID,
           t.PointChange,
           t.ReasonForChange,
-          t.TimeChanged,
+          DATE_FORMAT(t.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged,
           u.FirstName,
           u.LastName
        FROM POINT_TRANSACTIONS t
        JOIN DRIVERS d ON t.DriverID = d.LicenseNumber
        JOIN USERS u ON d.UserID = u.UserID
        WHERE d.SponsorCompanyID = ?
+         AND t.TimeChanged IS NOT NULL
+         AND t.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY t.TimeChanged DESC`,
       [companyId]
     );

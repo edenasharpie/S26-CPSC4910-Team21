@@ -36,16 +36,34 @@ router.get('/my-points/:userId', async (req, res) => {
 
     // 3. Get transaction history from POINT_TRANSACTIONS
     const [history] = await pool.execute(
-      `SELECT PointChange, ReasonForChange, TimeChanged 
-       FROM POINT_TRANSACTIONS 
-       WHERE DriverID = ? 
+      `SELECT
+         PointChange,
+         ReasonForChange,
+         DATE_FORMAT(TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
+       FROM POINT_TRANSACTIONS
+       WHERE DriverID = ?
+         AND TimeChanged IS NOT NULL
+         AND TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY TimeChanged DESC`,
       [LicenseNumber]
     );
 
+    const normalizedHistory = history.map((entry) => {
+      const pointChange = Number(entry.PointChange);
+      const timeChanged = typeof entry.TimeChanged === 'string' && entry.TimeChanged.trim()
+        ? entry.TimeChanged
+        : null;
+
+      return {
+        PointChange: Number.isFinite(pointChange) ? pointChange : 0,
+        ReasonForChange: entry.ReasonForChange ?? 'Point update',
+        TimeChanged: timeChanged,
+      };
+    });
+
     res.json({
       balance: PointBalance,
-      history: history
+      history: normalizedHistory
     });
   } catch (error) {
     console.error("Driver Points Error:", error);

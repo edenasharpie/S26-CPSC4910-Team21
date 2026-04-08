@@ -397,9 +397,18 @@ export async function addPointTransaction(driverUserId, adminUserId, pointChange
 // Retrieve all point changes for the user
 export async function getPointHistory(userId) {
   const [rows] = await pool.execute(
-    `SELECT pt.* FROM POINT_TRANSACTIONS pt
+    `SELECT
+        pt.TransactionID,
+        pt.DriverID,
+        pt.UserChanged,
+        pt.PointChange,
+        pt.ReasonForChange,
+        DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
+     FROM POINT_TRANSACTIONS pt
      JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
      WHERE d.UserID = ?
+       AND pt.TimeChanged IS NOT NULL
+       AND pt.TimeChanged >= '2000-01-01 00:00:00'
      ORDER BY pt.TimeChanged DESC`,
     [userId]
   );
@@ -460,6 +469,8 @@ export async function getAllPointTransactions() {
     FROM POINT_TRANSACTIONS pt
     JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
     JOIN USERS u ON d.UserID = u.UserID
+    WHERE pt.TimeChanged IS NOT NULL
+      AND pt.TimeChanged >= '2000-01-01 00:00:00'
     ORDER BY pt.TimeChanged DESC
   `);
   return rows;
