@@ -27,7 +27,7 @@ const authenticateToken = (req, res, next) => {
 
 import express from 'express';
 import cors from 'cors';
-import { pool, verifyDatabaseConnection } from './src/db.js';
+import { pool, verifyDatabaseConnection, initializeSystemAuditUserCache } from './src/db.js';
 import aboutRoutes from './src/routes/about.js';
 import loginRoutes from './src/routes/login.js';
 import adminCatalogsRoutes from './src/routes/admin-catalogs.js';
@@ -98,6 +98,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 const startServer = async () => {
   await verifyDatabaseConnection();
+  await initializeSystemAuditUserCache();
 
   app.listen(PORT, HOST, () => {
     console.log(`Backend running on ${HOST}:${PORT}`);

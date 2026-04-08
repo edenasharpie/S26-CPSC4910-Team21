@@ -1,25 +1,31 @@
+import type { Route } from "./+types/applications";
 import { useLoaderData, useNavigate } from "react-router";
-import { StatusBadge } from "~/components/status-badge"; // Assuming you followed the shared component path
+import { StatusBadge } from "~/components/status-badge";
 import { toApiUrl } from "~/utils/api-url";
+import { requireAuth } from "~/utils/session.server";
 
-export async function loader() {
-  const res = await fetch(toApiUrl("/api/sponsors/driver-applications"));
+export async function loader({ request }: Route.LoaderArgs) {
+  const user = requireAuth(request, ["sponsor"]);
+  const res = await fetch(toApiUrl(`/api/sponsors/${user.UserID}/driver-applications`), {
+    headers: { Cookie: request.headers.get("Cookie") ?? "" },
+  });
   if (!res.ok) throw new Error("Failed to load applications");
-  return await res.json();
+  const applications = await res.json();
+  return { applications, userId: user.UserID };
 }
 
 export default function DriverApplications() {
-  const applications = useLoaderData() as any[];
+  const { applications, userId } = useLoaderData() as { applications: any[]; userId: number };
   const navigate = useNavigate();
 
   const handleDecision = async (appId: number, status: 'accepted' | 'rejected') => {
     const reason = window.prompt(`Provide a reason for being ${status}:`, "");
-    
+
     // If user clicks "Cancel" on the prompt, stop the function
     if (reason === null) return;
 
     try {
-      const res = await fetch(toApiUrl("/api/sponsors/process-application"), {
+      const res = await fetch(toApiUrl(`/api/sponsors/${userId}/process-application`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -46,7 +52,7 @@ export default function DriverApplications() {
     <div className="p-8 bg-[#0f172a] min-h-screen">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold text-white mb-8">Review Driver Applications</h1>
-        
+
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -67,7 +73,7 @@ export default function DriverApplications() {
                     <div className="text-sm text-slate-400 font-medium">ID: {app.DriverID}</div>
                     <div className="text-xs text-indigo-600 font-mono mt-1">License: {app.LicenseNumber || "N/A"}</div>
                   </td>
-                  
+
                   <td className="p-6 text-slate-500 text-sm font-medium">
                     {app.TimeSubmitted ? new Date(app.TimeSubmitted).toLocaleDateString() : "N/A"}
                   </td>
@@ -96,7 +102,7 @@ export default function DriverApplications() {
                       ) : (
                         <div className="text-right">
                            <p className="text-xs font-bold text-slate-300 uppercase italic">Decision Logged</p>
-                           <p className="text-[10px] text-slate-400 max-w-[150px] truncate">{app.DecisionExplanation}</p>
+                           <p className="text-[10px] text-slate-400 max-w-37.5 truncate">{app.DecisionExplanation}</p>
                         </div>
                       )}
                     </div>
@@ -105,11 +111,11 @@ export default function DriverApplications() {
               ))}
             </tbody>
           </table>
-          
+
           {applications.length === 0 && (
             <div className="p-24 text-center">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4 text-slate-400 text-2xl">
-                
+
               </div>
               <p className="text-slate-500 font-medium">No applications waiting for review.</p>
             </div>

@@ -22,7 +22,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     if (!companyRes.ok) throw new Error(`Could not load company info (${companyRes.status})`);
     const company = await companyRes.json();
 
-    const driversRes = await fetch(`${API_URL}/api/sponsors/my-drivers/${company.sponsorCompanyId}`);
+    const driversRes = await fetch(`${API_URL}/api/sponsors/${user.UserID}/my-drivers`);
     if (!driversRes.ok) throw new Error(`Could not load drivers (${driversRes.status})`);
     const drivers = await driversRes.json();
 

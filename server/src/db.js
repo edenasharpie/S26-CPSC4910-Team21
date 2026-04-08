@@ -36,6 +36,72 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+let cachedSystemAuditUserId = null;
+
+function parsePermissions(rawPermissions) {
+  if (!rawPermissions) return {};
+  if (typeof rawPermissions === 'object') return rawPermissions;
+
+  try {
+    const parsed = JSON.parse(rawPermissions);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function validateSystemAuditAccount(row) {
+  if (!row) {
+    throw new Error('Missing system audit account row.');
+  }
+
+  if (Number(row.ActiveStatus) !== 0) {
+    throw new Error('System audit account must be inactive (ActiveStatus = 0).');
+  }
+
+  const permissions = parsePermissions(row.Permissions);
+  if (permissions.canLogin === true) {
+    throw new Error('System audit account cannot have Permissions.canLogin = true.');
+  }
+}
+
+export async function initializeSystemAuditUserCache() {
+  const [rows] = await pool.execute(
+    'SELECT UserID, ActiveStatus, Permissions FROM USERS WHERE IsSystemAccount = 1'
+  );
+
+  if (rows.length !== 1) {
+    throw new Error(`Expected exactly one system account (IsSystemAccount = 1), found ${rows.length}.`);
+  }
+
+  const row = rows[0];
+  validateSystemAuditAccount(row);
+
+  const parsedUserId = Number(row.UserID);
+  if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+    throw new Error(`Invalid system audit UserID resolved from USERS: ${row.UserID}`);
+  }
+
+  cachedSystemAuditUserId = parsedUserId;
+  return cachedSystemAuditUserId;
+}
+
+export function getCachedSystemAuditUserId() {
+  return cachedSystemAuditUserId;
+}
+
+export async function resolveAuditActorUserId(userId) {
+  if (userId !== null && userId !== undefined) {
+    return Number(userId);
+  }
+
+  if (!cachedSystemAuditUserId) {
+    throw new Error('System audit UserID cache is not initialized.');
+  }
+
+  return cachedSystemAuditUserId;
+}
+
 // Error handling for the connection pool
 pool.on('error', (err) => {
   console.error('Unexpected error on idle database client:', err);
@@ -420,11 +486,19 @@ export async function getUserByEmail(email) {
 
 export async function logLoginAttempt(userId, success, result, ipAddress) {
   try {
+    const effectiveUserId = await resolveAuditActorUserId(userId);
     await pool.execute(
       'INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties) VALUES (?, NOW(), ?, ?)',
-      [userId ?? 0, 'LoginAttempt', JSON.stringify({ success, result, ipAddress })]
+      [effectiveUserId, 'LoginAttempt', JSON.stringify({ success, result, ipAddress })]
     );
   } catch (err) {
-    console.error('Error logging login attempt to EVENTS:', err);
+    console.error('Error logging login attempt to EVENTS:', {
+      err,
+      originalUserId: userId,
+      cachedSystemAuditUserId,
+      success,
+      result,
+      ipAddress,
+    });
   }
 }

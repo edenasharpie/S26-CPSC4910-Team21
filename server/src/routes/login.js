@@ -134,7 +134,13 @@ router.post('/login', async (req, res) => {
   }
 
   if (!user) {
+    // DB logger maps null userId to the cached IsSystemAccount actor.
     await logLoginAttempt(null, false, 'username_not_found', ip);
+    return res.status(401).json({ success: false, error: 'Invalid username or password.' });
+  }
+
+  if (Number(user.IsSystemAccount) === 1) {
+    await logLoginAttempt(user.UserID, false, 'failed', ip);
     return res.status(401).json({ success: false, error: 'Invalid username or password.' });
   }
 

@@ -56,10 +56,22 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
-// Get drivers based off performance
-router.get('/my-drivers/:companyId', async (req, res) => {
+// Get drivers for the authenticated sponsor's company
+// Security: companyId is resolved server-side from userId — callers cannot
+// supply an arbitrary companyId to view another company's drivers.
+router.get('/:userId/my-drivers', async (req, res) => {
   try {
-    const { companyId } = req.params;
+    const { userId } = req.params;
+
+    const [sponsorRows] = await pool.execute(
+      `SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
+      [userId]
+    );
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+    const companyId = sponsorRows[0].SponsorCompanyID;
+
     const [drivers] = await pool.execute(
       `SELECT
          u.UserID, u.FirstName, u.LastName, u.Username, u.ProfilePicture,
@@ -860,50 +872,88 @@ router.put('/user/:id', async (req, res) => {
     }
 });
 
-// Sponsors to view Driver Applications
-router.get('/view-applications', async (req, res) => {
+// GET /api/sponsors/:userId/driver-applications
+// Returns all applications for the sponsor's company, scoped by userId.
+router.get('/:userId/driver-applications', async (req, res) => {
     try {
+        const { userId } = req.params;
+
+        const [sponsorRows] = await pool.execute(
+            `SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
+            [userId]
+        );
+        if (sponsorRows.length === 0) {
+            return res.status(404).json({ error: 'Sponsor not found' });
+        }
+        const companyId = sponsorRows[0].SponsorCompanyID;
+
         const [rows] = await pool.execute(
-            `SELECT 
-                u.UserID, 
-                u.FirstName, 
-                u.LastName, 
-                u.Email, 
-                u.DateApplied, 
+            `SELECT
+                da.ApplicationID,
+                da.DriverID,
+                da.ApplicationStatus,
+                da.DecisionExplanation,
+                da.TimeSubmitted,
+                u.FirstName,
+                u.LastName,
                 d.LicenseNumber
-             FROM USERS u
-             JOIN DRIVERS d ON u.UserID = d.UserID
-             WHERE u.UserType = 'driver' AND u.ActiveStatus = 0
-             ORDER BY u.DateApplied DESC`
+             FROM DRIVER_APPLICATIONS da
+             JOIN DRIVERS d ON da.DriverID = d.LicenseNumber
+             JOIN USERS u ON d.UserID = u.UserID
+             WHERE da.SponsorCompanyID = ?
+             ORDER BY da.TimeSubmitted DESC`,
+            [companyId]
         );
         res.json(rows);
     } catch (error) {
-        console.error("View Apps Error:", error);
+        console.error("Driver Applications Error:", error);
         res.status(500).json({ error: "Could not fetch applications" });
     }
 });
 
-// Sponsors accept or deny application
-router.post('/process-application', async (req, res) => {
+// POST /api/sponsors/:userId/process-application
+// Accepts or rejects an application, scoped to the sponsor's company.
+router.post('/:userId/process-application', async (req, res) => {
+    const { userId } = req.params;
     const { applicationId, status, explanation } = req.body;
 
-    // Validation: Ensure only valid ENUM values are sent
     const validStatuses = ['accepted', 'rejected', 'pending'];
     if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: "Invalid status" });
     }
 
     try {
+        const [sponsorRows] = await pool.execute(
+            `SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
+            [userId]
+        );
+        if (sponsorRows.length === 0) {
+            return res.status(404).json({ error: 'Sponsor not found' });
+        }
+        const companyId = sponsorRows[0].SponsorCompanyID;
+
+        // Verify this application belongs to the sponsor's company
+        const [appRows] = await pool.execute(
+            `SELECT SponsorCompanyID FROM DRIVER_APPLICATIONS WHERE ApplicationID = ?`,
+            [applicationId]
+        );
+        if (appRows.length === 0) {
+            return res.status(404).json({ error: 'Application not found' });
+        }
+        if (Number(appRows[0].SponsorCompanyID) !== Number(companyId)) {
+            return res.status(403).json({ error: 'Not authorized to modify this application' });
+        }
+
         await pool.execute(
-            `UPDATE DRIVER_APPLICATIONS 
-             SET ApplicationStatus = ?, DecisionExplanation = ? 
+            `UPDATE DRIVER_APPLICATIONS
+             SET ApplicationStatus = ?, DecisionExplanation = ?
              WHERE ApplicationID = ?`,
             [status, explanation || "", applicationId]
         );
 
         res.json({ message: `Application ${status} successfully.` });
     } catch (error) {
-        console.error("Update Error:", error);
+        console.error("Process Application Error:", error);
         res.status(500).json({ error: "Failed to update application status." });
     }
 });
