@@ -64,7 +64,7 @@ app.use('/api/driver/:userId/orders', driverOrdersRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
 app.use('/api/sponsor/:userId/reviews', reviewRoutes);
-//app.use('/api/admin', adminRoute);
+app.use('/api/admin', adminRoute);
 
 app.use((err, _req, res, _next) => {
   console.error('Unhandled server error:', err);

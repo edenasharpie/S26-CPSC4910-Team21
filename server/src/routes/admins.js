@@ -1,5 +1,11 @@
 import express from 'express';
 import { pool } from '../db.js';
+import { getEffectiveSessionUser } from '../middleware/session-context.js';
+import {
+  getSystemAdminRetentionSettings,
+  saveSystemAdminRetentionSettings,
+} from '../services/admin-settings-service.js';
+import { validateAdminRetentionSettings } from '../utils/admin-settings.js';
 const router = express.Router();
 
 // GET /api/admins/invoices
@@ -60,14 +66,9 @@ router.get('/driver-report/:driverId', async (req, res) => {
 // GET /api/admin/settings/:userId - Get admin user settings
 router.get('/settings/:userId', async (req, res) => {
   try {
-    const { userId } = req.params;
-    
-    // Get admin user and their settings from a settings table or JSON column
-    // For now, return default settings
-    res.json({
-      auditLogRetentionDays: 365,
-      userDataRetentionDays: 90
-    });
+    // Route keeps :userId for client compatibility, but settings are system-wide.
+    const settings = await getSystemAdminRetentionSettings();
+    res.json(settings);
   } catch (error) {
     console.error('Error fetching admin settings:', error);
     res.status(500).json({ error: 'Failed to fetch settings' });
@@ -77,19 +78,18 @@ router.get('/settings/:userId', async (req, res) => {
 // POST /api/admin/settings/:userId - Update admin user settings
 router.post('/settings/:userId', async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { auditLogRetentionDays, userDataRetentionDays } = req.body;
-    
-    if (!auditLogRetentionDays || !userDataRetentionDays) {
-      return res.status(400).json({ error: 'Both retention periods are required' });
+    const validation = validateAdminRetentionSettings(req.body);
+    if (!validation.ok) {
+      return res.status(400).json({ error: validation.error });
     }
-    
-    // Store settings in user preferences or a settings table
-    // For now, acknowledge the save
-    res.json({ 
-      success: true, 
-      auditLogRetentionDays, 
-      userDataRetentionDays 
+
+    const effectiveSessionUser = getEffectiveSessionUser(req);
+    const actorUserId = effectiveSessionUser?.UserID ?? null;
+    const saved = await saveSystemAdminRetentionSettings(validation.value, actorUserId);
+
+    res.json({
+      success: true,
+      ...saved,
     });
   } catch (error) {
     console.error('Error updating admin settings:', error);
