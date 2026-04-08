@@ -140,7 +140,16 @@ router.get('/:userId/drivers/:driverId/points', async (req, res) => {
 router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
   try {
     const { userId, driverId } = req.params;
+    const sponsorUserId = Number(userId);
     console.log(`[SPONSOR_GET_HISTORY] userId=${userId}, driverId=${driverId}`);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
     
     // Get the sponsor's company
     const [sponsorRows] = await pool.execute(
@@ -182,6 +191,15 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
 router.get('/:userId/point-transactions', async (req, res) => {
   try {
     const { userId } = req.params;
+    const sponsorUserId = Number(userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
 
     const [sponsorRows] = await pool.execute(
       `SELECT sc.SponsorCompanyID
@@ -224,115 +242,174 @@ router.get('/:userId/point-transactions', async (req, res) => {
 
 // POST /api/sponsors/:userId/drivers/:driverId/point-transactions - Add point transaction
 router.post('/:userId/drivers/:driverId/point-transactions', async (req, res) => {
+  let connection;
   try {
     const { userId, driverId } = req.params;
     const { pointChange, reason } = req.body;
-    
-    if (!pointChange || !reason) {
+
+    const sponsorUserId = Number(userId);
+    const driverUserId = Number(driverId);
+    const pointDelta = Number(pointChange);
+    const reasonText = typeof reason === 'string' ? reason.trim() : '';
+
+    if (!Number.isInteger(sponsorUserId) || !Number.isInteger(driverUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID or driver user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    if (!Number.isFinite(pointDelta) || pointDelta === 0 || !reasonText) {
       return res.status(400).json({ error: 'pointChange and reason are required' });
     }
-    
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
     // Get the sponsor's company
-    const [sponsorRows] = await pool.execute(
+    const [sponsorRows] = await connection.execute(
       `SELECT sc.SponsorCompanyID
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
-    
+
     if (sponsorRows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Sponsor not found' });
     }
-    
+
     const companyId = sponsorRows[0].SponsorCompanyID;
-    
+
     // Verify driver belongs to sponsor
-    const [drivers] = await pool.execute(
-      `SELECT u.UserID, d.PointBalance
+    const [drivers] = await connection.execute(
+      `SELECT u.UserID, d.LicenseNumber, d.PointBalance
        FROM USERS u
        JOIN DRIVERS d ON u.UserID = d.UserID
        WHERE u.UserID = ? AND d.SponsorCompanyID = ?`,
-      [driverId, companyId]
+      [driverUserId, companyId]
     );
-    
+
     if (drivers.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Driver not found for this sponsor' });
     }
-    
+
     // Create transaction
-    await pool.execute(
+    await connection.execute(
       `INSERT INTO POINT_TRANSACTIONS (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
        VALUES (?, ?, ?, ?, NOW())`,
-      [driverId, userId, pointChange, reason]
+      [drivers[0].LicenseNumber, sponsorUserId, pointDelta, reasonText]
     );
-    
+
     // Update driver's point balance
-    const newBalance = drivers[0].PointBalance + pointChange;
-    await pool.execute(
-      `UPDATE DRIVERS SET PointBalance = ? WHERE UserID = ?`,
-      [newBalance, driverId]
+    const newBalance = Number(drivers[0].PointBalance) + pointDelta;
+    await connection.execute(
+      `UPDATE DRIVERS SET PointBalance = ? WHERE LicenseNumber = ?`,
+      [newBalance, drivers[0].LicenseNumber]
     );
-    
+
+    await connection.commit();
     res.json({ success: true, newBalance });
   } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
     console.error('Error creating transaction:', error);
     res.status(500).json({ error: 'Failed to create transaction' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
 // PUT /api/sponsors/:userId/point-transactions/:tId - Edit a transaction
 router.put('/:userId/point-transactions/:tId', async (req, res) => {
+  let connection;
   try {
     const { userId, tId } = req.params;
     const { newPoints, newReason } = req.body;
-    
-    if (newPoints === undefined || !newReason) {
+
+    const sponsorUserId = Number(userId);
+    const transactionId = Number(tId);
+    const pointValue = Number(newPoints);
+    const reasonText = typeof newReason === 'string' ? newReason.trim() : '';
+
+    if (!Number.isInteger(sponsorUserId) || !Number.isInteger(transactionId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID or transaction ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    if (!Number.isFinite(pointValue) || !reasonText) {
       return res.status(400).json({ error: 'newPoints and newReason are required' });
     }
-    
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
     // Get the sponsor's company
-    const [sponsorRows] = await pool.execute(
+    const [sponsorRows] = await connection.execute(
       `SELECT sc.SponsorCompanyID
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
-    
+
     if (sponsorRows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Sponsor not found' });
     }
-    
+
+    const companyId = sponsorRows[0].SponsorCompanyID;
+
     // Get the transaction
-    const [transactions] = await pool.execute(
-      `SELECT * FROM POINT_TRANSACTIONS WHERE TransactionID = ?`,
-      [tId]
+    const [transactions] = await connection.execute(
+      `SELECT pt.TransactionID, pt.DriverID, pt.PointChange
+       FROM POINT_TRANSACTIONS pt
+       JOIN DRIVERS d ON d.LicenseNumber = pt.DriverID
+       WHERE pt.TransactionID = ? AND d.SponsorCompanyID = ?`,
+      [transactionId, companyId]
     );
-    
+
     if (transactions.length === 0) {
-      return res.status(404).json({ error: 'Transaction not found' });
+      await connection.rollback();
+      return res.status(404).json({ error: 'Transaction not found for this sponsor' });
     }
-    
+
     const oldPoints = transactions[0].PointChange;
-    const pointDifference = newPoints - oldPoints;
-    
+    const pointDifference = pointValue - oldPoints;
+
     // Update transaction
-    await pool.execute(
+    await connection.execute(
       `UPDATE POINT_TRANSACTIONS SET PointChange = ?, ReasonForChange = ? WHERE TransactionID = ?`,
-      [newPoints, newReason, tId]
+      [pointValue, reasonText, transactionId]
     );
-    
+
     // Update driver's point balance by the difference
-    await pool.execute(
-      `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = (SELECT DriverID FROM POINT_TRANSACTIONS WHERE TransactionID = ?)`,
-      [pointDifference, tId]
+    await connection.execute(
+      `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = ?`,
+      [pointDifference, transactions[0].DriverID]
     );
-    
+
+    await connection.commit();
     res.json({ success: true });
   } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
     console.error('Error updating transaction:', error);
     res.status(500).json({ error: 'Failed to update transaction' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
@@ -734,49 +811,6 @@ router.patch('/:companyId/description', async (req, res) => {
 //    res.status(500).json({ error: "Failed to fetch security logs" });
 //  }
 //});
-
-// POST /api/sponsors/deduct-points
-router.post('/deduct-points', async (req, res) => {
-    const { driverId, points, reason, sponsorId } = req.body;
-    const connection = await pool.getConnection();
-
-    try {
-        await connection.beginTransaction();
-
-        // Update Driver's balance 
-        const [updateResult] = await connection.execute(
-            "UPDATE DRIVERS SET PointBalance = PointBalance - ? WHERE UserID = ?",
-            [points, driverId]
-        );
-
-        if (updateResult.affectedRows === 0) {
-            throw new Error("Driver not found");
-        }
-
-        // Get Driver's LicenseNumber for transaction log
-        const [driver] = await connection.execute(
-            "SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?",
-            [driverId]
-        );
-
-        // Log transaction as negative value
-        await connection.execute(
-            `INSERT INTO POINT_TRANSACTIONS 
-            (DriverID, PointChange, ReasonForChange, TimeChanged, UserChanged) 
-            VALUES (?, ?, ?, NOW(), ?)`,
-            [driver[0].LicenseNumber, -Math.abs(points), reason, sponsorId]
-        );
-
-        await connection.commit();
-        res.json({ message: `Successfully deducted ${points} points.` });
-    } catch (error) {
-        await connection.rollback();
-        console.error("Deduction Error:", error);
-        res.status(500).json({ error: error.message || "Failed to deduct points" });
-    } finally {
-        connection.release();
-    }
-});
 
 // GET /api/sponsors/driver-purchases/:companyId
 router.get('/driver-purchases/:companyId', async (req, res) => {

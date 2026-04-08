@@ -38,7 +38,6 @@ function buildNavSections(user: { UserID: number; UserType: string } | null) {
         { to: "/sponsor/reports", label: "Reports" },
         { to: "/sponsor/manage-users", label: "Manage Users" },
         { to: "/sponsor/driver-purchases", label: "Driver Purchases" },
-        { to: "/sponsor/deduct-points", label: "Deduct Points" },
         ...(userId ? [{ to: `/sponsor/settings/${userId}`, label: "My Settings" }] : []),
       ],
     },

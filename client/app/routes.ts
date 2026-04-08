@@ -57,7 +57,6 @@ export default [
   route("admin/add-sponsor", "routes/admin/add-sponsor.tsx"),
 
   //SPONSOR FLEET MANAGEMENT
-  route("sponsor/deduct-points", "routes/sponsor/deduct-points.tsx"),
   route("sponsor/driver-purchases", "routes/sponsor/driver-purchases.tsx"),
   route("sponsor/manage-users", "routes/sponsor/manage-users.tsx"),
   route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
