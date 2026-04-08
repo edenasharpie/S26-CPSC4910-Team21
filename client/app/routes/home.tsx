@@ -65,7 +65,6 @@ function buildNavSections(user: { UserID: number; UserType: string } | null) {
       label: "General",
       links: [
         { to: "/about", label: "About" },
-        { to: "/profile", label: "Profile" },
         { to: "/components-demo", label: "Components Demo" },
       ],
     },

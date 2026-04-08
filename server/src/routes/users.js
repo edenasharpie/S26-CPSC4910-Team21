@@ -1,5 +1,5 @@
 import express from 'express';
-import { validatePasswordComplexity, hashPassword } from '../utils/auth.js';
+import { validatePasswordComplexity, hashPassword, verifyPassword } from '../utils/auth.js';
 import { changePasswordWithHistory, getUserById } from '../utils/queries.js';
 import { pool } from '../db.js';
 import {
@@ -111,6 +111,86 @@ router.patch('/profile/:id', async (req, res) => {
       await connection.rollback();
     }
     console.error('Profile Update Route Error:', error);
+    return res.status(500).json({ error: 'Server error' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+/**
+ * POST /api/user/deactivate
+ * Body: { userId: number, currentPassword: string }
+ */
+router.post('/deactivate', async (req, res) => {
+  let connection;
+  try {
+    const userId = Number(req.body?.userId);
+    const currentPassword = typeof req.body?.currentPassword === 'string'
+      ? req.body.currentPassword
+      : '';
+
+    if (!Number.isInteger(userId) || !currentPassword) {
+      return res.status(400).json({ error: 'userId and currentPassword are required.' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, userId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [rows] = await connection.execute(
+      `SELECT UserID, UserType, PassHash, ActiveStatus
+       FROM USERS
+       WHERE UserID = ?
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const user = rows[0];
+
+    if (!Boolean(user.ActiveStatus)) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'This account is already deactivated.' });
+    }
+
+    const passwordMatches = await verifyPassword(currentPassword, user.PassHash);
+    if (!passwordMatches) {
+      await connection.rollback();
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+
+    await connection.execute(
+      'UPDATE USERS SET ActiveStatus = 0 WHERE UserID = ?',
+      [userId]
+    );
+
+    await connection.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountStatusChange', JSON_OBJECT('newStatus', false, 'targetUserId', ?, 'adminNotes', 'self_deactivate'))`,
+      [userId, userId]
+    );
+
+    await connection.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Account deactivated successfully.',
+      userId,
+    });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error('Profile Deactivate Route Error:', error);
     return res.status(500).json({ error: 'Server error' });
   } finally {
     if (connection) {

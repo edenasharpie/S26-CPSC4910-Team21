@@ -33,7 +33,7 @@ export default [
   //route("admin/profile/:id", "routes/admin/profile/$id/edit.tsx"),
   route("sponsor/profile/:id/edit", "routes/sponsor/profile/$id/edit.tsx"),
   //route("sponsor/profile/:id", "routes/sponsor/profile/$id/edit.tsx"),
-  route("profile", "routes/profile.tsx"),
+  route("driver/profile/:id/edit", "routes/driver/profile/$id/edit.tsx"),
 
   //INVOICES
   route("admin/invoices", "routes/admin/invoices.tsx"),

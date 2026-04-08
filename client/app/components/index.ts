@@ -6,3 +6,4 @@ export { Modal } from "./Modal";
 export { Table } from "./Table";
 export { Badge } from "./Badge";
 export { Alert } from "./Alert";
+export { ProfileEditLayout, getProfileEditFieldClass } from "./ProfileEditLayout";

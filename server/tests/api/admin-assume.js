@@ -97,14 +97,14 @@ async function runTests() {
     }
 
     // Test 3: Admin-assumed sponsor can load downstream sponsor data used by dashboard/invoices/profile pages
-    log('TEST 3: Assumed sponsor downstream data loads', 'GET /api/sponsors/user/:userId, /my-drivers/:companyId, /point-transactions, /api/user/profile/:id');
+    log('TEST 3: Assumed sponsor downstream data loads', 'GET /api/sponsors/user/:userId, /:userId/my-drivers, /point-transactions, /api/user/profile/:id');
     const assumedSponsorUserId = assumeSponsorRes.data.assumedUser.UserID;
     const sponsorContextRes = await axios.get(`${API_BASE_URL}/sponsors/user/${assumedSponsorUserId}`);
     if (sponsorContextRes.status !== 200 || !sponsorContextRes.data?.sponsorCompanyId) {
       throw new Error('Expected sponsor context with sponsorCompanyId for assumed sponsor');
     }
 
-    const driversRes = await axios.get(`${API_BASE_URL}/sponsors/my-drivers/${sponsorContextRes.data.sponsorCompanyId}`);
+    const driversRes = await axios.get(`${API_BASE_URL}/sponsors/${assumedSponsorUserId}/my-drivers`);
     if (driversRes.status !== 200 || !Array.isArray(driversRes.data)) {
       throw new Error('Expected sponsor driver list for assumed sponsor');
     }
@@ -158,6 +158,26 @@ async function runTests() {
       driverPatchRes.data?.LastName !== 'ProfileEdit'
     ) {
       throw new Error('Expected assumed driver to update own profile fields');
+    }
+
+    // Test 3d: Assumed sponsor can mutate own profile fields
+    log('TEST 3d: Assumed sponsor can update own profile', 'PATCH /api/user/profile/:id');
+    const sponsorSelfPatchRes = await axios.patch(
+      `${API_BASE_URL}/user/profile/${assumedSponsorUserId}`,
+      {
+        firstName: 'AssumedSponsor',
+        lastName: 'ProfileEdit',
+        email: `assumed-sponsor-self-${Date.now()}@example.com`,
+        phone: '5557008000',
+      }
+    );
+
+    if (
+      sponsorSelfPatchRes.status !== 200 ||
+      sponsorSelfPatchRes.data?.FirstName !== 'AssumedSponsor' ||
+      sponsorSelfPatchRes.data?.LastName !== 'ProfileEdit'
+    ) {
+      throw new Error('Expected assumed sponsor to update own profile fields');
     }
 
     // Test 4: Missing sponsor profile linkage blocks assume-sponsor

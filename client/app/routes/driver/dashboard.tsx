@@ -153,7 +153,11 @@ export default function DriverDashboard() {
             <Form method="post" action="/logout">
               <Button variant="secondary" size="sm" type="submit">Sign out</Button>
             </Form>
-            <button className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm">
+            <button
+              type="button"
+              onClick={() => navigate(`/driver/profile/${effectiveUserId}/edit`)}
+              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm"
+            >
               <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase">
                 {driver?.FirstName?.[0]}{driver?.LastName?.[0]}
               </div>
