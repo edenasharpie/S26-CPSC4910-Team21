@@ -259,8 +259,8 @@ export default function SponsorPortal() {
                 <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
               </Form>
             )}
-            <button
-              onClick={() => navigate(`/sponsor/settings/${user.UserID}`)}
+            <Link
+              to={`/sponsor/settings/${user.UserID}`}
               className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
               aria-label="Settings"
               title="Settings"
@@ -273,9 +273,8 @@ export default function SponsorPortal() {
             <Form method="post" action="/logout">
               <Button variant="secondary" size="sm" type="submit">Sign out</Button>
             </Form>
-            <button 
-              type="button"
-              onClick={() => navigate(`/sponsor/profile/${user.UserID}/edit`)}
+            <Link
+              to={`/sponsor/profile/${user.UserID}/edit`}
               className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
             >
             <div className="relative">
@@ -292,7 +291,7 @@ export default function SponsorPortal() {
               <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{user.Username}</p>
               <p className="text-[10px] text-gray-400 font-mono mt-0.5">{companyName}</p>
             </div>
-            </button>
+            </Link>
           </div>
         </div>
 
