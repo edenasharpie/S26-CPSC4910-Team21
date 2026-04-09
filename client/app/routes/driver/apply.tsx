@@ -18,11 +18,13 @@ type DriverApplication = {
 // 1. Updated loader with more flexible data extraction
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireAuth(request, ["driver", "admin"]);
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+  const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
 
   try {
     const [sponsorsRes, applicationsRes] = await Promise.all([
-      fetch(toApiUrl("/api/sponsors")),
-      fetch(toApiUrl(`/api/user/my-applications/${session.UserID}`)),
+      fetch(toApiUrl("/api/sponsors"), requestInit),
+      fetch(toApiUrl(`/api/user/my-applications/${session.UserID}`), requestInit),
     ]);
 
     const sponsorsData = await sponsorsRes.json();

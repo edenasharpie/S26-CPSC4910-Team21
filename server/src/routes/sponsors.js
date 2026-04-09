@@ -33,7 +33,16 @@ router.get('/', async (req, res) => {
 // GET /api/sponsors/user/:userId - Get sponsor company for a given sponsor user
 router.get('/user/:userId', async (req, res) => {
   try {
-    const { userId } = req.params;
+    const sponsorUserId = Number(req.params.userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
     const [rows] = await pool.execute(
       `SELECT sc.SponsorCompanyID as sponsorCompanyId,
               sc.CompanyName      as companyName,
@@ -46,7 +55,7 @@ router.get('/user/:userId', async (req, res) => {
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        JOIN USERS u ON s.UserID = u.UserID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Sponsor company not found for this user' });
     res.json(rows[0]);
@@ -61,11 +70,19 @@ router.get('/user/:userId', async (req, res) => {
 // supply an arbitrary companyId to view another company's drivers.
 router.get('/:userId/my-drivers', async (req, res) => {
   try {
-    const { userId } = req.params;
+    const sponsorUserId = Number(req.params.userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
 
     const [sponsorRows] = await pool.execute(
       `SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
     if (sponsorRows.length === 0) {
       return res.status(404).json({ error: 'Sponsor not found' });
@@ -97,6 +114,16 @@ router.get('/:userId/my-drivers', async (req, res) => {
 router.get('/:userId/drivers/:driverId/points', async (req, res) => {
   try {
     const { userId, driverId } = req.params;
+    const sponsorUserId = Number(userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
     console.log(`[SPONSOR_GET_POINTS] userId=${userId}, driverId=${driverId}`);
     
     // Get the sponsor's company
@@ -105,7 +132,7 @@ router.get('/:userId/drivers/:driverId/points', async (req, res) => {
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
     
     if (sponsorRows.length === 0) {
@@ -551,6 +578,16 @@ router.patch('/:userId/drivers/:driverId', async (req, res) => {
 router.get('/:userId/drivers/:driverId', async (req, res) => {
   try {
     const { userId, driverId } = req.params;
+    const sponsorUserId = Number(userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
     console.log(`[SPONSOR_GET_DRIVER] userId=${userId}, driverId=${driverId}`);
     
     // Get the sponsor's company
@@ -559,7 +596,7 @@ router.get('/:userId/drivers/:driverId', async (req, res) => {
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
     
     if (sponsorRows.length === 0) {
@@ -606,6 +643,10 @@ router.post('/:userId/assume-driver/:driverId', async (req, res) => {
         success: false,
         error: 'userId and driverId must be valid integers.',
       });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ success: false, error: 'Access forbidden for requested user context.' });
     }
 
     connection = await pool.getConnection();
@@ -918,11 +959,19 @@ router.put('/user/:id', async (req, res) => {
 // Returns all applications for the sponsor's company, scoped by userId.
 router.get('/:userId/driver-applications', async (req, res) => {
     try {
-        const { userId } = req.params;
+        const sponsorUserId = Number(req.params.userId);
+
+        if (!Number.isInteger(sponsorUserId)) {
+          return res.status(400).json({ error: 'Invalid sponsor user ID' });
+        }
+
+        if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+          return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+        }
 
         const [sponsorRows] = await pool.execute(
             `SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
-            [userId]
+            [sponsorUserId]
         );
         if (sponsorRows.length === 0) {
             return res.status(404).json({ error: 'Sponsor not found' });
@@ -956,9 +1005,17 @@ router.get('/:userId/driver-applications', async (req, res) => {
 // POST /api/sponsors/:userId/process-application
 // Accepts or rejects an application, scoped to the sponsor's company.
 router.post('/:userId/process-application', async (req, res) => {
-  const { userId } = req.params;
+  const sponsorUserId = Number(req.params.userId);
     const { applicationId, status, explanation } = req.body;
   let connection;
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
 
     const validStatuses = ['accepted', 'rejected', 'pending'];
     if (!validStatuses.includes(status)) {
@@ -971,7 +1028,7 @@ router.post('/:userId/process-application', async (req, res) => {
 
       const [sponsorRows] = await connection.execute(
         `SELECT SponsorID, SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
-            [userId]
+            [sponsorUserId]
         );
         if (sponsorRows.length === 0) {
         await connection.rollback();
@@ -1035,7 +1092,7 @@ router.post('/:userId/process-application', async (req, res) => {
       await connection.execute(
         `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
          VALUES (?, NOW(), 'ApplicationStatusUpdate', JSON_OBJECT('status', ?, 'reviewNotes', ?))`,
-        [userId, status, explanation || ""]
+        [sponsorUserId, status, explanation || ""]
       );
 
       await connection.commit();

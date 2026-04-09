@@ -46,13 +46,15 @@ function formatChartDate(value: unknown): string {
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireAuth(request, ["driver", "admin"]);
   const effectiveUserId = String(session.UserID);
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+  const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
 
   try {
     // Use the existing driver endpoints and gracefully degrade on partial failures.
     const [pointsRes, performanceRes, sponsorsRes] = await Promise.all([
-      fetch(`${API_URL}/api/drivers/my-points/${effectiveUserId}`),
-      fetch(`${API_URL}/api/drivers/performance/${effectiveUserId}`),
-      fetch(`${API_URL}/api/drivers/sponsors/${effectiveUserId}`),
+      fetch(`${API_URL}/api/drivers/my-points/${effectiveUserId}`, requestInit),
+      fetch(`${API_URL}/api/drivers/performance/${effectiveUserId}`, requestInit),
+      fetch(`${API_URL}/api/drivers/sponsors/${effectiveUserId}`, requestInit),
     ]);
 
     const pointsPayload = pointsRes.ok ? await pointsRes.json() : null;

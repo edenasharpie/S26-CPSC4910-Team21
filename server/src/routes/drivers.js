@@ -2,6 +2,29 @@ import express from 'express';
 const router = express.Router();
 import { pool } from '../db.js';
 import { verifyPassword } from '../utils/auth.js';
+import { routeUserMatchesEffectiveSession } from '../middleware/session-context.js';
+
+function getAssumedSponsorOriginalUser(req, expectedDriverUserId) {
+  const sessionContext = req.sessionContext;
+  if (!sessionContext?.isAssumed) {
+    return null;
+  }
+
+  const effectiveUser = sessionContext.effectiveUser;
+  const originalUser = sessionContext.originalUser;
+
+  if (
+    !effectiveUser ||
+    !originalUser ||
+    String(effectiveUser.UserType).toLowerCase() !== 'driver' ||
+    String(originalUser.UserType).toLowerCase() !== 'sponsor' ||
+    Number(effectiveUser.UserID) !== Number(expectedDriverUserId)
+  ) {
+    return null;
+  }
+
+  return originalUser;
+}
 
 // GET /api/drivers/my-points/:userId
 router.get('/my-points/:userId', async (req, res) => {
@@ -108,12 +131,20 @@ router.get('/performance/:userId', async (req, res) => {
 // GET /api/drivers/sponsors/:userId
 // Returns the driver's affiliated sponsor company for dashboard display.
 router.get('/sponsors/:userId', async (req, res) => {
-  const { userId } = req.params;
+  const driverUserId = Number(req.params.userId);
+
+  if (!Number.isInteger(driverUserId)) {
+    return res.status(400).json({ error: 'Invalid driver user ID.' });
+  }
+
+  if (!routeUserMatchesEffectiveSession(req, driverUserId)) {
+    return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+  }
 
   try {
     const [accountRows] = await pool.execute(
       'SELECT ActiveStatus FROM USERS WHERE UserID = ? AND UserType = "driver"',
-      [userId]
+      [driverUserId]
     );
 
     if (accountRows.length === 0) {
@@ -124,16 +155,37 @@ router.get('/sponsors/:userId', async (req, res) => {
       return res.status(403).json({ error: 'Driver account is inactive.' });
     }
 
-    const [rows] = await pool.execute(
+    let assumedSponsorCompanyId = null;
+    const assumedOriginalSponsor = getAssumedSponsorOriginalUser(req, driverUserId);
+
+    if (assumedOriginalSponsor) {
+      const [sponsorRows] = await pool.execute(
+        'SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ? LIMIT 1',
+        [assumedOriginalSponsor.UserID]
+      );
+
+      if (sponsorRows.length === 0) {
+        return res.status(403).json({ error: 'Assumed sponsor context is invalid.' });
+      }
+
+      assumedSponsorCompanyId = Number(sponsorRows[0].SponsorCompanyID);
+    }
+
+    const query =
       `SELECT
          sc.SponsorCompanyID AS SponsorID,
          sc.SponsorCompanyID,
          sc.CompanyName
        FROM DRIVERS d
        JOIN SPONSOR_COMPANIES sc ON d.SponsorCompanyID = sc.SponsorCompanyID
-       WHERE d.UserID = ?`,
-      [userId]
-    );
+       WHERE d.UserID = ?` +
+      (Number.isInteger(assumedSponsorCompanyId) ? ' AND sc.SponsorCompanyID = ?' : '');
+
+    const queryParams = Number.isInteger(assumedSponsorCompanyId)
+      ? [driverUserId, assumedSponsorCompanyId]
+      : [driverUserId];
+
+    const [rows] = await pool.execute(query, queryParams);
 
     const sponsors = rows.map((row) => ({
       SponsorID: Number(row.SponsorID),
