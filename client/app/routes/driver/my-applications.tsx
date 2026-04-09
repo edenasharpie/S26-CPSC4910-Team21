@@ -8,10 +8,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // requireAuth likely returns the user object stored in the cookie
   const user = await requireAuth(request, ["driver"]);
   
-  // 2. Use the real ID from the session (e.g., user.username or user.id)
-  const driverId = user.Username || user.UserID; 
+  // 2. Use the authenticated user id; server resolves it to LicenseNumber.
+  const driverId = user.UserID;
 
-  const res = await fetch(toApiUrl(`/api/users/my-applications/${driverId}`));
+  const res = await fetch(toApiUrl(`/api/user/my-applications/${driverId}`));
   if (!res.ok) throw new Error("Could not load applications");
   
   return await res.json();

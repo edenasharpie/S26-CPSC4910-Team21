@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
+
 // Error checking for .fs-env connection and db connection
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -427,4 +428,23 @@ export async function logLoginAttempt(userId, success, result, ipAddress) {
   } catch (err) {
     console.error('Error logging login attempt to EVENTS:', err);
   }
+}
+
+export async function getAllSponsorCompanies() {
+  const [rows] = await pool.execute(
+    `SELECT SponsorID, CompanyName, Description FROM SPONSORS WHERE Status = 'Active'`
+  );
+  return rows;
+}
+
+/**
+ * Retrieves a single sponsor by its ID.
+ * Useful for validating an application before submission.
+ */
+export async function getSponsorById(sponsorId) {
+  const [rows] = await pool.execute(
+    'SELECT * FROM SPONSORS WHERE SponsorID = ?',
+    [sponsorId]
+  );
+  return rows[0];
 }

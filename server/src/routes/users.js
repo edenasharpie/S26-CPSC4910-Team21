@@ -365,17 +365,72 @@ router.post('/submit-application', async (req, res) => {
   const { driverId, sponsorCompanyId, explanation } = req.body;
 
   try {
+    const rawDriverId = String(driverId ?? '').trim();
+    const rawSponsorCompanyId = Number(sponsorCompanyId);
+    const rawExplanation = String(explanation ?? '').trim();
+
+    if (!rawDriverId || !Number.isInteger(rawSponsorCompanyId) || !rawExplanation) {
+      return res.status(400).json({ error: 'driverId, sponsorCompanyId, and explanation are required.' });
+    }
+
+    // DRIVER_APPLICATIONS.DriverID should store DRIVERS.LicenseNumber.
+    let licenseNumber = rawDriverId;
+    const numericDriverId = Number(rawDriverId);
+
+    if (Number.isInteger(numericDriverId)) {
+      const [driverRows] = await pool.execute(
+        'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+        [numericDriverId]
+      );
+
+      if (driverRows.length > 0) {
+        licenseNumber = driverRows[0].LicenseNumber;
+      }
+    }
+
+    const [driverByLicenseRows] = await pool.execute(
+      'SELECT LicenseNumber FROM DRIVERS WHERE LicenseNumber = ? LIMIT 1',
+      [licenseNumber]
+    );
+
+    if (driverByLicenseRows.length === 0) {
+      return res.status(404).json({ error: 'Driver not found. Could not resolve driver license number.' });
+    }
+
+    const [sponsorRows] = await pool.execute(
+      'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ? LIMIT 1',
+      [rawSponsorCompanyId]
+    );
+
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor company not found.' });
+    }
+
+    const [existingPendingRows] = await pool.execute(
+      `SELECT ApplicationID
+       FROM DRIVER_APPLICATIONS
+       WHERE DriverID = ? AND SponsorCompanyID = ? AND ApplicationStatus = 'pending'
+       LIMIT 1`,
+      [licenseNumber, rawSponsorCompanyId]
+    );
+
+    if (existingPendingRows.length > 0) {
+      return res.status(409).json({ error: 'You already have a pending application for this sponsor.' });
+    }
+
     // ApplicationStatus defaults to 'pending' based on your ENUM
     const [result] = await pool.execute(
       `INSERT INTO DRIVER_APPLICATIONS 
        (DriverID, SponsorCompanyID, ApplicationStatus, DecisionExplanation, TimeSubmitted)
        VALUES (?, ?, 'pending', ?, NOW())`,
-      [driverId, sponsorCompanyId, explanation]
+      [licenseNumber, rawSponsorCompanyId, rawExplanation]
     );
 
     res.status(201).json({ 
       message: "Application submitted successfully!", 
-      applicationId: result.insertId 
+      applicationId: result.insertId,
+      driverId: licenseNumber,
+      sponsorCompanyId: rawSponsorCompanyId,
     });
   } catch (error) {
     console.error("Submission Error:", error);
@@ -387,19 +442,39 @@ router.get('/my-applications/:driverId', async (req, res) => {
     const { driverId } = req.params;
 
     try {
+        const rawDriverId = String(driverId ?? '').trim();
+        if (!rawDriverId) {
+          return res.status(400).json({ error: 'driverId is required.' });
+        }
+
+        // DRIVER_APPLICATIONS.DriverID stores DRIVERS.LicenseNumber.
+        let licenseNumber = rawDriverId;
+        const numericDriverId = Number(rawDriverId);
+
+        if (Number.isInteger(numericDriverId)) {
+          const [driverRows] = await pool.execute(
+            'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+            [numericDriverId]
+          );
+
+          if (driverRows.length > 0) {
+            licenseNumber = driverRows[0].LicenseNumber;
+          }
+        }
+
         const [rows] = await pool.execute(
             `SELECT 
                 a.ApplicationID, 
                 a.SponsorCompanyID, 
-                u.FirstName AS SponsorName, 
+                sc.CompanyName AS SponsorName,
                 a.ApplicationStatus, 
                 a.DecisionExplanation, 
                 a.TimeSubmitted
              FROM DRIVER_APPLICATIONS a
-             JOIN USERS u ON a.SponsorCompanyID = u.UserID
+             JOIN SPONSOR_COMPANIES sc ON a.SponsorCompanyID = sc.SponsorCompanyID
              WHERE a.DriverID = ?
              ORDER BY a.TimeSubmitted DESC`,
-            [driverId]
+            [licenseNumber]
         );
         res.json(rows);
     } catch (error) {

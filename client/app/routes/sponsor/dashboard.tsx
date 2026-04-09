@@ -1,4 +1,4 @@
-// --- IMPORTS ---
+//Imports
 import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Modal } from "~/components";
@@ -14,7 +14,7 @@ import { getApiBaseUrl } from "~/utils/api-url";
 
 const API_URL = getApiBaseUrl();
 
-// --- LOADER ---
+//Loader
 export async function loader({ request }: Route.LoaderArgs) {
   const user = requireAuth(request, ['sponsor']);
   try {
