@@ -514,22 +514,3 @@ export async function logLoginAttempt(userId, success, result, ipAddress) {
     });
   }
 }
-
-export async function getAllSponsorCompanies() {
-  const [rows] = await pool.execute(
-    `SELECT SponsorID, CompanyName, Description FROM SPONSORS WHERE Status = 'Active'`
-  );
-  return rows;
-}
-
-/**
- * Retrieves a single sponsor by its ID.
- * Useful for validating an application before submission.
- */
-export async function getSponsorById(sponsorId) {
-  const [rows] = await pool.execute(
-    'SELECT * FROM SPONSORS WHERE SponsorID = ?',
-    [sponsorId]
-  );
-  return rows[0];
-}
