@@ -96,6 +96,15 @@ export default function SponsorProfileEdit() {
     setErrorMessage(null);
   }, [data]);
 
+  useEffect(() => {
+    if (!successMessage) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setSuccessMessage(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [successMessage]);
+
   if (!profile) {
     return null;
   }
@@ -217,6 +226,8 @@ export default function SponsorProfileEdit() {
       profileMeta={profileMeta}
       successMessage={successMessage}
       errorMessage={errorMessage}
+      onDismissSuccess={() => setSuccessMessage(null)}
+      onDismissError={() => setErrorMessage(null)}
       actions={
         <>
           {isEditing && (

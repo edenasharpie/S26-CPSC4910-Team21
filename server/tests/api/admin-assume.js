@@ -141,62 +141,89 @@ async function runTests() {
 
     // Test 3b: Assumed sponsor can mutate sponsor-owned driver profile fields
     log('TEST 3b: Assumed sponsor can update driver profile', 'PATCH /api/sponsors/:userId/drivers/:driverId');
+    const sponsorDriverEmail = `sd${Date.now()}@e.co`;
+    const sponsorDriverPhone = '5551002000';
     const sponsorPatchRes = await axios.patch(
       `${API_BASE_URL}/sponsors/${assumedSponsorUserId}/drivers/${driver.userId}`,
       {
         firstName: 'AssumedSponsor',
         lastName: 'DriverEdit',
-        email: `assumed-sponsor-driver-${Date.now()}@example.com`,
-        phone: '5551002000',
+        email: sponsorDriverEmail,
+        phone: sponsorDriverPhone,
       }
     );
 
+    const sponsorPatchUserId = Number(sponsorPatchRes.data?.UserID ?? sponsorPatchRes.data?.userId);
+    const sponsorPatchEmail = sponsorPatchRes.data?.Email ?? sponsorPatchRes.data?.email;
+    const sponsorPatchPhone = sponsorPatchRes.data?.Phone ?? sponsorPatchRes.data?.phone;
+
     if (
       sponsorPatchRes.status !== 200 ||
+      sponsorPatchUserId !== Number(driver.userId) ||
       sponsorPatchRes.data?.FirstName !== 'AssumedSponsor' ||
-      sponsorPatchRes.data?.LastName !== 'DriverEdit'
+      sponsorPatchRes.data?.LastName !== 'DriverEdit' ||
+      String(sponsorPatchEmail ?? '') !== sponsorDriverEmail ||
+      String(sponsorPatchPhone ?? '') !== sponsorDriverPhone
     ) {
-      throw new Error('Expected assumed sponsor to update sponsor-owned driver profile fields');
+      throw new Error(`Expected assumed sponsor to update sponsor-owned driver profile fields. Received: ${JSON.stringify(sponsorPatchRes.data)}`);
     }
 
     // Test 3c: Assumed driver can mutate own profile fields
     log('TEST 3c: Assumed driver can update own profile', 'PATCH /api/user/profile/:id');
+    const assumedDriverEmail = `ad${Date.now()}@e.co`;
+    const assumedDriverPhone = '5553004000';
     const driverPatchRes = await axios.patch(
       `${API_BASE_URL}/user/profile/${assumedDriverUserId}`,
       {
         firstName: 'AssumedDriver',
         lastName: 'ProfileEdit',
-        email: `assumed-driver-${Date.now()}@example.com`,
-        phone: '5553004000',
+        email: assumedDriverEmail,
+        phone: assumedDriverPhone,
       }
     );
 
+    const driverPatchUserId = Number(driverPatchRes.data?.UserID ?? driverPatchRes.data?.userId);
+    const driverPatchEmail = driverPatchRes.data?.Email ?? driverPatchRes.data?.email;
+    const driverPatchPhone = driverPatchRes.data?.Phone ?? driverPatchRes.data?.phone;
+
     if (
       driverPatchRes.status !== 200 ||
+      driverPatchUserId !== Number(assumedDriverUserId) ||
       driverPatchRes.data?.FirstName !== 'AssumedDriver' ||
-      driverPatchRes.data?.LastName !== 'ProfileEdit'
+      driverPatchRes.data?.LastName !== 'ProfileEdit' ||
+      String(driverPatchEmail ?? '') !== assumedDriverEmail ||
+      String(driverPatchPhone ?? '') !== assumedDriverPhone
     ) {
-      throw new Error('Expected assumed driver to update own profile fields');
+      throw new Error(`Expected assumed driver to update own profile fields. Received: ${JSON.stringify(driverPatchRes.data)}`);
     }
 
     // Test 3d: Assumed sponsor can mutate own profile fields
     log('TEST 3d: Assumed sponsor can update own profile', 'PATCH /api/user/profile/:id');
+    const assumedSponsorEmail = `ss${Date.now()}@e.co`;
+    const assumedSponsorPhone = '5557008000';
     const sponsorSelfPatchRes = await axios.patch(
       `${API_BASE_URL}/user/profile/${assumedSponsorUserId}`,
       {
         firstName: 'AssumedSponsor',
         lastName: 'ProfileEdit',
-        email: `assumed-sponsor-self-${Date.now()}@example.com`,
-        phone: '5557008000',
+        email: assumedSponsorEmail,
+        phone: assumedSponsorPhone,
       }
     );
 
+    const sponsorSelfPatchUserId = Number(sponsorSelfPatchRes.data?.UserID ?? sponsorSelfPatchRes.data?.userId);
+    const sponsorSelfPatchEmail = sponsorSelfPatchRes.data?.Email ?? sponsorSelfPatchRes.data?.email;
+    const sponsorSelfPatchPhone = sponsorSelfPatchRes.data?.Phone ?? sponsorSelfPatchRes.data?.phone;
+
     if (
       sponsorSelfPatchRes.status !== 200 ||
+      sponsorSelfPatchUserId !== Number(assumedSponsorUserId) ||
       sponsorSelfPatchRes.data?.FirstName !== 'AssumedSponsor' ||
-      sponsorSelfPatchRes.data?.LastName !== 'ProfileEdit'
+      sponsorSelfPatchRes.data?.LastName !== 'ProfileEdit' ||
+      String(sponsorSelfPatchEmail ?? '') !== assumedSponsorEmail ||
+      String(sponsorSelfPatchPhone ?? '') !== assumedSponsorPhone
     ) {
-      throw new Error('Expected assumed sponsor to update own profile fields');
+      throw new Error(`Expected assumed sponsor to update own profile fields. Received: ${JSON.stringify(sponsorSelfPatchRes.data)}`);
     }
 
     // Test 4: Missing sponsor profile linkage blocks assume-sponsor
