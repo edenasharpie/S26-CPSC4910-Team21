@@ -12,10 +12,10 @@ interface User {
 }
 
 export async function loader({ request }: { request: Request }) {
-  await requireAuth(request, ["sponsor"]);
+  const user = await requireAuth(request, ["sponsor"]);
   try {
     // TODO: clarify if this should list drivers or sponsor users within the company.
-    const res = await fetch(`${API_URL}/api/sponsors/affiliated-users`);
+    const res = await fetch(`${API_URL}/api/sponsors/${user.UserID}/my-drivers`);
     
     if (!res.ok) {
       throw new Error(`Server responded with ${res.status}`);
