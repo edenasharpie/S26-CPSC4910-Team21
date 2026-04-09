@@ -135,21 +135,23 @@ export default function DriverDashboard() {
   const chartData = useMemo(() => {
       if (validHistory.length === 0) return [];
 
-      const sortedHistory = [...validHistory].sort(
-        (a: any, b: any) => a.parsedDate.getTime() - b.parsedDate.getTime()
+      const sortedNewestFirst = [...validHistory].sort(
+        (a: any, b: any) => b.parsedDate.getTime() - a.parsedDate.getTime()
       );
 
-      const totalChange = validHistory.reduce((sum: number, item: any) => sum + item.PointChange, 0);
-      let runningBalance = (driver?.PointBalance ?? 0) - totalChange;
-
-      return sortedHistory.map((item: any) => {
-        runningBalance += item.PointChange;
+      let currentCalcBalance = driver?.PointBalance ?? 0;
+      
+      const historyWithBalances = sortedNewestFirst.map((item: any) => {
+        const pointAtTime = currentCalcBalance;
+        currentCalcBalance -= item.PointChange; // Subtract the change to see previous state
         return {
           date: formatChartDate(item.TimeChanged),
-          balance: runningBalance,
+          balance: pointAtTime,
         };
       });
-    }, [validHistory, driver?.PointBalance]);
+      
+      return historyWithBalances.reverse();
+}, [validHistory, driver?.PointBalance]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
