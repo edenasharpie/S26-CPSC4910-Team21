@@ -406,9 +406,7 @@ export async function getPointHistory(userId) {
         pt.ReasonForChange,
         DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
      FROM POINT_TRANSACTIONS pt
-     JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
-     WHERE d.UserID = ?
-       AND pt.TimeChanged IS NOT NULL
+     WHERE pt.DriverID = (SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?)
        AND pt.TimeChanged >= '2000-01-01 00:00:00'
      ORDER BY pt.TimeChanged DESC`,
     [userId]
