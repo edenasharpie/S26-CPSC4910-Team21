@@ -199,7 +199,9 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
          pt.TransactionID, pt.DriverID, pt.UserChanged, pt.PointChange, 
          pt.ReasonForChange,
          DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged,
-         u.Username as ChangedByUsername
+         u.Username as ChangedByUsername,
+         u.FirstName as ChangedByFirstName,
+         u.LastName as ChangedByLastName
        FROM POINT_TRANSACTIONS pt
        JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
        LEFT JOIN USERS u ON pt.UserChanged = u.UserID
@@ -253,12 +255,16 @@ router.get('/:userId/point-transactions', async (req, res) => {
          u.FirstName,
          u.LastName,
          pt.UserChanged AS AdminUserID,
+         actor.Username AS ChangedByUsername,
+         actor.FirstName AS ChangedByFirstName,
+         actor.LastName AS ChangedByLastName,
          pt.PointChange,
          pt.ReasonForChange,
          DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
        FROM POINT_TRANSACTIONS pt
        JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
        JOIN USERS u ON d.UserID = u.UserID
+       LEFT JOIN USERS actor ON pt.UserChanged = actor.UserID
        WHERE d.SponsorCompanyID = ?
          AND pt.TimeChanged IS NOT NULL
          AND pt.TimeChanged >= '2000-01-01 00:00:00'

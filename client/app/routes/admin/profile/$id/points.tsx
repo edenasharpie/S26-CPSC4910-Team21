@@ -230,6 +230,9 @@ export default function PointsPage() {
                   <th className="p-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest text-left">
                     Reason
                   </th>
+                  <th className="p-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest text-left">
+                    Changed By
+                  </th>
                   <th className="p-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest text-right">
                     Edit
                   </th>
@@ -277,6 +280,20 @@ export default function PointsPage() {
                       ) : (
                         <span className="text-sm text-gray-700 dark:text-gray-300">{row.ReasonForChange}</span>
                       )}
+                    </td>
+                    <td className="p-4 text-left text-sm text-gray-600 dark:text-gray-300">
+                      <div className="leading-tight">
+                        <div>
+                          {(() => {
+                            const fullName = `${row.ChangedByFirstName ?? ""} ${row.ChangedByLastName ?? ""}`.trim();
+                            if (!row.ChangedByUsername) return "Unknown";
+                            return fullName || "Unknown User";
+                          })()}
+                        </div>
+                        {row.ChangedByUsername ? (
+                          <div className="text-xs text-gray-400">@{row.ChangedByUsername}</div>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="p-4 text-right">
                       <Form

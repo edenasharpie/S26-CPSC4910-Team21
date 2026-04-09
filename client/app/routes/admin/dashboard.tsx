@@ -214,8 +214,10 @@ export default function AdminPortal() {
   const [auditTargetUserId, setAuditTargetUserId] = useState("");
   const [auditEventFilters, setAuditEventFilters] = useState<string[]>([]);
   const [auditLoginOutcome, setAuditLoginOutcome] = useState<"" | "success" | "failure">("");
+  const [auditPointUserScope, setAuditPointUserScope] = useState<"any" | "changedBy" | "affected">("any");
 
   const isLoginAttemptsSelected = auditEventFilters.includes("LoginAttempt");
+  const isPointTransactionsSelected = auditEventFilters.includes("PointTransaction");
 
   const totalPages = Math.max(1, Math.ceil(totalCount / Math.max(pageSize, 1)));
   const hasPrevPage = page > 1;
@@ -752,6 +754,9 @@ export default function AdminPortal() {
                     if (checked) return prev.includes("PointTransaction") ? prev : [...prev, "PointTransaction"];
                     return prev.filter((v) => v !== "PointTransaction");
                   });
+                  if (!checked) {
+                    setAuditPointUserScope("any");
+                  }
                 }}
               />
               <AuditOption
@@ -800,6 +805,42 @@ export default function AdminPortal() {
                     onChange={() => setAuditLoginOutcome("failure")}
                   />
                   Failed only
+                </label>
+              </div>
+            )}
+
+            {isPointTransactionsSelected && (
+              <div className="ml-1 mt-3 rounded-md border border-gray-200 dark:border-gray-700 p-3 space-y-2 text-left">
+                <p className="text-xs font-bold text-gray-500 uppercase">Point Transaction Filter Scope</p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="pointUserScope"
+                    value="any"
+                    checked={auditPointUserScope === "any"}
+                    onChange={() => setAuditPointUserScope("any")}
+                  />
+                  Either changed by or affected user
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="pointUserScope"
+                    value="changedBy"
+                    checked={auditPointUserScope === "changedBy"}
+                    onChange={() => setAuditPointUserScope("changedBy")}
+                  />
+                  User who made the change
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="pointUserScope"
+                    value="affected"
+                    checked={auditPointUserScope === "affected"}
+                    onChange={() => setAuditPointUserScope("affected")}
+                  />
+                  User affected by the change
                 </label>
               </div>
             )}

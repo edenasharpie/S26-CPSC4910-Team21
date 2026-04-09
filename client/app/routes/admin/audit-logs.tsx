@@ -12,6 +12,8 @@ interface AuditLogEntry {
   EventID: number;
   UserID: number;
   Username: string | null;
+  FirstName?: string | null;
+  LastName?: string | null;
   Timestamp: string;
   EventType: string;
   Properties: Record<string, any>;
@@ -27,6 +29,7 @@ interface AdminUserOption {
 
 type UserScopeFilter = "" | "admin" | "driver" | "sponsor";
 type LoginOutcomeFilter = "" | "success" | "failure";
+type PointUserScopeFilter = "any" | "changedBy" | "affected";
 
 export async function loader({ request }: Route.LoaderArgs) {
   await requireAuth(request, ["admin"]);
@@ -42,12 +45,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   const targetUserId = url.searchParams.get("targetUserId")?.trim();
   const rawTargetUserType = url.searchParams.get("targetUserType")?.trim().toLowerCase();
   const rawLoginOutcome = url.searchParams.get("loginOutcome")?.trim().toLowerCase();
+  const rawPointUserScope = url.searchParams.get("pointUserScope")?.trim();
   const targetUserType: UserScopeFilter =
     rawTargetUserType === "admin" || rawTargetUserType === "driver" || rawTargetUserType === "sponsor"
       ? rawTargetUserType
       : "";
   const loginOutcome: LoginOutcomeFilter =
     rawLoginOutcome === "success" || rawLoginOutcome === "failure" ? rawLoginOutcome : "";
+  const pointUserScope: PointUserScopeFilter =
+    rawPointUserScope === "changedBy" || rawPointUserScope === "affected" ? rawPointUserScope : "any";
 
   try {
     const params = new URLSearchParams();
@@ -60,6 +66,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     if (targetUserType) params.set("targetUserType", targetUserType);
     if (loginOutcome) params.set("loginOutcome", loginOutcome);
+    if (pointUserScope !== "any") params.set("pointUserScope", pointUserScope);
 
     const cookieHeader = request.headers.get("Cookie") ?? "";
     const [logsRes, usersRes] = await Promise.all([
@@ -94,6 +101,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       selectedTargetUserId: targetUserId ?? "",
       selectedTargetUserType: targetUserType,
       selectedLoginOutcome: loginOutcome,
+      selectedPointUserScope: pointUserScope,
       error: null,
     };
   } catch (error: any) {
@@ -105,6 +113,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       selectedTargetUserId: targetUserId ?? "",
       selectedTargetUserType: targetUserType,
       selectedLoginOutcome: loginOutcome,
+      selectedPointUserScope: pointUserScope,
       error: error.message as string,
     };
   }
@@ -145,48 +154,34 @@ export default function AuditLogs() {
     selectedTargetUserId,
     selectedTargetUserType,
     selectedLoginOutcome,
+    selectedPointUserScope,
     error,
   } = useLoaderData<typeof loader>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [eventFilters, setEventFilters] = useState<string[]>(selectedFilters);
   const [loginOutcome, setLoginOutcome] = useState<LoginOutcomeFilter>(selectedLoginOutcome);
+  const [pointUserScope, setPointUserScope] = useState<PointUserScopeFilter>(selectedPointUserScope);
   const [userScope, setUserScope] = useState<UserScopeFilter>(selectedTargetUserType);
   const [specificUserId, setSpecificUserId] = useState<string>(selectedTargetUserId);
 
   const isLoginAttemptsFilterSelected = eventFilters.includes("LoginAttempt");
+  const isPointTransactionsFilterSelected = eventFilters.includes("PointTransaction");
 
   useEffect(() => {
     setEventFilters(selectedFilters);
     setLoginOutcome(selectedLoginOutcome);
+    setPointUserScope(selectedPointUserScope);
     setUserScope(selectedTargetUserType);
     setSpecificUserId(selectedTargetUserId);
-  }, [selectedFilters, selectedLoginOutcome, selectedTargetUserType, selectedTargetUserId]);
+  }, [selectedFilters, selectedLoginOutcome, selectedPointUserScope, selectedTargetUserType, selectedTargetUserId]);
 
   const filteredLogs = useMemo(() => {
-    const selectedUserIdNumber = Number.parseInt(selectedTargetUserId, 10);
-    const hasSpecificUserFilter = Number.isInteger(selectedUserIdNumber) && selectedUserIdNumber > 0;
     const selectedEventTypes = new Set(selectedFilters);
     const hasEventTypeFilter = selectedEventTypes.size > 0;
-
-    const userTypeById = new Map<number, string>();
-    for (const user of users) {
-      userTypeById.set(Number(user.UserID), String(user.UserType ?? "").toLowerCase());
-    }
 
     return logs.filter((log) => {
       if (hasEventTypeFilter && !selectedEventTypes.has(log.EventType)) {
         return false;
-      }
-
-      if (hasSpecificUserFilter && Number(log.UserID) !== selectedUserIdNumber) {
-        return false;
-      }
-
-      if (selectedTargetUserType) {
-        const userType = userTypeById.get(Number(log.UserID));
-        if (!userType || userType !== selectedTargetUserType) {
-          return false;
-        }
       }
 
       if (selectedLoginOutcome && log.EventType === "LoginAttempt") {
@@ -197,7 +192,7 @@ export default function AuditLogs() {
 
       return true;
     });
-  }, [logs, users, selectedFilters, selectedTargetUserId, selectedTargetUserType, selectedLoginOutcome]);
+  }, [logs, selectedFilters, selectedLoginOutcome]);
 
   const usersForScope = users
     .filter((user) => !userScope || user.UserType === userScope)
@@ -281,11 +276,19 @@ export default function AuditLogs() {
     {
       key: "Username",
       header: "Username",
-      render: (log: AuditLogEntry) => (
-        <span className="font-medium text-gray-700 dark:text-gray-300">
-          {log.Username ?? "Unknown"}
-        </span>
-      ),
+      render: (log: AuditLogEntry) => {
+        const fullName = `${log.FirstName ?? ""} ${log.LastName ?? ""}`.trim();
+        if (!log.Username) {
+          return <span className="font-medium text-gray-700 dark:text-gray-300">Unknown</span>;
+        }
+
+        return (
+          <span className="font-medium text-gray-700 dark:text-gray-300 leading-tight inline-block">
+            <span className="block">{fullName || "Unknown User"}</span>
+            <span className="block text-xs text-gray-400">@{log.Username}</span>
+          </span>
+        );
+      },
     },
     {
       key: "status",
@@ -317,12 +320,6 @@ export default function AuditLogs() {
       <div className="max-w-7xl mx-auto">
         {/* Navigation */}
         <div className="mb-4">
-          <Link
-            to="/"
-            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline block mb-2"
-          >
-            ← Home
-          </Link>
           <Link
             to="/admin/dashboard"
             className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline block mb-2"
@@ -421,6 +418,10 @@ export default function AuditLogs() {
                   if (f.value === "LoginAttempt" && !checked) {
                     setLoginOutcome("");
                   }
+
+                  if (f.value === "PointTransaction" && !checked) {
+                    setPointUserScope("any");
+                  }
                 }}
               />
             ))}
@@ -459,6 +460,44 @@ export default function AuditLogs() {
                     onChange={() => setLoginOutcome("failure")}
                   />
                   Failed only
+                </label>
+              </div>
+            )}
+
+            {isPointTransactionsFilterSelected && (
+              <div className="ml-7 space-y-2 rounded-md border border-gray-200 dark:border-gray-800 p-3">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Point Transaction Filter Scope:
+                </p>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="radio"
+                    name="pointUserScope"
+                    value="any"
+                    checked={pointUserScope === "any"}
+                    onChange={() => setPointUserScope("any")}
+                  />
+                  Either changed by or affected user
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="radio"
+                    name="pointUserScope"
+                    value="changedBy"
+                    checked={pointUserScope === "changedBy"}
+                    onChange={() => setPointUserScope("changedBy")}
+                  />
+                  User who made the change
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="radio"
+                    name="pointUserScope"
+                    value="affected"
+                    checked={pointUserScope === "affected"}
+                    onChange={() => setPointUserScope("affected")}
+                  />
+                  User affected by the change
                 </label>
               </div>
             )}

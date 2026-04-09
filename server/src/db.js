@@ -363,6 +363,7 @@ export async function addPointTransaction(driverUserId, adminUserId, pointChange
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    const effectiveActorUserId = await resolveAuditActorUserId(adminUserId);
 
     const [driverRows] = await connection.execute(
       'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?',
@@ -378,12 +379,26 @@ export async function addPointTransaction(driverUserId, adminUserId, pointChange
     await connection.execute(
       `INSERT INTO POINT_TRANSACTIONS (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged) 
        VALUES (?, ?, ?, ?, NOW())`,
-      [licenseNumber, adminUserId, pointChange, reason]
+      [licenseNumber, effectiveActorUserId, pointChange, reason]
     );
 
     await connection.execute(
       `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE UserID = ?`,
       [pointChange, driverUserId]
+    );
+
+    await connection.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'PointTransaction', ?)`,
+      [
+        effectiveActorUserId,
+        JSON.stringify({
+          pointsDelta: Number(pointChange),
+          reason: String(reason),
+          driverId: String(licenseNumber),
+          targetDriverUserId: Number(driverUserId),
+        }),
+      ]
     );
 
     await connection.commit();
@@ -402,11 +417,15 @@ export async function getPointHistory(userId) {
         pt.TransactionID,
         pt.DriverID,
         pt.UserChanged,
+        actor.Username AS ChangedByUsername,
+        actor.FirstName AS ChangedByFirstName,
+        actor.LastName AS ChangedByLastName,
         pt.PointChange,
         pt.ReasonForChange,
         DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
      FROM POINT_TRANSACTIONS pt
      JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
+     LEFT JOIN USERS actor ON pt.UserChanged = actor.UserID
      WHERE d.UserID = ?
        AND pt.TimeChanged IS NOT NULL
        AND pt.TimeChanged >= '2000-01-01 00:00:00'
@@ -421,6 +440,7 @@ export async function updatePointTransaction(transactionId, newPoints, newReason
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    const effectiveActorUserId = await resolveAuditActorUserId(adminUserId);
 
     const [oldRow] = await connection.execute(
       'SELECT PointChange, DriverID FROM POINT_TRANSACTIONS WHERE TransactionID = ?',
@@ -437,12 +457,27 @@ export async function updatePointTransaction(transactionId, newPoints, newReason
       `UPDATE POINT_TRANSACTIONS 
        SET PointChange = ?, ReasonForChange = ?, UserChanged = ?, TimeChanged = NOW() 
        WHERE TransactionID = ?`,
-      [newPoints, newReason, adminUserId, transactionId]
+      [newPoints, newReason, effectiveActorUserId, transactionId]
     );
 
     await connection.execute(
       `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = ?`,
       [pointDifference, licenseNumber]
+    );
+
+    await connection.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'PointTransaction', ?)`,
+      [
+        effectiveActorUserId,
+        JSON.stringify({
+          pointsDelta: Number(newPoints),
+          reason: String(newReason),
+          driverId: String(licenseNumber),
+          transactionId: Number(transactionId),
+          updated: true,
+        }),
+      ]
     );
 
     await connection.commit();
@@ -464,12 +499,16 @@ export async function getAllPointTransactions() {
       u.FirstName,
       u.LastName,
       pt.UserChanged AS AdminUserID,
+      actor.Username AS ChangedByUsername,
+      actor.FirstName AS ChangedByFirstName,
+      actor.LastName AS ChangedByLastName,
       pt.PointChange,
       pt.ReasonForChange,
       DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') as TimeChanged
     FROM POINT_TRANSACTIONS pt
     JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
     JOIN USERS u ON d.UserID = u.UserID
+    LEFT JOIN USERS actor ON pt.UserChanged = actor.UserID
     WHERE pt.TimeChanged IS NOT NULL
       AND pt.TimeChanged >= '2000-01-01 00:00:00'
     ORDER BY pt.TimeChanged DESC

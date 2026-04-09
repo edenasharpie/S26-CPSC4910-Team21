@@ -84,6 +84,15 @@ router.get('/', async (req, res) => {
       }
     }
 
+    if (req.query.pointUserScope) {
+      const pointUserScope = String(req.query.pointUserScope).trim();
+      const allowedPointUserScopes = new Set(['any', 'changedBy', 'affected']);
+      if (!allowedPointUserScopes.has(pointUserScope)) {
+        return res.status(400).json({ error: 'Invalid pointUserScope. Must be any, changedBy, or affected.' });
+      }
+      auditFilters.pointUserScope = pointUserScope;
+    }
+
     const logs = await getAuditLogs(auditFilters);
     return res.json(logs);
   } catch (err) {
