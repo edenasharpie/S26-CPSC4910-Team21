@@ -13,6 +13,7 @@ interface DriverApplication {
   ApplicationStatus: ApplicationStatus;
   DriverExplanation?: string | null;
   TimeSubmitted?: string | null;
+  UserID?: number | string | null;
   FirstName?: string | null;
   LastName?: string | null;
   LicenseNumber?: string | null;
@@ -194,7 +195,7 @@ export default function DriverApplications() {
                     <div className="font-semibold text-gray-900 dark:text-gray-100 leading-tight">
                       {app.FirstName} {app.LastName}
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Driver ID: {app.DriverID}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">User ID: {app.UserID ?? "N/A"}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-1">License: {app.LicenseNumber || "N/A"}</div>
                   </td>
 
@@ -215,29 +216,24 @@ export default function DriverApplications() {
                   </td>
 
                   <td className="p-4">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => handleDecision(app, "accepted")}
-                        disabled={app.ApplicationStatus === "accepted"}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => handleDecision(app, "rejected")}
-                        disabled={app.ApplicationStatus === "rejected"}
-                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        onClick={() => handleDecision(app, "pending")}
-                        disabled={app.ApplicationStatus === "pending"}
-                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-700 text-xs font-semibold rounded-md transition-colors dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-100 dark:disabled:bg-gray-800"
-                      >
-                        Reset Pending
-                      </button>
-                    </div>
+                    <select
+                      aria-label="Application action"
+                      defaultValue=""
+                      onChange={(event) => {
+                        const nextStatus = event.target.value as ApplicationStatus | "";
+                        event.target.value = "";
+                        if (!nextStatus) return;
+                        handleDecision(app, nextStatus);
+                      }}
+                      className="w-36 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-100 shadow-sm outline-none transition-colors hover:border-gray-300 dark:hover:border-gray-500"
+                    >
+                      <option value="" disabled>
+                        Select action
+                      </option>
+                      <option value="accepted">Accept</option>
+                      <option value="rejected">Reject</option>
+                      <option value="pending">Reset Pending</option>
+                    </select>
                   </td>
 
                   <td className="p-4 align-top min-w-[320px]">

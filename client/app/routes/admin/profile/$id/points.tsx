@@ -145,7 +145,8 @@ export default function PointsPage() {
   }, [validHistory]);
 
   return (
-    <div className="p-8 max-w-400 mx-auto space-y-10 text-left text-gray-900 dark:text-gray-100">
+    <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-8">
+      <div className="max-w-400 mx-auto space-y-10 text-left text-gray-900 dark:text-gray-100">
       <Link
         to="/"
         className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
@@ -166,7 +167,7 @@ export default function PointsPage() {
             {driver.FirstName} {driver.LastName}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm font-mono mt-2 bg-gray-50 dark:bg-gray-900 px-3 py-1 rounded-md inline-block border border-gray-200 dark:border-gray-700 text-left">
-            License: {driver.LicenseNumber}
+            License Number: {driver.LicenseNumber}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-900 px-10 py-4 rounded-3xl border-2 border-indigo-600 text-center shadow-lg shadow-indigo-100/40 dark:shadow-none">
@@ -423,6 +424,7 @@ export default function PointsPage() {
             </p>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -145,6 +145,7 @@ router.get('/:userId/drivers/:driverId/points', async (req, res) => {
     const [drivers] = await pool.execute(
       `SELECT
          u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
+         d.LicenseNumber,
          d.PerformanceStatus, d.PointBalance, u.ActiveStatus
        FROM USERS u
        JOIN DRIVERS d ON u.UserID = d.UserID
@@ -991,12 +992,16 @@ router.get('/:userId/driver-applications', async (req, res) => {
                 da.ApplicationStatus,
             da.DecisionExplanation AS DriverExplanation,
                 da.TimeSubmitted,
+            COALESCE(u.UserID, d.UserID) AS UserID,
                 u.FirstName,
                 u.LastName,
-                d.LicenseNumber
+            d.LicenseNumber
              FROM DRIVER_APPLICATIONS da
-             JOIN DRIVERS d ON da.DriverID = d.LicenseNumber
-             JOIN USERS u ON d.UserID = u.UserID
+           LEFT JOIN DRIVERS d ON (
+             da.DriverID COLLATE utf8mb4_unicode_ci = d.LicenseNumber COLLATE utf8mb4_unicode_ci
+             OR CAST(d.UserID AS CHAR) COLLATE utf8mb4_unicode_ci = da.DriverID COLLATE utf8mb4_unicode_ci
+           )
+           LEFT JOIN USERS u ON d.UserID = u.UserID
              WHERE da.SponsorCompanyID = ?
              ORDER BY da.TimeSubmitted DESC`,
             [companyId]
