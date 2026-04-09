@@ -49,15 +49,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   try {
     // Use the existing driver endpoints and gracefully degrade on partial failures.
-    const [pointsRes, performanceRes] = await Promise.all([
+    const [pointsRes, performanceRes, sponsorsRes] = await Promise.all([
       fetch(`${API_URL}/api/drivers/my-points/${effectiveUserId}`),
       fetch(`${API_URL}/api/drivers/performance/${effectiveUserId}`),
+      fetch(`${API_URL}/api/drivers/sponsors/${effectiveUserId}`),
     ]);
 
     const pointsPayload = pointsRes.ok ? await pointsRes.json() : null;
     const performancePayload = performanceRes.ok ? await performanceRes.json() : null;
+    const sponsorsPayload = sponsorsRes.ok ? await sponsorsRes.json() : [];
 
     const history = Array.isArray(pointsPayload?.history) ? pointsPayload.history : [];
+    const sponsors = Array.isArray(sponsorsPayload) ? sponsorsPayload : [];
     const pointBalance = Number(pointsPayload?.balance ?? 0);
 
     const driver = {
@@ -72,7 +75,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     return {
       driver,
       history,
-      sponsors: [],
+      sponsors,
       session,
       effectiveUserId,
     };
@@ -228,7 +231,7 @@ export default function DriverDashboard() {
                       variant="secondary" 
                       size="sm" 
                       className="w-full text-[10px] uppercase font-bold tracking-widest py-2"
-                      onClick={() => navigate(`/shop/catalog/${s.SponsorID}`)}
+                      onClick={() => navigate('/driver/catalogs')}
                     >
                       View Catalog
                     </Button>
@@ -243,6 +246,15 @@ export default function DriverDashboard() {
                       Apply for Sponsor
                     </Button>
                   </div>
+                )}
+
+                {sponsors.length > 0 && (
+                  <Button
+                    className="w-full text-[10px] uppercase font-bold tracking-widest"
+                    onClick={() => navigate('/driver/apply')}
+                  >
+                    Apply for Sponsor
+                  </Button>
                 )}
               </div>
             </div>

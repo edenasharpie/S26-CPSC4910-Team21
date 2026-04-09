@@ -243,7 +243,7 @@ export default function SponsorPortal() {
             <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Home</Link>
             <div className="flex items-center gap-4">
               <div>
-                <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>
+                <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Dashboard</h1>
                 <p className="text-gray-500 text-sm mt-1 font-medium italic">{companyName}</p>
               </div>
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
@@ -324,6 +324,13 @@ export default function SponsorPortal() {
                 className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all shadow-sm"
               >
                 Invoices
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => navigate("/sponsor/applications")} 
+                className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all shadow-sm"
+              >
+                Applications
               </Button>
             </div>
           </aside>

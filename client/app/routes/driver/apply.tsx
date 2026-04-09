@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useLoaderData, useRevalidator } from "react-router";
 import { toApiUrl } from "~/utils/api-url";
 import { requireAuth } from "~/utils/session.server";
+import { StatusBadge } from "~/components/status-badge";
 
 type SponsorCompany = { id: string | number; companyName: string };
 type DriverApplication = {
@@ -171,17 +172,39 @@ export function DriverApplicationForm({
 }
 
 function ApplicationsList({ applications }: { applications: DriverApplication[] }) {
+  const statusPriority: Record<string, number> = {
+    accepted: 0,
+    rejected: 0,
+    pending: 1,
+  };
+
+  const sortedApplications = [...applications].sort((a, b) => {
+    const aStatus = String(a?.ApplicationStatus ?? "pending").toLowerCase();
+    const bStatus = String(b?.ApplicationStatus ?? "pending").toLowerCase();
+
+    const aPriority = statusPriority[aStatus] ?? 2;
+    const bPriority = statusPriority[bStatus] ?? 2;
+
+    if (aPriority !== bPriority) {
+      return aPriority - bPriority;
+    }
+
+    const aTime = new Date(a?.TimeSubmitted ?? 0).getTime();
+    const bTime = new Date(b?.TimeSubmitted ?? 0).getTime();
+    return bTime - aTime;
+  });
+
   return (
     <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl dark:shadow-slate-950/40 border border-slate-100 dark:border-slate-800 w-full">
       <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-4">Sponsor Applications</h3>
 
-      {applications.length === 0 ? (
+      {sortedApplications.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 px-5 py-10 text-center text-slate-500 dark:text-slate-400">
           No applications yet.
         </div>
       ) : (
         <div className="space-y-3 max-h-[560px] overflow-auto pr-1">
-          {applications.map((app) => {
+          {sortedApplications.map((app) => {
             const submittedAt = new Date(app.TimeSubmitted);
             return (
               <div
@@ -192,9 +215,7 @@ function ApplicationsList({ applications }: { applications: DriverApplication[] 
                   <p className="font-bold text-slate-900 dark:text-slate-100">
                     {app.SponsorName || `Company #${app.SponsorCompanyID}`}
                   </p>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    {app.ApplicationStatus}
-                  </span>
+                  <StatusBadge status={app.ApplicationStatus} />
                 </div>
 
                 <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-600 dark:text-slate-300">

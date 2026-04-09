@@ -934,7 +934,7 @@ router.get('/:userId/driver-applications', async (req, res) => {
                 da.ApplicationID,
                 da.DriverID,
                 da.ApplicationStatus,
-                da.DecisionExplanation,
+            da.DecisionExplanation AS DriverExplanation,
                 da.TimeSubmitted,
                 u.FirstName,
                 u.LastName,
@@ -956,8 +956,9 @@ router.get('/:userId/driver-applications', async (req, res) => {
 // POST /api/sponsors/:userId/process-application
 // Accepts or rejects an application, scoped to the sponsor's company.
 router.post('/:userId/process-application', async (req, res) => {
-    const { userId } = req.params;
+  const { userId } = req.params;
     const { applicationId, status, explanation } = req.body;
+  let connection;
 
     const validStatuses = ['accepted', 'rejected', 'pending'];
     if (!validStatuses.includes(status)) {
@@ -965,38 +966,91 @@ router.post('/:userId/process-application', async (req, res) => {
     }
 
     try {
-        const [sponsorRows] = await pool.execute(
-            `SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const [sponsorRows] = await connection.execute(
+        `SELECT SponsorID, SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
             [userId]
         );
         if (sponsorRows.length === 0) {
+        await connection.rollback();
             return res.status(404).json({ error: 'Sponsor not found' });
         }
+        const sponsorId = sponsorRows[0].SponsorID;
         const companyId = sponsorRows[0].SponsorCompanyID;
 
         // Verify this application belongs to the sponsor's company
-        const [appRows] = await pool.execute(
-            `SELECT SponsorCompanyID FROM DRIVER_APPLICATIONS WHERE ApplicationID = ?`,
+      const [appRows] = await connection.execute(
+        `SELECT SponsorCompanyID, DriverID FROM DRIVER_APPLICATIONS WHERE ApplicationID = ?`,
             [applicationId]
         );
         if (appRows.length === 0) {
+        await connection.rollback();
             return res.status(404).json({ error: 'Application not found' });
         }
         if (Number(appRows[0].SponsorCompanyID) !== Number(companyId)) {
+        await connection.rollback();
             return res.status(403).json({ error: 'Not authorized to modify this application' });
         }
 
-        await pool.execute(
+      // Keep DecisionExplanation as the original driver-submitted application reason.
+      await connection.execute(
             `UPDATE DRIVER_APPLICATIONS
-             SET ApplicationStatus = ?, DecisionExplanation = ?
+         SET ApplicationStatus = ?
              WHERE ApplicationID = ?`,
-            [status, explanation || "", applicationId]
+        [status, applicationId]
         );
+
+      if (status === 'accepted') {
+        await connection.execute(
+          `UPDATE DRIVERS
+           SET SponsorCompanyID = ?
+           WHERE LicenseNumber = ?`,
+          [companyId, appRows[0].DriverID]
+        );
+
+        // Link accepted drivers to the specific sponsor who processed the application
+        // when the optional SPONSOR_DRIVERS table is available.
+        const [junctionTableRows] = await connection.execute(
+          `SELECT COUNT(*) AS tableCount
+           FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'SPONSOR_DRIVERS'`
+        );
+
+        if (Number(junctionTableRows[0]?.tableCount) > 0) {
+          await connection.execute(
+            `INSERT INTO SPONSOR_DRIVERS (SponsorID, DriverID)
+             SELECT ?, ?
+             WHERE NOT EXISTS (
+               SELECT 1
+               FROM SPONSOR_DRIVERS
+               WHERE SponsorID = ? AND DriverID = ?
+             )`,
+            [sponsorId, appRows[0].DriverID, sponsorId, appRows[0].DriverID]
+          );
+        }
+      }
+
+      await connection.execute(
+        `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+         VALUES (?, NOW(), 'ApplicationStatusUpdate', JSON_OBJECT('status', ?, 'reviewNotes', ?))`,
+        [userId, status, explanation || ""]
+      );
+
+      await connection.commit();
 
         res.json({ message: `Application ${status} successfully.` });
     } catch (error) {
+      if (connection) {
+        await connection.rollback();
+      }
         console.error("Process Application Error:", error);
         res.status(500).json({ error: "Failed to update application status." });
+    } finally {
+      if (connection) {
+        connection.release();
+      }
     }
 });
 

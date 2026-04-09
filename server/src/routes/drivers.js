@@ -105,6 +105,50 @@ router.get('/performance/:userId', async (req, res) => {
   }
 });
 
+// GET /api/drivers/sponsors/:userId
+// Returns the driver's affiliated sponsor company for dashboard display.
+router.get('/sponsors/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const [accountRows] = await pool.execute(
+      'SELECT ActiveStatus FROM USERS WHERE UserID = ? AND UserType = "driver"',
+      [userId]
+    );
+
+    if (accountRows.length === 0) {
+      return res.status(404).json({ error: 'Driver account not found.' });
+    }
+
+    if (!Boolean(accountRows[0].ActiveStatus)) {
+      return res.status(403).json({ error: 'Driver account is inactive.' });
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT
+         sc.SponsorCompanyID AS SponsorID,
+         sc.SponsorCompanyID,
+         sc.CompanyName
+       FROM DRIVERS d
+       JOIN SPONSOR_COMPANIES sc ON d.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE d.UserID = ?`,
+      [userId]
+    );
+
+    const sponsors = rows.map((row) => ({
+      SponsorID: Number(row.SponsorID),
+      SponsorCompanyID: Number(row.SponsorCompanyID),
+      CompanyName: row.CompanyName,
+      Description: 'Official Program Sponsor',
+    }));
+
+    return res.json(sponsors);
+  } catch (error) {
+    console.error('Driver Sponsors Error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /api/drivers/deactivate
 router.post('/deactivate', async (req, res) => {
   const { userId, currentPassword } = req.body ?? {};

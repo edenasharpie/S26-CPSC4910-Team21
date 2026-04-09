@@ -58,6 +58,7 @@ export default [
 
   //SPONSOR FLEET MANAGEMENT
   route("sponsor/driver-purchases", "routes/sponsor/driver-purchases.tsx"),
+  route("sponsor/applications", "routes/sponsor/applications.tsx"),
   route("sponsor/manage-users", "routes/sponsor/manage-users.tsx"),
   route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
 
