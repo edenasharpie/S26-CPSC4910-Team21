@@ -4,6 +4,7 @@
   /* fonts */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   
   /* colors */
   --color-primary-50: #eff6ff;
@@ -195,6 +196,37 @@ button {
 
 .gradient-danger {
   @apply bg-gradient-to-r from-red-600 to-rose-700;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+@keyframes landingFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.landing-fade-up {
+  animation: landingFadeUp 550ms ease-out both;
+}
+
+.landing-delay-1 {
+  animation-delay: 100ms;
+}
+
+.landing-delay-2 {
+  animation-delay: 200ms;
+}
+
+.landing-delay-3 {
+  animation-delay: 300ms;
 }
 
 /* skeleton stuff */
