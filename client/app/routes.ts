@@ -44,7 +44,7 @@ export default [
   //REPORTS
   route("admin/reports", "routes/admin/reports.tsx"),
   route("sponsor/reports", "routes/sponsor/reports.tsx"),
-  //route("sponsor/reviews", "routes/sponsor/reviews.tsx"),
+  route("sponsor/reviews", "routes/sponsor/reviews.tsx"),
 
   //CATALOGS
   route("admin/catalogs", "routes/admin/catalogs.tsx"),

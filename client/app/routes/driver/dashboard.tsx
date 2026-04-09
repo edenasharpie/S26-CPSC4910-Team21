@@ -193,7 +193,9 @@ export default function DriverDashboard() {
             <button
               type="button"
               onClick={() => navigate(`/driver/profile/${effectiveUserId}/edit`)}
-              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm"
+              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow"
+              aria-label="Open account information"
+              title="Open account information"
             >
               <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase">
                 {driver?.FirstName?.[0]}{driver?.LastName?.[0]}
