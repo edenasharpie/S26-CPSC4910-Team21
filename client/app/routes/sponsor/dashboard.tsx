@@ -16,7 +16,7 @@ const API_URL = getApiBaseUrl();
 
 //Loader
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = requireAuth(request, ['sponsor']);
+  const user = await requireAuth(request, ['sponsor']);
   try {
     const companyRes = await fetch(`${API_URL}/api/sponsors/user/${user.UserID}`);
     if (!companyRes.ok) throw new Error(`Could not load company info (${companyRes.status})`);
