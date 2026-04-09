@@ -99,7 +99,7 @@ export default function InvoicesPage() {
 
         {/* Stats Grid - Added to match Audit Dashboard */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <StatCard title="Total Transactions" value={transactions.length} color="text-gray-900" />
+          <StatCard title="Total Transactions" value={transactions.length} color="text-gray-900 dark: text-white" />
           <StatCard title="Points Awarded" value={positiveTrans} color="text-green-600" />
           <StatCard title="Net Point Flow" value={totalPoints} color="text-blue-600" />
         </div>
@@ -120,10 +120,12 @@ export default function InvoicesPage() {
 
 // Stats Helper to match Audit page consistency
 function StatCard({ title, value, color }: { title: string; value: number | string; color: string }) {
+  
+  const textColor = color || "text-gray-900 dark:text-white";
   return (
     <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border dark:border-gray-800 shadow-sm text-left">
       <div className="text-sm text-gray-500 font-medium">{title}</div>
-      <div className={`text-3xl font-bold mt-1 ${color}`}>{value}</div>
+      <div className={`text-3xl font-bold mt-1 ${textColor}`}>{value}</div>
     </div>
   );
 }
