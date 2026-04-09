@@ -40,6 +40,7 @@ export default [
 
   //AUDIT LOGS
   route("admin/audit-logs", "routes/admin/audit-logs.tsx"),
+  route("admin/debug-navigation", "routes/admin/debug-navigation.tsx"),
 
   //REPORTS
   route("admin/reports", "routes/admin/reports.tsx"),
