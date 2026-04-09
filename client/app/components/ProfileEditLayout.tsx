@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
+import { Alert } from "./Alert";
 
 interface ProfileEditLayoutProps {
   apiBaseUrl: string;
@@ -12,6 +13,8 @@ interface ProfileEditLayoutProps {
   profileMeta?: string;
   successMessage?: string | null;
   errorMessage?: string | null;
+  onDismissSuccess?: () => void;
+  onDismissError?: () => void;
   actions?: ReactNode;
   children: ReactNode;
   auxiliaryContent?: ReactNode;
@@ -79,6 +82,8 @@ export function ProfileEditLayout({
   profileMeta,
   successMessage,
   errorMessage,
+  onDismissSuccess,
+  onDismissError,
   actions,
   children,
   auxiliaryContent,
@@ -120,14 +125,20 @@ export function ProfileEditLayout({
         </div>
 
         {successMessage && (
-          <div className="p-3 bg-green-50 text-green-700 text-sm rounded border border-green-200">
-            {successMessage}
-          </div>
+          <Alert
+            variant="success"
+            title="Saved"
+            message={successMessage}
+            onDismiss={onDismissSuccess}
+          />
         )}
         {errorMessage && (
-          <div className="p-3 bg-red-50 text-red-700 text-sm rounded border border-red-200">
-            {errorMessage}
-          </div>
+          <Alert
+            variant="error"
+            title="Unable to save"
+            message={errorMessage}
+            onDismiss={onDismissError}
+          />
         )}
 
         <div className="flex items-center gap-8 pb-6 border-b border-gray-100 dark:border-gray-800">

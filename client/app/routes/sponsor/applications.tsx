@@ -1,30 +1,94 @@
 import type { Route } from "./+types/applications";
+import { useEffect, useState } from "react";
 import { Link, useLoaderData, useNavigate } from "react-router";
+import { Alert } from "~/components/Alert";
+import { Modal } from "~/components/Modal";
 import { StatusBadge } from "~/components/status-badge";
 import { toApiUrl } from "~/utils/api-url";
 import { requireAuth } from "~/utils/session.server";
+
+type ApplicationStatus = "pending" | "accepted" | "rejected";
+
+interface DriverApplication {
+  ApplicationID: number;
+  DriverID: string;
+  ApplicationStatus: ApplicationStatus;
+  DriverExplanation: string | null;
+  TimeSubmitted: string | null;
+  FirstName: string;
+  LastName: string;
+  LicenseNumber: string | null;
+}
+
+interface SponsorApplicationPermissions {
+  canViewDriverApplications: boolean;
+  canAcceptDriverApplications: boolean;
+  canRejectDriverApplications: boolean;
+}
+
+interface ApplicationsLoaderData {
+  applications: DriverApplication[];
+  permissions: SponsorApplicationPermissions;
+  userId: number;
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = requireAuth(request, ["sponsor"]);
   const res = await fetch(toApiUrl(`/api/sponsors/${user.UserID}/driver-applications`), {
     headers: { Cookie: request.headers.get("Cookie") ?? "" },
   });
-  if (!res.ok) throw new Error("Failed to load applications");
-  const applications = await res.json();
-  return { applications, userId: user.UserID };
+  if (!res.ok) {
+    let message = "Failed to load applications";
+    try {
+      const errorPayload = await res.json();
+      if (typeof errorPayload?.error === "string" && errorPayload.error.trim()) {
+        message = errorPayload.error;
+      }
+    } catch {
+      // Fall back to default message if response is not JSON.
+    }
+    throw new Error(message);
+  }
+
+  const payload = await res.json();
+  const applications = Array.isArray(payload?.applications) ? payload.applications : [];
+  const permissions: SponsorApplicationPermissions = {
+    canViewDriverApplications: Boolean(payload?.permissions?.canViewDriverApplications),
+    canAcceptDriverApplications: Boolean(payload?.permissions?.canAcceptDriverApplications),
+    canRejectDriverApplications: Boolean(payload?.permissions?.canRejectDriverApplications),
+  };
+
+  return { applications, permissions, userId: user.UserID };
 }
 
 export default function DriverApplications() {
-  const { applications, userId } = useLoaderData() as { applications: any[]; userId: number };
+  const { applications, permissions, userId } = useLoaderData() as ApplicationsLoaderData;
   const navigate = useNavigate();
+  const [localApplications, setLocalApplications] = useState<DriverApplication[]>(applications);
+  const [updatingAppId, setUpdatingAppId] = useState<number | null>(null);
+  const [pendingDecision, setPendingDecision] = useState<{ appId: number; status: Exclude<ApplicationStatus, "pending">; driverName: string } | null>(null);
+  const [decisionNote, setDecisionNote] = useState("");
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [bannerError, setBannerError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLocalApplications(applications);
+  }, [applications]);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    const timeout = window.setTimeout(() => setSuccessMessage(null), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [successMessage]);
 
   const statusPriority: Record<string, number> = {
-    accepted: 0,
-    rejected: 0,
-    pending: 1,
+    pending: 0,
+    accepted: 1,
+    rejected: 1,
   };
 
-  const sortedApplications = [...applications].sort((a, b) => {
+  const sortedApplications = [...localApplications].sort((a, b) => {
     const aStatus = String(a?.ApplicationStatus ?? "pending").toLowerCase();
     const bStatus = String(b?.ApplicationStatus ?? "pending").toLowerCase();
 
@@ -45,33 +109,99 @@ export default function DriverApplications() {
     return raw || "No reason provided.";
   };
 
-  const handleDecision = async (appId: number, status: 'accepted' | 'rejected') => {
-    const reason = window.prompt(`Provide a reason for being ${status}:`, "");
+  const beginDecision = (app: DriverApplication, status: Exclude<ApplicationStatus, "pending">) => {
+    const canTakeAction = status === "accepted"
+      ? permissions.canAcceptDriverApplications
+      : permissions.canRejectDriverApplications;
 
-    // If user clicks "Cancel" on the prompt, stop the function
-    if (reason === null) return;
+    if (!canTakeAction || updatingAppId !== null) {
+      return;
+    }
+
+    setDecisionNote("");
+    setDecisionError(null);
+    setBannerError(null);
+    setPendingDecision({
+      appId: app.ApplicationID,
+      status,
+      driverName: `${app.FirstName} ${app.LastName}`.trim(),
+    });
+  };
+
+  const closeDecisionModal = () => {
+    if (updatingAppId !== null) return;
+    setPendingDecision(null);
+    setDecisionNote("");
+    setDecisionError(null);
+  };
+
+  const submitDecision = async () => {
+    if (!pendingDecision) {
+      return;
+    }
+
+    const reason = decisionNote.trim();
+    if (!reason) {
+      setDecisionError("A decision note is required.");
+      return;
+    }
+
+    if (reason.length > 1000) {
+      setDecisionError("Decision note must be 1000 characters or fewer.");
+      return;
+    }
 
     try {
+      setUpdatingAppId(pendingDecision.appId);
+      setDecisionError(null);
+      setBannerError(null);
+
       const res = await fetch(toApiUrl(`/api/sponsors/${userId}/process-application`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          applicationId: appId,
-          status: status,
+          applicationId: pendingDecision.appId,
+          status: pendingDecision.status,
           explanation: reason
         }),
       });
 
       if (res.ok) {
-        // Refresh the loader data to show the new status
+        setLocalApplications((previous) =>
+          previous.map((application) =>
+            application.ApplicationID === pendingDecision.appId
+              ? { ...application, ApplicationStatus: pendingDecision.status }
+              : application
+          )
+        );
+
+        setSuccessMessage(
+          pendingDecision.status === "accepted"
+            ? "Application accepted successfully."
+            : "Application rejected successfully."
+        );
+
+        setPendingDecision(null);
+        setDecisionNote("");
         navigate(".", { replace: true });
       } else {
-        const errData = await res.json();
-        alert(errData.error || "Failed to update application.");
+        let message = "Failed to update application.";
+        try {
+          const errData = await res.json();
+          if (typeof errData?.error === "string" && errData.error.trim()) {
+            message = errData.error;
+          }
+        } catch {
+          // Keep fallback message if response cannot be parsed.
+        }
+
+        setDecisionError(message);
       }
     } catch (err) {
       console.error("Connection error:", err);
-      alert("Could not connect to the server.");
+      setBannerError("Could not connect to the server.");
+    } finally {
+      setUpdatingAppId(null);
     }
   };
 
@@ -92,9 +222,29 @@ export default function DriverApplications() {
 
         <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-6">Review Driver Applications</h1>
 
+        {bannerError && (
+          <Alert
+            variant="error"
+            title="Unable to process request"
+            message={bannerError}
+            className="mb-4"
+            onDismiss={() => setBannerError(null)}
+          />
+        )}
+
+        {successMessage && (
+          <Alert
+            variant="success"
+            title="Decision saved"
+            message={successMessage}
+            className="mb-4"
+            onDismiss={() => setSuccessMessage(null)}
+          />
+        )}
+
         <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[980px]">
+            <table className="w-full text-left border-collapse min-w-245">
             <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="p-6 text-xs font-black text-slate-500 dark:text-slate-300 uppercase tracking-widest">Driver Details</th>
@@ -116,7 +266,7 @@ export default function DriverApplications() {
                   </td>
 
                   <td className="p-6 align-top">
-                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed max-w-md break-words whitespace-pre-wrap">
+                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed max-w-md wrap-break-word whitespace-pre-wrap">
                       {getDriverReason(app)}
                     </p>
                   </td>
@@ -133,18 +283,27 @@ export default function DriverApplications() {
                     <div className="flex justify-end gap-3">
                       {app.ApplicationStatus === 'pending' ? (
                         <>
-                          <button
-                            onClick={() => handleDecision(app.ApplicationID, 'accepted')}
-                            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-emerald-100 dark:shadow-black/30 transition-all active:scale-95"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            onClick={() => handleDecision(app.ApplicationID, 'rejected')}
-                            className="px-5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-sm font-bold rounded-xl transition-all active:scale-95 border border-rose-200 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 dark:text-rose-200 dark:border-rose-800"
-                          >
-                            Reject
-                          </button>
+                          {permissions.canAcceptDriverApplications && (
+                            <button
+                              onClick={() => beginDecision(app, 'accepted')}
+                              disabled={updatingAppId !== null}
+                              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl shadow-lg shadow-emerald-100 dark:shadow-black/30 transition-all active:scale-95"
+                            >
+                              Accept
+                            </button>
+                          )}
+                          {permissions.canRejectDriverApplications && (
+                            <button
+                              onClick={() => beginDecision(app, 'rejected')}
+                              disabled={updatingAppId !== null}
+                              className="px-5 py-2 bg-rose-50 hover:bg-rose-100 disabled:opacity-60 disabled:cursor-not-allowed text-rose-600 text-sm font-bold rounded-xl transition-all active:scale-95 border border-rose-200 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 dark:text-rose-200 dark:border-rose-800"
+                            >
+                              Reject
+                            </button>
+                          )}
+                          {!permissions.canAcceptDriverApplications && !permissions.canRejectDriverApplications && (
+                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase">No decision permissions</p>
+                          )}
                         </>
                       ) : (
                         <div className="text-right">
@@ -169,6 +328,62 @@ export default function DriverApplications() {
           )}
         </div>
       </div>
+
+      <Modal
+        isOpen={Boolean(pendingDecision)}
+        onClose={closeDecisionModal}
+        title={pendingDecision?.status === 'accepted' ? 'Accept Application' : 'Reject Application'}
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={closeDecisionModal}
+              disabled={updatingAppId !== null}
+              className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submitDecision}
+              disabled={updatingAppId !== null}
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {updatingAppId !== null ? 'Saving...' : 'Submit Decision'}
+            </button>
+          </div>
+        }
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+          {pendingDecision
+            ? `Add a decision note for ${pendingDecision.driverName} before continuing.`
+            : 'Add a decision note before continuing.'}
+        </p>
+
+        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2" htmlFor="decision-note">
+          Decision Note
+        </label>
+        <textarea
+          id="decision-note"
+          value={decisionNote}
+          onChange={(event) => setDecisionNote(event.target.value)}
+          rows={5}
+          maxLength={1000}
+          className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-sm text-slate-900 dark:text-slate-100"
+          placeholder="Provide context for this decision"
+        />
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{decisionNote.trim().length}/1000 characters</p>
+
+        {decisionError && (
+          <Alert
+            variant="error"
+            title="Decision failed"
+            message={decisionError}
+            className="mt-4"
+            onDismiss={() => setDecisionError(null)}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

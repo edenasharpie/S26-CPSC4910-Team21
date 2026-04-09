@@ -228,6 +228,8 @@ export default function EditUserProfile() {
       profileMeta={`Last Login: ${user.lastLogin || "Never"}`}
       successMessage={successMessage}
       errorMessage={error}
+      onDismissSuccess={() => setSuccessMessage(null)}
+      onDismissError={() => setError(null)}
       actions={
         <>
           {isEditing && !isOwnProfile && (

@@ -8,6 +8,7 @@ import {
   ScrollRestoration,
   useLoaderData,
 } from "react-router";
+import { useEffect, useRef } from "react";
 
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -108,6 +109,46 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const { session, assumed, originalRole } = useLoaderData<typeof loader>();
+  const autoExitTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (!assumed || typeof window === "undefined") {
+      autoExitTriggeredRef.current = false;
+      return;
+    }
+
+    autoExitTriggeredRef.current = false;
+
+    const triggerAutoExit = () => {
+      if (autoExitTriggeredRef.current) {
+        return;
+      }
+
+      autoExitTriggeredRef.current = true;
+
+      try {
+        void fetch("/exit-assumption?mode=unload", {
+          method: "POST",
+          keepalive: true,
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "text/plain;charset=UTF-8",
+          },
+          body: "mode=unload",
+        });
+      } catch {
+        // Fail silently to avoid blocking browser navigation or tab close.
+      }
+    };
+
+    window.addEventListener("pagehide", triggerAutoExit);
+    window.addEventListener("beforeunload", triggerAutoExit);
+
+    return () => {
+      window.removeEventListener("pagehide", triggerAutoExit);
+      window.removeEventListener("beforeunload", triggerAutoExit);
+    };
+  }, [assumed]);
 
   return (
     <>

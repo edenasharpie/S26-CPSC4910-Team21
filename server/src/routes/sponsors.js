@@ -970,13 +970,32 @@ router.get('/:userId/driver-applications', async (req, res) => {
         }
 
         const [sponsorRows] = await pool.execute(
-            `SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
+            `SELECT u.UserType, u.Permissions, s.SponsorCompanyID
+             FROM USERS u
+             JOIN SPONSORS s ON s.UserID = u.UserID
+             WHERE u.UserID = ?
+             LIMIT 1`,
             [sponsorUserId]
         );
         if (sponsorRows.length === 0) {
             return res.status(404).json({ error: 'Sponsor not found' });
         }
-        const companyId = sponsorRows[0].SponsorCompanyID;
+
+        const sponsor = sponsorRows[0];
+        if (String(sponsor.UserType).toLowerCase() !== 'sponsor') {
+          return res.status(403).json({ error: 'Only sponsors can view driver applications.' });
+        }
+
+        if (!hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canViewDriverApplications')) {
+          return res.status(403).json({ error: 'Missing canViewDriverApplications permission.' });
+        }
+
+        const companyId = sponsor.SponsorCompanyID;
+        const permissions = {
+          canViewDriverApplications: hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canViewDriverApplications'),
+          canAcceptDriverApplications: hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canAcceptDriverApplications'),
+          canRejectDriverApplications: hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canRejectDriverApplications'),
+        };
 
         const [rows] = await pool.execute(
             `SELECT
@@ -995,7 +1014,7 @@ router.get('/:userId/driver-applications', async (req, res) => {
              ORDER BY da.TimeSubmitted DESC`,
             [companyId]
         );
-        res.json(rows);
+          res.json({ applications: rows, permissions });
     } catch (error) {
         console.error("Driver Applications Error:", error);
         res.status(500).json({ error: "Could not fetch applications" });
@@ -1006,40 +1025,85 @@ router.get('/:userId/driver-applications', async (req, res) => {
 // Accepts or rejects an application, scoped to the sponsor's company.
 router.post('/:userId/process-application', async (req, res) => {
   const sponsorUserId = Number(req.params.userId);
-    const { applicationId, status, explanation } = req.body;
+  const rawApplicationId = Number(req.body?.applicationId);
+  const rawStatus = String(req.body?.status ?? '').trim().toLowerCase();
+  const rawExplanation = String(req.body?.explanation ?? '').trim();
   let connection;
 
     if (!Number.isInteger(sponsorUserId)) {
       return res.status(400).json({ error: 'Invalid sponsor user ID' });
     }
 
+    if (!Number.isInteger(rawApplicationId)) {
+      return res.status(400).json({ error: 'applicationId must be a valid integer.' });
+    }
+
     if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
       return res.status(403).json({ error: 'Access forbidden for requested user context.' });
     }
 
-    const validStatuses = ['accepted', 'rejected', 'pending'];
-    if (!validStatuses.includes(status)) {
-        return res.status(400).json({ error: "Invalid status" });
+    const validStatuses = ['accepted', 'rejected'];
+    if (!validStatuses.includes(rawStatus)) {
+        return res.status(400).json({ error: "status must be accepted or rejected." });
     }
+
+    if (!rawExplanation) {
+      return res.status(400).json({ error: 'explanation is required.' });
+    }
+
+    if (rawExplanation.length > 1000) {
+      return res.status(400).json({ error: 'explanation must be 1000 characters or fewer.' });
+    }
+
+    const explanation = rawExplanation;
+    const status = rawStatus;
+    const applicationId = rawApplicationId;
 
     try {
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
       const [sponsorRows] = await connection.execute(
-        `SELECT SponsorID, SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
+        `SELECT u.UserID, u.UserType, u.ActiveStatus, u.Permissions, s.SponsorID, s.SponsorCompanyID
+         FROM USERS u
+         JOIN SPONSORS s ON s.UserID = u.UserID
+         WHERE u.UserID = ?
+         LIMIT 1`,
             [sponsorUserId]
         );
         if (sponsorRows.length === 0) {
         await connection.rollback();
             return res.status(404).json({ error: 'Sponsor not found' });
         }
-        const sponsorId = sponsorRows[0].SponsorID;
-        const companyId = sponsorRows[0].SponsorCompanyID;
+
+      const sponsor = sponsorRows[0];
+      if (String(sponsor.UserType).toLowerCase() !== 'sponsor') {
+        await connection.rollback();
+        return res.status(403).json({ error: 'Only sponsors can process driver applications.' });
+      }
+
+      if (!Boolean(sponsor.ActiveStatus)) {
+        await connection.rollback();
+        return res.status(403).json({ error: 'Inactive sponsor accounts cannot process applications.' });
+      }
+
+      const requiredPermission = status === 'accepted'
+        ? 'canAcceptDriverApplications'
+        : 'canRejectDriverApplications';
+
+      if (!hasBooleanPermission(sponsor.UserType, sponsor.Permissions, requiredPermission)) {
+        await connection.rollback();
+        return res.status(403).json({ error: `Missing ${requiredPermission} permission.` });
+      }
+
+      const sponsorId = sponsor.SponsorID;
+      const companyId = sponsor.SponsorCompanyID;
 
         // Verify this application belongs to the sponsor's company
       const [appRows] = await connection.execute(
-        `SELECT SponsorCompanyID, DriverID FROM DRIVER_APPLICATIONS WHERE ApplicationID = ?`,
+        `SELECT ApplicationStatus, SponsorCompanyID, DriverID
+         FROM DRIVER_APPLICATIONS
+         WHERE ApplicationID = ?`,
             [applicationId]
         );
         if (appRows.length === 0) {
@@ -1050,6 +1114,11 @@ router.post('/:userId/process-application', async (req, res) => {
         await connection.rollback();
             return res.status(403).json({ error: 'Not authorized to modify this application' });
         }
+
+      if (String(appRows[0].ApplicationStatus).toLowerCase() !== 'pending') {
+        await connection.rollback();
+        return res.status(409).json({ error: 'Application has already been processed.' });
+      }
 
       // Keep DecisionExplanation as the original driver-submitted application reason.
       await connection.execute(
@@ -1091,8 +1160,8 @@ router.post('/:userId/process-application', async (req, res) => {
 
       await connection.execute(
         `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
-         VALUES (?, NOW(), 'ApplicationStatusUpdate', JSON_OBJECT('status', ?, 'reviewNotes', ?))`,
-        [sponsorUserId, status, explanation || ""]
+         VALUES (?, NOW(), 'ApplicationStatusUpdate', JSON_OBJECT('status', ?, 'reviewNotes', ?, 'applicationId', ?, 'driverId', ?))`,
+        [sponsorUserId, status, explanation, applicationId, appRows[0].DriverID]
       );
 
       await connection.commit();

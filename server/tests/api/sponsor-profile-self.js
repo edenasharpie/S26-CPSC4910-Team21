@@ -63,19 +63,22 @@ async function runTests() {
     const updatedFirst = 'SponsorSelf';
     const updatedLast = 'Patched';
     const updatedEmail = `sponsor-self-${Date.now()}@example.com`;
+    const updatedPhone = '5551112222';
 
     const patchRes = await axios.patch(`${API_BASE_URL}/user/profile/${sponsor.userId}`, {
       firstName: updatedFirst,
       lastName: updatedLast,
       email: updatedEmail,
-      phone: '5551112222',
+      phone: updatedPhone,
     });
 
     if (
       patchRes.status !== 200 ||
+      Number(patchRes.data?.UserID) !== Number(sponsor.userId) ||
       patchRes.data?.FirstName !== updatedFirst ||
       patchRes.data?.LastName !== updatedLast ||
-      patchRes.data?.Email !== updatedEmail
+      patchRes.data?.Email !== updatedEmail ||
+      patchRes.data?.Phone !== updatedPhone
     ) {
       throw new Error('Expected sponsor self profile PATCH to persist updated fields');
     }
