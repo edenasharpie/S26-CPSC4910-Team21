@@ -20,19 +20,18 @@ export default [
   route("driver/dashboard", "routes/driver/dashboard.tsx"),
 
   //SETTINGS
-  //route("sponsor/settings", "routes/sponsor/settings.$userId.tsx"),
   route("sponsor/settings/:userId", "routes/sponsor/settings.$userId.tsx"),
   route("admin/settings/:userId", "routes/admin/settings.$userId.tsx"),
+  //route("driver/settings/:userId", "routes/driver/settings.$userId.tsx"),
 
   //POINTS (must come before generic profile routes)
   route("admin/profile/:id/points", "routes/admin/profile/$id/points.tsx"),
   route("sponsor/profile/:id/points", "routes/sponsor/profile/$id/points.tsx"),
+  //route("driver/profile/:id/points", "routes/driver/profile/$id/points.tsx"),
 
   //PROFILES
   route("admin/profile/:id/edit", "routes/admin/profile/$id/edit.tsx"),
-  //route("admin/profile/:id", "routes/admin/profile/$id/edit.tsx"),
   route("sponsor/profile/:id/edit", "routes/sponsor/profile/$id/edit.tsx"),
-  //route("sponsor/profile/:id", "routes/sponsor/profile/$id/edit.tsx"),
   route("driver/profile/:id/edit", "routes/driver/profile/$id/edit.tsx"),
 
   //INVOICES
@@ -45,7 +44,7 @@ export default [
   //REPORTS
   route("admin/reports", "routes/admin/reports.tsx"),
   route("sponsor/reports", "routes/sponsor/reports.tsx"),
-  route("sponsor/reviews", "routes/sponsor/reviews.tsx"),
+  //route("sponsor/reviews", "routes/sponsor/reviews.tsx"),
 
   //CATALOGS
   route("admin/catalogs", "routes/admin/catalogs.tsx"),
