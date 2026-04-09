@@ -1013,6 +1013,12 @@ router.get('/:userId/driver-applications', async (req, res) => {
 router.post('/:userId/process-application', async (req, res) => {
   const sponsorUserId = Number(req.params.userId);
     const { applicationId, status, explanation } = req.body;
+  const parsedApplicationId = Number(applicationId);
+  const MAX_DECISION_EXPLANATION_LENGTH = 45;
+  const normalizedExplanation = typeof explanation === 'string' ? explanation.trim() : '';
+  const fallbackExplanation = `Status changed to ${status}`;
+  const effectiveExplanation = normalizedExplanation.length > 0 ? normalizedExplanation : fallbackExplanation;
+  const dbSafeExplanation = effectiveExplanation.slice(0, MAX_DECISION_EXPLANATION_LENGTH);
   let connection;
 
     if (!Number.isInteger(sponsorUserId)) {
@@ -1026,6 +1032,10 @@ router.post('/:userId/process-application', async (req, res) => {
     const validStatuses = ['accepted', 'rejected', 'pending'];
     if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: "Invalid status" });
+    }
+
+    if (!Number.isInteger(parsedApplicationId) || parsedApplicationId <= 0) {
+      return res.status(400).json({ error: 'Invalid applicationId' });
     }
 
     try {
@@ -1046,7 +1056,7 @@ router.post('/:userId/process-application', async (req, res) => {
         // Verify this application belongs to the sponsor's company
       const [appRows] = await connection.execute(
         `SELECT SponsorCompanyID, DriverID FROM DRIVER_APPLICATIONS WHERE ApplicationID = ?`,
-            [applicationId]
+            [parsedApplicationId]
         );
         if (appRows.length === 0) {
         await connection.rollback();
@@ -1057,12 +1067,12 @@ router.post('/:userId/process-application', async (req, res) => {
             return res.status(403).json({ error: 'Not authorized to modify this application' });
         }
 
-      // Keep DecisionExplanation as the original driver-submitted application reason.
       await connection.execute(
-            `UPDATE DRIVER_APPLICATIONS
-         SET ApplicationStatus = ?
-             WHERE ApplicationID = ?`,
-        [status, applicationId]
+        `UPDATE DRIVER_APPLICATIONS
+         SET ApplicationStatus = ?,
+         DecisionExplanation = ?
+         WHERE ApplicationID = ?`,
+        [status, dbSafeExplanation, parsedApplicationId]
         );
 
       if (status === 'accepted') {
@@ -1098,12 +1108,45 @@ router.post('/:userId/process-application', async (req, res) => {
       await connection.execute(
         `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
          VALUES (?, NOW(), 'ApplicationStatusUpdate', JSON_OBJECT('status', ?, 'reviewNotes', ?))`,
-        [sponsorUserId, status, explanation || ""]
+        [sponsorUserId, status, dbSafeExplanation]
       );
+
+      const [updatedRows] = await connection.execute(
+        `SELECT
+            ApplicationID,
+            ApplicationStatus,
+            DecisionExplanation
+         FROM DRIVER_APPLICATIONS
+         WHERE ApplicationID = ?`,
+        [parsedApplicationId]
+      );
+
+      const updatedApplication = updatedRows[0] ?? null;
+      if (!updatedApplication) {
+        throw new Error('Unable to verify updated application record.');
+      }
+
+      if (String(updatedApplication.ApplicationStatus ?? '') !== String(status)) {
+        throw new Error('Application status did not persist after update.');
+      }
+
+      const persistedExplanation =
+        typeof updatedApplication.DecisionExplanation === 'string'
+          ? updatedApplication.DecisionExplanation.trim()
+          : '';
+
+      if (persistedExplanation !== dbSafeExplanation) {
+        throw new Error('DecisionExplanation did not persist after update.');
+      }
 
       await connection.commit();
 
-        res.json({ message: `Application ${status} successfully.` });
+        res.json({
+          message: `Application ${status} successfully.`,
+          application: updatedApplication,
+          noteTruncated: dbSafeExplanation !== effectiveExplanation,
+          updateVerified: true,
+        });
     } catch (error) {
       if (connection) {
         await connection.rollback();
