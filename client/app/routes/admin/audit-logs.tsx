@@ -1,5 +1,5 @@
 import type { Route } from "./+types/audit-logs";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLoaderData, Form } from "react-router";
 import { Table, Button, Badge, Modal } from "~/components";
 import { requireAuth } from "~/utils/session.server";
@@ -26,6 +26,7 @@ interface AdminUserOption {
 }
 
 type UserScopeFilter = "" | "admin" | "driver" | "sponsor";
+type LoginOutcomeFilter = "" | "success" | "failure";
 
 export async function loader({ request }: Route.LoaderArgs) {
   await requireAuth(request, ["admin"]);
@@ -40,10 +41,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   const endDate = url.searchParams.get("endDate")?.trim();
   const targetUserId = url.searchParams.get("targetUserId")?.trim();
   const rawTargetUserType = url.searchParams.get("targetUserType")?.trim().toLowerCase();
+  const rawLoginOutcome = url.searchParams.get("loginOutcome")?.trim().toLowerCase();
   const targetUserType: UserScopeFilter =
     rawTargetUserType === "admin" || rawTargetUserType === "driver" || rawTargetUserType === "sponsor"
       ? rawTargetUserType
       : "";
+  const loginOutcome: LoginOutcomeFilter =
+    rawLoginOutcome === "success" || rawLoginOutcome === "failure" ? rawLoginOutcome : "";
 
   try {
     const params = new URLSearchParams();
@@ -55,6 +59,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     if (targetUserId) params.set("targetUserId", targetUserId);
 
     if (targetUserType) params.set("targetUserType", targetUserType);
+    if (loginOutcome) params.set("loginOutcome", loginOutcome);
 
     const cookieHeader = request.headers.get("Cookie") ?? "";
     const [logsRes, usersRes] = await Promise.all([
@@ -88,6 +93,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       selectedFilters: filters,
       selectedTargetUserId: targetUserId ?? "",
       selectedTargetUserType: targetUserType,
+      selectedLoginOutcome: loginOutcome,
       error: null,
     };
   } catch (error: any) {
@@ -98,6 +104,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       selectedFilters: filters,
       selectedTargetUserId: targetUserId ?? "",
       selectedTargetUserType: targetUserType,
+      selectedLoginOutcome: loginOutcome,
       error: error.message as string,
     };
   }
@@ -115,6 +122,21 @@ function deriveStatus(entry: AuditLogEntry): string {
   return "—";
 }
 
+function deriveLoginAttemptOutcome(entry: AuditLogEntry): LoginOutcomeFilter {
+  if (entry.EventType !== "LoginAttempt") return "";
+
+  const p = entry.Properties ?? {};
+  if (typeof p.success === "boolean") {
+    return p.success ? "success" : "failure";
+  }
+
+  const result = String(p.result ?? "").toLowerCase();
+  if (result === "success") return "success";
+  if (result) return "failure";
+
+  return "";
+}
+
 export default function AuditLogs() {
   const {
     logs,
@@ -122,11 +144,23 @@ export default function AuditLogs() {
     selectedFilters,
     selectedTargetUserId,
     selectedTargetUserType,
+    selectedLoginOutcome,
     error,
   } = useLoaderData<typeof loader>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [eventFilters, setEventFilters] = useState<string[]>(selectedFilters);
+  const [loginOutcome, setLoginOutcome] = useState<LoginOutcomeFilter>(selectedLoginOutcome);
   const [userScope, setUserScope] = useState<UserScopeFilter>(selectedTargetUserType);
   const [specificUserId, setSpecificUserId] = useState<string>(selectedTargetUserId);
+
+  const isLoginAttemptsFilterSelected = eventFilters.includes("LoginAttempt");
+
+  useEffect(() => {
+    setEventFilters(selectedFilters);
+    setLoginOutcome(selectedLoginOutcome);
+    setUserScope(selectedTargetUserType);
+    setSpecificUserId(selectedTargetUserId);
+  }, [selectedFilters, selectedLoginOutcome, selectedTargetUserType, selectedTargetUserId]);
 
   const filteredLogs = useMemo(() => {
     const selectedUserIdNumber = Number.parseInt(selectedTargetUserId, 10);
@@ -155,9 +189,15 @@ export default function AuditLogs() {
         }
       }
 
+      if (selectedLoginOutcome && log.EventType === "LoginAttempt") {
+        if (deriveLoginAttemptOutcome(log) !== selectedLoginOutcome) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [logs, users, selectedFilters, selectedTargetUserId, selectedTargetUserType]);
+  }, [logs, users, selectedFilters, selectedTargetUserId, selectedTargetUserType, selectedLoginOutcome]);
 
   const usersForScope = users
     .filter((user) => !userScope || user.UserType === userScope)
@@ -355,7 +395,11 @@ export default function AuditLogs() {
           onClose={() => setIsModalOpen(false)}
           title="Filter Audit Report"
         >
-          <Form method="get" className="space-y-4 text-left">
+          <Form
+            method="get"
+            className="space-y-4 text-left"
+            onSubmit={() => setIsModalOpen(false)}
+          >
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Include event types:
             </p>
@@ -365,9 +409,59 @@ export default function AuditLogs() {
                 label={f.label}
                 name="filter"
                 value={f.value}
-                defaultChecked={selectedFilters.includes(f.value)}
+                checked={eventFilters.includes(f.value)}
+                onCheckedChange={(checked) => {
+                  setEventFilters((prev) => {
+                    if (checked) {
+                      return prev.includes(f.value) ? prev : [...prev, f.value];
+                    }
+                    return prev.filter((value) => value !== f.value);
+                  });
+
+                  if (f.value === "LoginAttempt" && !checked) {
+                    setLoginOutcome("");
+                  }
+                }}
               />
             ))}
+
+            {isLoginAttemptsFilterSelected && (
+              <div className="ml-7 space-y-2 rounded-md border border-gray-200 dark:border-gray-800 p-3">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Login Attempt Result:
+                </p>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="radio"
+                    name="loginOutcome"
+                    value=""
+                    checked={loginOutcome === ""}
+                    onChange={() => setLoginOutcome("")}
+                  />
+                  All login attempts
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="radio"
+                    name="loginOutcome"
+                    value="success"
+                    checked={loginOutcome === "success"}
+                    onChange={() => setLoginOutcome("success")}
+                  />
+                  Successful only
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="radio"
+                    name="loginOutcome"
+                    value="failure"
+                    checked={loginOutcome === "failure"}
+                    onChange={() => setLoginOutcome("failure")}
+                  />
+                  Failed only
+                </label>
+              </div>
+            )}
 
             <div className="pt-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -426,7 +520,6 @@ export default function AuditLogs() {
               <Button
                 type="submit"
                 variant="primary"
-                onClick={() => setIsModalOpen(false)}
               >
                 Apply Filters
               </Button>
@@ -461,10 +554,14 @@ function Checkbox({
   label,
   name,
   value,
+  checked,
+  onCheckedChange,
 }: {
   label: string;
   name: string;
   value: string;
+  checked?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
 }) {
   return (
     <label className="flex items-center gap-3 cursor-pointer group">
@@ -472,6 +569,8 @@ function Checkbox({
         type="checkbox"
         name={name}
         value={value}
+        checked={checked}
+        onChange={(event) => onCheckedChange?.(event.target.checked)}
         className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
       />
       <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200">

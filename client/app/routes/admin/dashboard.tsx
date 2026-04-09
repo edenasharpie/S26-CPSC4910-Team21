@@ -212,6 +212,10 @@ export default function AdminPortal() {
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [auditUserType, setAuditUserType] = useState("all");
   const [auditTargetUserId, setAuditTargetUserId] = useState("");
+  const [auditEventFilters, setAuditEventFilters] = useState<string[]>([]);
+  const [auditLoginOutcome, setAuditLoginOutcome] = useState<"" | "success" | "failure">("");
+
+  const isLoginAttemptsSelected = auditEventFilters.includes("LoginAttempt");
 
   const totalPages = Math.max(1, Math.ceil(totalCount / Math.max(pageSize, 1)));
   const hasPrevPage = page > 1;
@@ -675,14 +679,130 @@ export default function AdminPortal() {
               Log Categories
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <AuditOption label="Login Attempts"         name="filter" value="LoginAttempt" />
-              <AuditOption label="Password Changes"       name="filter" value="PasswordChange" />
-              <AuditOption label="Account Updates"        name="filter" value="AccountUpdate" />
-              <AuditOption label="Account Status Changes" name="filter" value="AccountStatusChange" />
-              <AuditOption label="Application Updates"    name="filter" value="ApplicationStatusUpdate" />
-              <AuditOption label="Point Transactions"     name="filter" value="PointTransaction" />
-              <AuditOption label="Review Moderation"      name="filter" value="ReviewModerationEvent" />
+              <AuditOption
+                label="Login Attempts"
+                name="filter"
+                value="LoginAttempt"
+                checked={auditEventFilters.includes("LoginAttempt")}
+                onCheckedChange={(checked) => {
+                  setAuditEventFilters((prev) => {
+                    if (checked) return prev.includes("LoginAttempt") ? prev : [...prev, "LoginAttempt"];
+                    return prev.filter((v) => v !== "LoginAttempt");
+                  });
+                  if (!checked) {
+                    setAuditLoginOutcome("");
+                  }
+                }}
+              />
+              <AuditOption
+                label="Password Changes"
+                name="filter"
+                value="PasswordChange"
+                checked={auditEventFilters.includes("PasswordChange")}
+                onCheckedChange={(checked) => {
+                  setAuditEventFilters((prev) => {
+                    if (checked) return prev.includes("PasswordChange") ? prev : [...prev, "PasswordChange"];
+                    return prev.filter((v) => v !== "PasswordChange");
+                  });
+                }}
+              />
+              <AuditOption
+                label="Account Updates"
+                name="filter"
+                value="AccountUpdate"
+                checked={auditEventFilters.includes("AccountUpdate")}
+                onCheckedChange={(checked) => {
+                  setAuditEventFilters((prev) => {
+                    if (checked) return prev.includes("AccountUpdate") ? prev : [...prev, "AccountUpdate"];
+                    return prev.filter((v) => v !== "AccountUpdate");
+                  });
+                }}
+              />
+              <AuditOption
+                label="Account Status Changes"
+                name="filter"
+                value="AccountStatusChange"
+                checked={auditEventFilters.includes("AccountStatusChange")}
+                onCheckedChange={(checked) => {
+                  setAuditEventFilters((prev) => {
+                    if (checked) return prev.includes("AccountStatusChange") ? prev : [...prev, "AccountStatusChange"];
+                    return prev.filter((v) => v !== "AccountStatusChange");
+                  });
+                }}
+              />
+              <AuditOption
+                label="Application Updates"
+                name="filter"
+                value="ApplicationStatusUpdate"
+                checked={auditEventFilters.includes("ApplicationStatusUpdate")}
+                onCheckedChange={(checked) => {
+                  setAuditEventFilters((prev) => {
+                    if (checked) return prev.includes("ApplicationStatusUpdate") ? prev : [...prev, "ApplicationStatusUpdate"];
+                    return prev.filter((v) => v !== "ApplicationStatusUpdate");
+                  });
+                }}
+              />
+              <AuditOption
+                label="Point Transactions"
+                name="filter"
+                value="PointTransaction"
+                checked={auditEventFilters.includes("PointTransaction")}
+                onCheckedChange={(checked) => {
+                  setAuditEventFilters((prev) => {
+                    if (checked) return prev.includes("PointTransaction") ? prev : [...prev, "PointTransaction"];
+                    return prev.filter((v) => v !== "PointTransaction");
+                  });
+                }}
+              />
+              <AuditOption
+                label="Review Moderation"
+                name="filter"
+                value="ReviewModerationEvent"
+                checked={auditEventFilters.includes("ReviewModerationEvent")}
+                onCheckedChange={(checked) => {
+                  setAuditEventFilters((prev) => {
+                    if (checked) return prev.includes("ReviewModerationEvent") ? prev : [...prev, "ReviewModerationEvent"];
+                    return prev.filter((v) => v !== "ReviewModerationEvent");
+                  });
+                }}
+              />
             </div>
+
+            {isLoginAttemptsSelected && (
+              <div className="ml-1 mt-3 rounded-md border border-gray-200 dark:border-gray-700 p-3 space-y-2 text-left">
+                <p className="text-xs font-bold text-gray-500 uppercase">Login Attempt Result</p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="loginOutcome"
+                    value=""
+                    checked={auditLoginOutcome === ""}
+                    onChange={() => setAuditLoginOutcome("")}
+                  />
+                  All login attempts
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="loginOutcome"
+                    value="success"
+                    checked={auditLoginOutcome === "success"}
+                    onChange={() => setAuditLoginOutcome("success")}
+                  />
+                  Successful only
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="loginOutcome"
+                    value="failure"
+                    checked={auditLoginOutcome === "failure"}
+                    onChange={() => setAuditLoginOutcome("failure")}
+                  />
+                  Failed only
+                </label>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-6 border-t dark:border-gray-800">
@@ -812,10 +932,14 @@ function AuditOption({
   label,
   name,
   value,
+  checked,
+  onCheckedChange,
 }: {
   label: string;
   name: string;
   value: string;
+  checked?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
 }) {
   return (
     <label className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg border dark:border-gray-800 cursor-pointer transition-colors text-left">
@@ -823,6 +947,8 @@ function AuditOption({
         type="checkbox"
         name={name}
         value={value}
+        checked={checked}
+        onChange={(event) => onCheckedChange?.(event.target.checked)}
         className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
       />
       <span className="text-xs font-semibold">{label}</span>
