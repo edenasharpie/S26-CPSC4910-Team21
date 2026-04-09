@@ -1,0 +1,142 @@
+driverApplications:
+  parameters:
+    - name: userId
+      in: path
+      description: Sponsor user ID for scoped application access.
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - applications
+    summary: List sponsor driver applications
+    description: Returns driver applications for the authenticated sponsor's company. Requires canViewDriverApplications permission.
+    responses:
+      '200':
+        description: Applications and sponsor decision permissions.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                applications:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      ApplicationID:
+                        type: integer
+                      DriverID:
+                        type: string
+                      ApplicationStatus:
+                        type: string
+                        enum: [pending, accepted, rejected]
+                      DriverExplanation:
+                        type: string
+                        nullable: true
+                      TimeSubmitted:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      FirstName:
+                        type: string
+                      LastName:
+                        type: string
+                      LicenseNumber:
+                        type: string
+                        nullable: true
+                permissions:
+                  type: object
+                  properties:
+                    canViewDriverApplications:
+                      type: boolean
+                    canAcceptDriverApplications:
+                      type: boolean
+                    canRejectDriverApplications:
+                      type: boolean
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Permission denied or user context mismatch.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+processApplication:
+  parameters:
+    - name: userId
+      in: path
+      description: Sponsor user ID for scoped application processing.
+      required: true
+      schema:
+        type: integer
+  post:
+    tags:
+      - applications
+    summary: Accept or reject a driver application
+    description: Processes a pending application for the sponsor's company. Requires canAcceptDriverApplications for accepted status and canRejectDriverApplications for rejected status.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - applicationId
+              - status
+              - explanation
+            properties:
+              applicationId:
+                type: integer
+                example: 2101
+              status:
+                type: string
+                enum: [accepted, rejected]
+              explanation:
+                type: string
+                minLength: 1
+                maxLength: 1000
+                example: Strong safety trend over the last quarter.
+    responses:
+      '200':
+        description: Application processed successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Application accepted successfully.
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Permission denied or out-of-scope application.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        description: Application has already been processed.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
