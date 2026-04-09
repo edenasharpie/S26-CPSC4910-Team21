@@ -14,11 +14,25 @@ const router = express.Router();
  */
 router.get('/profile/:id', async (req, res) => {
   try {
-    const user = await getUserById(Number(req.params.id));
+    const userId = Number(req.params.id);
+    const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    let licenseNumber = null;
+    if (String(user.UserType).toLowerCase() === 'driver') {
+      const [driverRows] = await pool.execute(
+        'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+        [userId]
+      );
+      licenseNumber = driverRows[0]?.LicenseNumber ?? null;
+    }
+
     // Omit sensitive fields before returning
     const { PassHash, ...safeUser } = user;
-    res.status(200).json(safeUser);
+    res.status(200).json({
+      ...safeUser,
+      LicenseNumber: licenseNumber,
+    });
   } catch (error) {
     console.error('Profile Route Error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -42,12 +56,24 @@ router.patch('/profile/:id', async (req, res) => {
 
     const firstName = typeof req.body?.firstName === 'string' ? req.body.firstName.trim() : undefined;
     const lastName = typeof req.body?.lastName === 'string' ? req.body.lastName.trim() : undefined;
+    const username = typeof req.body?.username === 'string' ? req.body.username.trim() : undefined;
     const email = typeof req.body?.email === 'string' ? req.body.email.trim() : undefined;
     const phoneRaw = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
     const phone = phoneRaw === '' ? null : phoneRaw;
+    const middleNameRaw = typeof req.body?.middleName === 'string' ? req.body.middleName.trim() : undefined;
+    const middleName = middleNameRaw === '' ? null : middleNameRaw;
+    const pronounsRaw = typeof req.body?.pronouns === 'string' ? req.body.pronouns.trim() : undefined;
+    const pronouns = pronounsRaw === '' ? null : pronounsRaw;
+    const profilePictureRaw = typeof req.body?.profilePicture === 'string' ? req.body.profilePicture.trim() : undefined;
+    const profilePicture = profilePictureRaw === '' ? null : profilePictureRaw;
+    const bioRaw = typeof req.body?.bio === 'string' ? req.body.bio.trim() : undefined;
+    const bio = bioRaw === '' ? null : bioRaw;
+    const licenseNumberRaw = typeof req.body?.licenseNumber === 'string' ? req.body.licenseNumber.trim() : undefined;
+    const licenseNumber = licenseNumberRaw === '' ? null : licenseNumberRaw;
 
     const updates = [];
     const values = [];
+    const hasLicenseNumberUpdate = licenseNumber !== undefined;
 
     if (firstName !== undefined) {
       if (!firstName) {
@@ -65,6 +91,14 @@ router.patch('/profile/:id', async (req, res) => {
       values.push(lastName);
     }
 
+    if (username !== undefined) {
+      if (!username) {
+        return res.status(400).json({ error: 'username cannot be empty.' });
+      }
+      updates.push('Username = ?');
+      values.push(username);
+    }
+
     if (email !== undefined) {
       if (!email) {
         return res.status(400).json({ error: 'email cannot be empty.' });
@@ -78,27 +112,67 @@ router.patch('/profile/:id', async (req, res) => {
       values.push(phone);
     }
 
-    if (updates.length === 0) {
+    if (middleName !== undefined) {
+      updates.push('MiddleName = ?');
+      values.push(middleName);
+    }
+
+    if (pronouns !== undefined) {
+      updates.push('Pronouns = ?');
+      values.push(pronouns);
+    }
+
+    if (profilePicture !== undefined) {
+      updates.push('ProfilePicture = ?');
+      values.push(profilePicture);
+    }
+
+    if (bio !== undefined) {
+      updates.push('Bio = ?');
+      values.push(bio);
+    }
+
+    if (updates.length === 0 && !hasLicenseNumberUpdate) {
       return res.status(400).json({ error: 'No valid profile fields provided for update.' });
+    }
+
+    if (hasLicenseNumberUpdate && !licenseNumber) {
+      return res.status(400).json({ error: 'licenseNumber cannot be empty.' });
     }
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
-    const [updateResult] = await connection.execute(
-      `UPDATE USERS SET ${updates.join(', ')} WHERE UserID = ?`,
-      [...values, userId]
-    );
+    if (updates.length > 0) {
+      const [updateResult] = await connection.execute(
+        `UPDATE USERS SET ${updates.join(', ')} WHERE UserID = ?`,
+        [...values, userId]
+      );
 
-    if (updateResult.affectedRows === 0) {
-      await connection.rollback();
-      return res.status(404).json({ error: 'User not found.' });
+      if (updateResult.affectedRows === 0) {
+        await connection.rollback();
+        return res.status(404).json({ error: 'User not found.' });
+      }
+    }
+
+    if (hasLicenseNumberUpdate) {
+      const [driverUpdateResult] = await connection.execute(
+        'UPDATE DRIVERS SET LicenseNumber = ? WHERE UserID = ?',
+        [licenseNumber, userId]
+      );
+
+      if (driverUpdateResult.affectedRows === 0) {
+        await connection.rollback();
+        return res.status(404).json({ error: 'Driver profile not found for this user.' });
+      }
     }
 
     const [rows] = await connection.execute(
-      `SELECT UserID, Username, Email, Phone, UserType, FirstName, LastName, ActiveStatus, ProfilePicture, Bio
-       FROM USERS
-       WHERE UserID = ?
+      `SELECT u.UserID, u.Username, u.Email, u.Phone, u.UserType, u.FirstName, u.MiddleName, u.LastName, u.Pronouns,
+              u.ActiveStatus, u.ProfilePicture, u.Bio, d.LicenseNumber
+       FROM USERS u
+       LEFT JOIN DRIVERS d ON d.UserID = u.UserID
+       WHERE u.UserID = ?
        LIMIT 1`,
       [userId]
     );
@@ -109,6 +183,9 @@ router.patch('/profile/:id', async (req, res) => {
   } catch (error) {
     if (connection) {
       await connection.rollback();
+    }
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Username or email already exists.' });
     }
     console.error('Profile Update Route Error:', error);
     return res.status(500).json({ error: 'Server error' });
@@ -445,17 +522,72 @@ router.post('/submit-application', async (req, res) => {
   const { driverId, sponsorCompanyId, explanation } = req.body;
 
   try {
+    const rawDriverId = String(driverId ?? '').trim();
+    const rawSponsorCompanyId = Number(sponsorCompanyId);
+    const rawExplanation = String(explanation ?? '').trim();
+
+    if (!rawDriverId || !Number.isInteger(rawSponsorCompanyId) || !rawExplanation) {
+      return res.status(400).json({ error: 'driverId, sponsorCompanyId, and explanation are required.' });
+    }
+
+    // DRIVER_APPLICATIONS.DriverID should store DRIVERS.LicenseNumber.
+    let licenseNumber = rawDriverId;
+    const numericDriverId = Number(rawDriverId);
+
+    if (Number.isInteger(numericDriverId)) {
+      const [driverRows] = await pool.execute(
+        'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+        [numericDriverId]
+      );
+
+      if (driverRows.length > 0) {
+        licenseNumber = driverRows[0].LicenseNumber;
+      }
+    }
+
+    const [driverByLicenseRows] = await pool.execute(
+      'SELECT LicenseNumber FROM DRIVERS WHERE LicenseNumber = ? LIMIT 1',
+      [licenseNumber]
+    );
+
+    if (driverByLicenseRows.length === 0) {
+      return res.status(404).json({ error: 'Driver not found. Could not resolve driver license number.' });
+    }
+
+    const [sponsorRows] = await pool.execute(
+      'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ? LIMIT 1',
+      [rawSponsorCompanyId]
+    );
+
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor company not found.' });
+    }
+
+    const [existingPendingRows] = await pool.execute(
+      `SELECT ApplicationID
+       FROM DRIVER_APPLICATIONS
+       WHERE DriverID = ? AND SponsorCompanyID = ? AND ApplicationStatus = 'pending'
+       LIMIT 1`,
+      [licenseNumber, rawSponsorCompanyId]
+    );
+
+    if (existingPendingRows.length > 0) {
+      return res.status(409).json({ error: 'You already have a pending application for this sponsor.' });
+    }
+
     // ApplicationStatus defaults to 'pending' based on your ENUM
     const [result] = await pool.execute(
       `INSERT INTO DRIVER_APPLICATIONS 
        (DriverID, SponsorCompanyID, ApplicationStatus, DecisionExplanation, TimeSubmitted)
        VALUES (?, ?, 'pending', ?, NOW())`,
-      [driverId, sponsorCompanyId, explanation]
+      [licenseNumber, rawSponsorCompanyId, rawExplanation]
     );
 
     res.status(201).json({ 
       message: "Application submitted successfully!", 
-      applicationId: result.insertId 
+      applicationId: result.insertId,
+      driverId: licenseNumber,
+      sponsorCompanyId: rawSponsorCompanyId,
     });
   } catch (error) {
     console.error("Submission Error:", error);
@@ -467,19 +599,39 @@ router.get('/my-applications/:driverId', async (req, res) => {
     const { driverId } = req.params;
 
     try {
+        const rawDriverId = String(driverId ?? '').trim();
+        if (!rawDriverId) {
+          return res.status(400).json({ error: 'driverId is required.' });
+        }
+
+        // DRIVER_APPLICATIONS.DriverID stores DRIVERS.LicenseNumber.
+        let licenseNumber = rawDriverId;
+        const numericDriverId = Number(rawDriverId);
+
+        if (Number.isInteger(numericDriverId)) {
+          const [driverRows] = await pool.execute(
+            'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+            [numericDriverId]
+          );
+
+          if (driverRows.length > 0) {
+            licenseNumber = driverRows[0].LicenseNumber;
+          }
+        }
+
         const [rows] = await pool.execute(
             `SELECT 
                 a.ApplicationID, 
                 a.SponsorCompanyID, 
-                u.FirstName AS SponsorName, 
+                sc.CompanyName AS SponsorName,
                 a.ApplicationStatus, 
                 a.DecisionExplanation, 
                 a.TimeSubmitted
              FROM DRIVER_APPLICATIONS a
-             JOIN USERS u ON a.SponsorCompanyID = u.UserID
+             JOIN SPONSOR_COMPANIES sc ON a.SponsorCompanyID = sc.SponsorCompanyID
              WHERE a.DriverID = ?
              ORDER BY a.TimeSubmitted DESC`,
-            [driverId]
+            [licenseNumber]
         );
         res.json(rows);
     } catch (error) {

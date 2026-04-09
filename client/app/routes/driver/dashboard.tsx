@@ -95,16 +95,17 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 }
 
+
 export default function DriverDashboard() {
   const { driver, history, sponsors, effectiveUserId } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
   // Performance status logic
   const statusConfig = {
-    excellent: { icon: "🌟", color: "text-yellow-500" },
-    good: { icon: "✅", color: "text-green-500" },
-    average: { icon: "⚠️", color: "text-orange-500" },
-    poor: { icon: "📉", color: "text-red-500" }
+    excellent: { label: "Excellent", color: "text-yellow-500" },
+    good: { label: "Good", color: "text-green-500" },
+    average: { label: "Average", color: "text-orange-500" },
+    poor: { label: "Poor", color: "text-red-500" }
   };
   
   const currentStatus = statusConfig[driver?.PerformanceStatus?.toLowerCase() as keyof typeof statusConfig] || statusConfig.good;
@@ -175,24 +176,26 @@ export default function DriverDashboard() {
               </div>
 
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
-                <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
-                  {currentStatus.icon}
-                </span>
                 <span className="text-xs uppercase tracking-tight text-emerald-600 dark:text-emerald-400 font-semibold leading-tight">
                   Driver<br/>Status
+                </span>
+                <span className={`text-xl font-black uppercase tracking-tighter ${currentStatus.color}`}>
+                  {currentStatus.label}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 self-end pb-1">
             <Form method="post" action="/logout">
               <Button variant="secondary" size="sm" type="submit">Sign out</Button>
             </Form>
             <button
               type="button"
               onClick={() => navigate(`/driver/profile/${effectiveUserId}/edit`)}
-              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm"
+              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow"
+              aria-label="Open account information"
+              title="Open account information"
             >
               <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase">
                 {driver?.FirstName?.[0]}{driver?.LastName?.[0]}
@@ -207,7 +210,6 @@ export default function DriverDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* Sidebar - SPONSORS (Dynamic from DB) */}
           <aside className="lg:col-span-4 space-y-6">
             <div className="space-y-4">
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">My Sponsors</h2>
@@ -232,15 +234,20 @@ export default function DriverDashboard() {
                     </Button>
                   </div>
                 )) : (
-                  <div className="p-6 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl text-center">
+                  <div className="p-6 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl text-center space-y-4">
                     <p className="text-xs text-gray-400">No active sponsors.</p>
+                    <Button 
+                      className="w-full text-[10px] uppercase font-bold tracking-widest"
+                      onClick={() => navigate("/driver/apply")}
+                    >
+                      Apply for Sponsor
+                    </Button>
                   </div>
                 )}
               </div>
             </div>
           </aside>
 
-          {/* Main Content */}
           <main className="lg:col-span-8 space-y-6">
             <div className="bg-white dark:bg-gray-900 p-6 shadow-md rounded-xl border dark:border-gray-800 text-left">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Point Progress</h2>
@@ -269,8 +276,6 @@ export default function DriverDashboard() {
                             tick={{fill: '#9ca3af'}}
                             domain={['auto', 'auto']} 
                         />
-                        
-                        {/* UPDATED TOOLTIP */}
                         <Tooltip 
                             cursor={{ stroke: '#6366f1', strokeWidth: 1 }}
                             contentStyle={{ 
@@ -284,14 +289,13 @@ export default function DriverDashboard() {
                             formatter={(value: number | undefined) => [Number(value ?? 0).toLocaleString(), "Balance"]}
                             labelFormatter={(label) => `Date: ${label}`}
                         />
-
                         <Area 
                             type="monotone" 
                             dataKey="balance" 
                             stroke="none" 
                             fillOpacity={1} 
                             fill="url(#colorPoints)" 
-                            tooltipType="none" // Prevents the area from double-counting in the tooltip
+                            tooltipType="none"
                         />
                         <Line 
                             type="stepAfter" 

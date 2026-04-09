@@ -65,4 +65,7 @@ export default [
   // Legacy driver dashboard (accessed by URL param)
   route("driver-dashboard/:id", "routes/driver-dashboard.tsx"),
 
+  //Applications
+  route("driver/apply", "routes/driver/apply.tsx"),
+
 ] satisfies RouteConfig;
