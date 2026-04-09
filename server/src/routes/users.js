@@ -14,11 +14,25 @@ const router = express.Router();
  */
 router.get('/profile/:id', async (req, res) => {
   try {
-    const user = await getUserById(Number(req.params.id));
+    const userId = Number(req.params.id);
+    const user = await getUserById(userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    let licenseNumber = null;
+    if (String(user.UserType).toLowerCase() === 'driver') {
+      const [driverRows] = await pool.execute(
+        'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+        [userId]
+      );
+      licenseNumber = driverRows[0]?.LicenseNumber ?? null;
+    }
+
     // Omit sensitive fields before returning
     const { PassHash, ...safeUser } = user;
-    res.status(200).json(safeUser);
+    res.status(200).json({
+      ...safeUser,
+      LicenseNumber: licenseNumber,
+    });
   } catch (error) {
     console.error('Profile Route Error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -42,12 +56,24 @@ router.patch('/profile/:id', async (req, res) => {
 
     const firstName = typeof req.body?.firstName === 'string' ? req.body.firstName.trim() : undefined;
     const lastName = typeof req.body?.lastName === 'string' ? req.body.lastName.trim() : undefined;
+    const username = typeof req.body?.username === 'string' ? req.body.username.trim() : undefined;
     const email = typeof req.body?.email === 'string' ? req.body.email.trim() : undefined;
     const phoneRaw = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
     const phone = phoneRaw === '' ? null : phoneRaw;
+    const middleNameRaw = typeof req.body?.middleName === 'string' ? req.body.middleName.trim() : undefined;
+    const middleName = middleNameRaw === '' ? null : middleNameRaw;
+    const pronounsRaw = typeof req.body?.pronouns === 'string' ? req.body.pronouns.trim() : undefined;
+    const pronouns = pronounsRaw === '' ? null : pronounsRaw;
+    const profilePictureRaw = typeof req.body?.profilePicture === 'string' ? req.body.profilePicture.trim() : undefined;
+    const profilePicture = profilePictureRaw === '' ? null : profilePictureRaw;
+    const bioRaw = typeof req.body?.bio === 'string' ? req.body.bio.trim() : undefined;
+    const bio = bioRaw === '' ? null : bioRaw;
+    const licenseNumberRaw = typeof req.body?.licenseNumber === 'string' ? req.body.licenseNumber.trim() : undefined;
+    const licenseNumber = licenseNumberRaw === '' ? null : licenseNumberRaw;
 
     const updates = [];
     const values = [];
+    const hasLicenseNumberUpdate = licenseNumber !== undefined;
 
     if (firstName !== undefined) {
       if (!firstName) {
@@ -65,6 +91,14 @@ router.patch('/profile/:id', async (req, res) => {
       values.push(lastName);
     }
 
+    if (username !== undefined) {
+      if (!username) {
+        return res.status(400).json({ error: 'username cannot be empty.' });
+      }
+      updates.push('Username = ?');
+      values.push(username);
+    }
+
     if (email !== undefined) {
       if (!email) {
         return res.status(400).json({ error: 'email cannot be empty.' });
@@ -78,27 +112,67 @@ router.patch('/profile/:id', async (req, res) => {
       values.push(phone);
     }
 
-    if (updates.length === 0) {
+    if (middleName !== undefined) {
+      updates.push('MiddleName = ?');
+      values.push(middleName);
+    }
+
+    if (pronouns !== undefined) {
+      updates.push('Pronouns = ?');
+      values.push(pronouns);
+    }
+
+    if (profilePicture !== undefined) {
+      updates.push('ProfilePicture = ?');
+      values.push(profilePicture);
+    }
+
+    if (bio !== undefined) {
+      updates.push('Bio = ?');
+      values.push(bio);
+    }
+
+    if (updates.length === 0 && !hasLicenseNumberUpdate) {
       return res.status(400).json({ error: 'No valid profile fields provided for update.' });
+    }
+
+    if (hasLicenseNumberUpdate && !licenseNumber) {
+      return res.status(400).json({ error: 'licenseNumber cannot be empty.' });
     }
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
-    const [updateResult] = await connection.execute(
-      `UPDATE USERS SET ${updates.join(', ')} WHERE UserID = ?`,
-      [...values, userId]
-    );
+    if (updates.length > 0) {
+      const [updateResult] = await connection.execute(
+        `UPDATE USERS SET ${updates.join(', ')} WHERE UserID = ?`,
+        [...values, userId]
+      );
 
-    if (updateResult.affectedRows === 0) {
-      await connection.rollback();
-      return res.status(404).json({ error: 'User not found.' });
+      if (updateResult.affectedRows === 0) {
+        await connection.rollback();
+        return res.status(404).json({ error: 'User not found.' });
+      }
+    }
+
+    if (hasLicenseNumberUpdate) {
+      const [driverUpdateResult] = await connection.execute(
+        'UPDATE DRIVERS SET LicenseNumber = ? WHERE UserID = ?',
+        [licenseNumber, userId]
+      );
+
+      if (driverUpdateResult.affectedRows === 0) {
+        await connection.rollback();
+        return res.status(404).json({ error: 'Driver profile not found for this user.' });
+      }
     }
 
     const [rows] = await connection.execute(
-      `SELECT UserID, Username, Email, Phone, UserType, FirstName, LastName, ActiveStatus, ProfilePicture, Bio
-       FROM USERS
-       WHERE UserID = ?
+      `SELECT u.UserID, u.Username, u.Email, u.Phone, u.UserType, u.FirstName, u.MiddleName, u.LastName, u.Pronouns,
+              u.ActiveStatus, u.ProfilePicture, u.Bio, d.LicenseNumber
+       FROM USERS u
+       LEFT JOIN DRIVERS d ON d.UserID = u.UserID
+       WHERE u.UserID = ?
        LIMIT 1`,
       [userId]
     );
@@ -109,6 +183,9 @@ router.patch('/profile/:id', async (req, res) => {
   } catch (error) {
     if (connection) {
       await connection.rollback();
+    }
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Username or email already exists.' });
     }
     console.error('Profile Update Route Error:', error);
     return res.status(500).json({ error: 'Server error' });

@@ -5,22 +5,22 @@ import type { Route } from "./+types/profile";
 import { Table, Input, Button, Badge, Alert, Modal } from "~/components";
 import { requireAuth } from "~/utils/session.server";
 import { getApiBaseUrl } from "~/utils/api-url";
-//import { getUserById } from "../../../server/database/db";
 
 const API_URL = getApiBaseUrl();
 
 // 1. THE LOADER: This pulls real data from the DB before the page renders
 export async function loader({ request }: Route.LoaderArgs) {
-  const session = requireAuth(request);
+  const session = await requireAuth(request);
   const userId = session.UserID;
 
-  const response = await fetch(`${API_URL}/api/user/profile/${userId}`);
+  const response = await fetch(`${API_URL}/api/user/profile/${userId}`, {
+    cache: "no-store",
+  });
   if (!response.ok) {
     throw new Response("User Not Found", { status: 404 });
   }
 
   const user = await response.json();
-  const displayName = `${user.FirstName ?? ""} ${user.LastName ?? ""}`.trim();
   const accountType = user.UserType
     ? `${user.UserType.charAt(0).toUpperCase()}${user.UserType.slice(1)}`
     : "User";
@@ -36,11 +36,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const profile = {
     id: user.UserID,
-    displayName: displayName || user.Username || "User",
+    username: user.Username || "",
+    first_name: user.FirstName || "",
+    last_name: user.LastName || "",
+    middle_name: user.MiddleName || "",
+    pronouns: user.Pronouns || "",
     email: user.Email,
     phone_number: user.Phone || "",
     point_to_dollar_ratio: 0,
     profile_picture_url: user.ProfilePicture,
+    bio: user.Bio || "",
+    license_number: user.LicenseNumber ?? user.licenseNumber ?? "",
     account_type: accountType,
     active_status: Boolean(user.ActiveStatus),
     created_at: user.LastLogin || new Date().toISOString(),
@@ -64,65 +70,92 @@ export default function ProfilePage() {
       ? "danger"
       : "default";
   
-  // UI States
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isEditingPassword, setIsEditingPassword] = useState(false);
   const [isEditingOrg, setIsEditingOrg] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   
-  // Success/Error Message States
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Form Field States (initialized with DB data)
-  const [displayName, setDisplayName] = useState(user.displayName);
+  const [username, setUsername] = useState(user.username || "");
+  const [firstName, setFirstName] = useState(user.first_name || "");
+  const [lastName, setLastName] = useState(user.last_name || "");
+  const [middleName, setMiddleName] = useState(user.middle_name || "");
+  const [pronouns, setPronouns] = useState(user.pronouns || "");
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone_number || "");
+  const [profilePictureUrl, setProfilePictureUrl] = useState(user.profile_picture_url || "");
+  const [bio, setBio] = useState(user.bio || "");
+  const [licenseNumber, setLicenseNumber] = useState(user.license_number || ""); // New State
   const [pointToDollarRatio, setPointToDollarRatio] = useState(user.point_to_dollar_ratio);
   
-  // Password States
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [deactivationPassword, setDeactivationPassword] = useState("");
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
 
+  useEffect(() => {
+    setUsername(user.username || "");
+    setFirstName(user.first_name || "");
+    setLastName(user.last_name || "");
+    setMiddleName(user.middle_name || "");
+    setPronouns(user.pronouns || "");
+    setEmail(user.email || "");
+    setPhone(user.phone_number || "");
+    setProfilePictureUrl(user.profile_picture_url || "");
+    setBio(user.bio || "");
+    setLicenseNumber(user.license_number || "");
+    setPointToDollarRatio(user.point_to_dollar_ratio || 0);
+  }, [user.id, user.license_number]);
+
   const handleSaveProfile = async () => {
     setSuccessMessage("");
     setErrorMessage("");
 
-    const trimmedDisplayName = displayName.trim();
-    const nameParts = trimmedDisplayName.length > 0 ? trimmedDisplayName.split(/\s+/) : [];
-    const firstName = nameParts.length > 0 ? nameParts[0] : '';
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+    const trimmedUsername = username.trim();
+    const trimmedFirstName = firstName.trim();
+    const trimmedLastName = lastName.trim();
 
-    if (!firstName || !lastName) {
-      setErrorMessage("Please provide both first and last name in Display Name.");
+    if (!trimmedUsername || !trimmedFirstName || !trimmedLastName) {
+      setErrorMessage("Please provide username, first name, and last name.");
       return;
     }
 
     try {
       setIsSavingProfile(true);
-
       const response = await fetch(`${API_URL}/api/user/profile/${user.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firstName,
-          lastName,
-          email,
-          phone,
+          username: trimmedUsername,
+          firstName: trimmedFirstName,
+          middleName: middleName.trim(),
+          lastName: trimmedLastName,
+          pronouns: pronouns.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          profilePicture: profilePictureUrl.trim(),
+          bio: bio.trim(),
+          licenseNumber: licenseNumber.trim(), // Included in API call
         }),
       });
 
-      const result = await response.json().catch(() => ({}));
+      const result = await response.json().catch(() => ({} as Record<string, unknown>));
 
       if (!response.ok) {
         setErrorMessage(result.error || 'Failed to update profile');
         return;
       }
 
-      setSuccessMessage('✅ Profile updated successfully!');
+      if (typeof result.LicenseNumber === "string") {
+        setLicenseNumber(result.LicenseNumber);
+      } else {
+        setLicenseNumber(licenseNumber.trim());
+      }
+
+      setSuccessMessage(`✅ Profile updated successfully.`);
       setIsEditingProfile(false);
       setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
@@ -137,7 +170,6 @@ export default function ProfilePage() {
     setErrorMessage("");
 
     try {
-      // Note: URL matches the filename "change-password.tsx" in your routes
       const response = await fetch("/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -151,13 +183,10 @@ export default function ProfilePage() {
       const result = await response.json();
 
       if (response.ok) {
-        // --- WHAT YOU SEE ON SUCCESS ---
         setSuccessMessage("✅ Password updated successfully!");
         setCurrentPassword(""); 
         setNewPassword("");     
         setIsEditingPassword(false);
-        
-        // Auto-hide success message after 5 seconds
         setTimeout(() => setSuccessMessage(""), 5000);
       } else {
         setErrorMessage(result.error || "Failed to update password");
@@ -168,6 +197,10 @@ export default function ProfilePage() {
   };
 
   const isDriverAccount = user.account_type === "Driver";
+  
+  const personalFieldClass = isEditingProfile
+    ? "!rounded-lg !border-2 !border-gray-300 !bg-white !text-gray-900 !shadow-md !ring-2 !ring-gray-100 transition-all duration-200"
+    : "!rounded-lg !border-2 !border-transparent !bg-gray-100/70 !text-gray-600 !cursor-not-allowed !shadow-none transition-all duration-200";
 
   const openDeactivateModal = () => {
     setDeactivationPassword("");
@@ -227,7 +260,6 @@ export default function ProfilePage() {
         My Profile & Settings
       </h1>
 
-      {/* SUCCESS NOTIFICATION */}
       {successMessage && (
         <Alert 
           variant="success" 
@@ -237,7 +269,6 @@ export default function ProfilePage() {
         />
       )}
 
-      {/* ERROR NOTIFICATION */}
       {errorMessage && (
         <Alert 
           message={errorMessage}
@@ -247,29 +278,34 @@ export default function ProfilePage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* LEFT COLUMN: PROFILE INFO */}
         <div className="lg:col-span-1 space-y-6">
           <div className="card p-6 flex flex-col items-center text-center">
             <img
-              src={user.profile_picture_url || "https://via.placeholder.com/150"}
+              src={profilePictureUrl || "https://via.placeholder.com/150"}
               alt="Profile"
               className="w-32 h-32 rounded-full mb-4 border-4 border-blue-500"
             />
-            <h2 className="text-2xl font-bold">{displayName}</h2>
+            <h2 className="text-2xl font-bold">{`${firstName} ${lastName}`.trim() || username || "User"}</h2>
+            <p className="text-sm text-gray-500 mt-1">@{username || "unknown"}</p>
+            <p className="text-xs text-gray-500 mt-1">UserID: {user.id}</p>
+            {(bio || pronouns) && (
+              <p className="text-sm text-gray-500 mt-1">
+                {bio || ""}
+                {bio && pronouns ? " | " : ""}
+                {pronouns ? pronouns : ""}
+              </p>
+            )}
             <Badge variant="info" className="mt-2">
               {user.account_type}
             </Badge>
-            <p className="text-gray-500 mt-2 text-sm italic">
-              Member since: {new Date(user.created_at).toLocaleDateString()}
-            </p>
           </div>
 
           <div className="card p-6">
             <h3 className="font-bold mb-4 border-b pb-2">Account Statistics</h3>
             <div className="space-y-2">
-              <div className="flex justify-between">
+              <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Last Password Change:</span>
-                <span className="font-medium text-xs">
+                <span className="font-medium">
                     {new Date(user.last_password_change).toLocaleString()}
                 </span>
               </div>
@@ -285,15 +321,13 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: SETTINGS */}
         <div className="lg:col-span-2 space-y-8">
-          {/* PERSONAL INFO SECTION */}
-          <div className="card p-6">
+          <div className={`card p-6 transition-all duration-300 ${isEditingProfile ? "ring-2 ring-gray-200 bg-gray-50/10" : ""}`}>
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold">Personal Information</h3>
               {!isEditingProfile ? (
                 <Button type="button" size="sm" onClick={() => setIsEditingProfile(true)}>
-                  Edit
+                  Edit Details
                 </Button>
               ) : (
                 <div className="flex gap-2">
@@ -306,25 +340,63 @@ export default function ProfilePage() {
                     size="sm"
                     onClick={handleSaveProfile}
                     isLoading={isSavingProfile}
-                    disabled={isSavingProfile}
                   >
-                    Save
+                    Save Changes
                   </Button>
                 </div>
               )}
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Display Name" value={displayName} disabled={!isEditingProfile} 
-                     onChange={(e) => setDisplayName(e.target.value)} />
-              <Input label="Email Address" value={email} disabled={!isEditingProfile} 
-                     onChange={(e) => setEmail(e.target.value)} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Input label="First Name" value={firstName} disabled={!isEditingProfile}
+                className={personalFieldClass}
+                onChange={(e) => setFirstName(e.target.value)} />
+              <Input label="Middle Name" value={middleName} disabled={!isEditingProfile}
+                className={personalFieldClass}
+                onChange={(e) => setMiddleName(e.target.value)} />
+              <Input label="Last Name" value={lastName} disabled={!isEditingProfile}
+                className={personalFieldClass}
+                onChange={(e) => setLastName(e.target.value)} />
+
+              <Input label="Username" value={username} disabled={!isEditingProfile}
+                className={personalFieldClass}
+                onChange={(e) => setUsername(e.target.value)} />
+              <Input label="Email Address" value={email} disabled={!isEditingProfile}
+                className={personalFieldClass}
+                onChange={(e) => setEmail(e.target.value)} />
               <Input label="Phone Number" value={phone} disabled={!isEditingProfile} 
-                     onChange={(e) => setPhone(e.target.value)} />
+                className={personalFieldClass}
+                onChange={(e) => setPhone(e.target.value)} />
+
+              <Input label="Pronouns" value={pronouns} disabled={!isEditingProfile}
+                className={personalFieldClass}
+                onChange={(e) => setPronouns(e.target.value)} />
+              
+              {/* License Number Input (Added after Pronouns) */}
+              <Input label="License Number" value={licenseNumber} disabled={!isEditingProfile}
+                className={personalFieldClass}
+                onChange={(e) => setLicenseNumber(e.target.value)} />
+
+              <Input label="Profile Picture URL" value={profilePictureUrl} disabled={!isEditingProfile}
+                className={personalFieldClass}
+                onChange={(e) => setProfilePictureUrl(e.target.value)} />
+              
+              <div className="md:col-span-3">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2">
+                  Bio
+                </label>
+                <textarea
+                  value={bio}
+                  disabled={!isEditingProfile}
+                  onChange={(e) => setBio(e.target.value)}
+                  rows={4}
+                  className={`w-full p-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all ${personalFieldClass}`}
+                  placeholder="Tell sponsors a bit about yourself"
+                />
+              </div>
             </div>
           </div>
 
-          {/* PASSWORD SECTION */}
           <div className="card p-6 border-l-4 border-yellow-500">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">Security</h3>
@@ -360,27 +432,6 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* POINT RATIO SECTION (Admin/Sponsor Only) */}
-          {(user.account_type === 'Admin' || user.account_type === 'Sponsor') && (
-            <div className="card p-6">
-              <h3 className="text-xl font-bold mb-4">Point Conversion Settings</h3>
-              <div className="flex items-end gap-4">
-                <div className="flex-1">
-                  <Input
-                    type="number"
-                    label="Points per $1.00"
-                    value={pointToDollarRatio}
-                    onChange={(e) => setPointToDollarRatio(Number(e.target.value))}
-                  />
-                </div>
-                <Button type="button" variant="secondary">Update Ratio</Button>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                Currently: {pointToDollarRatio} points = $1.00 USD
-              </p>
-            </div>
-          )}
-
           {isDriverAccount && (
             <div className="card p-6 border-l-4 border-red-500">
               <h3 className="text-xl font-bold mb-2">Account Status</h3>
@@ -400,9 +451,6 @@ export default function ProfilePage() {
                   Deactivate Account
                 </Button>
               </div>
-              <p className="text-sm text-gray-500 mt-4">
-                Deactivation signs you out immediately. You can reactivate from the login page by confirming your password.
-              </p>
             </div>
           )}
         </div>
@@ -410,23 +458,18 @@ export default function ProfilePage() {
 
       <Modal
         isOpen={isDeactivateModalOpen}
-        onClose={() => {
-          if (!isDeactivating) {
-            setIsDeactivateModalOpen(false);
-          }
-        }}
+        onClose={() => { if (!isDeactivating) setIsDeactivateModalOpen(false); }}
         title="Deactivate Account"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            This will deactivate your driver account and sign you out. Enter your current password to confirm.
+          <p className="text-sm text-gray-600">
+            This will deactivate your account and sign you out. Confirm with your password.
           </p>
           <Input
             id="deactivationPassword"
             name="deactivationPassword"
             type="password"
             label="Current Password"
-            placeholder="Enter your current password"
             value={deactivationPassword}
             onChange={(e) => setDeactivationPassword(e.target.value)}
           />
