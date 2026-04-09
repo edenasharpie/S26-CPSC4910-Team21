@@ -604,22 +604,68 @@ router.get('/my-applications/:driverId', async (req, res) => {
           return res.status(400).json({ error: 'driverId is required.' });
         }
 
-        // DRIVER_APPLICATIONS.DriverID stores DRIVERS.LicenseNumber.
-        let licenseNumber = rawDriverId;
         const numericDriverId = Number(rawDriverId);
+        let driverRow;
 
         if (Number.isInteger(numericDriverId)) {
           const [driverRows] = await pool.execute(
-            'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+            'SELECT UserID, LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
             [numericDriverId]
           );
 
           if (driverRows.length > 0) {
-            licenseNumber = driverRows[0].LicenseNumber;
+            driverRow = driverRows[0];
           }
         }
 
-        const [rows] = await pool.execute(
+        if (!driverRow) {
+          const [driverRowsByLicense] = await pool.execute(
+            'SELECT UserID, LicenseNumber FROM DRIVERS WHERE LicenseNumber = ? LIMIT 1',
+            [rawDriverId]
+          );
+
+          if (driverRowsByLicense.length > 0) {
+            driverRow = driverRowsByLicense[0];
+          }
+        }
+
+        if (!driverRow) {
+          return res.status(404).json({ error: 'Driver not found.' });
+        }
+
+        const resolvedDriverUserId = Number(driverRow.UserID);
+        const licenseNumber = String(driverRow.LicenseNumber);
+
+        if (!routeUserMatchesEffectiveSession(req, resolvedDriverUserId)) {
+          return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+        }
+
+        let assumedSponsorCompanyId = null;
+        const sessionContext = req.sessionContext;
+        const assumedEffectiveUser = sessionContext?.effectiveUser;
+        const assumedOriginalUser = sessionContext?.originalUser;
+
+        if (
+          sessionContext?.isAssumed &&
+          assumedEffectiveUser &&
+          assumedOriginalUser &&
+          String(assumedEffectiveUser.UserType).toLowerCase() === 'driver' &&
+          Number(assumedEffectiveUser.UserID) === resolvedDriverUserId &&
+          String(assumedOriginalUser.UserType).toLowerCase() === 'sponsor'
+        ) {
+          const [sponsorRows] = await pool.execute(
+            'SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ? LIMIT 1',
+            [assumedOriginalUser.UserID]
+          );
+
+          if (sponsorRows.length === 0) {
+            return res.status(403).json({ error: 'Assumed sponsor context is invalid.' });
+          }
+
+          assumedSponsorCompanyId = Number(sponsorRows[0].SponsorCompanyID);
+        }
+
+        const query =
             `SELECT 
                 a.ApplicationID, 
                 a.SponsorCompanyID, 
@@ -629,10 +675,15 @@ router.get('/my-applications/:driverId', async (req, res) => {
                 a.TimeSubmitted
              FROM DRIVER_APPLICATIONS a
              JOIN SPONSOR_COMPANIES sc ON a.SponsorCompanyID = sc.SponsorCompanyID
-             WHERE a.DriverID = ?
-             ORDER BY a.TimeSubmitted DESC`,
-            [licenseNumber]
-        );
+             WHERE a.DriverID = ?` +
+            (Number.isInteger(assumedSponsorCompanyId) ? ' AND a.SponsorCompanyID = ?' : '') +
+            ' ORDER BY a.TimeSubmitted DESC';
+
+        const queryParams = Number.isInteger(assumedSponsorCompanyId)
+          ? [licenseNumber, assumedSponsorCompanyId]
+          : [licenseNumber];
+
+        const [rows] = await pool.execute(query, queryParams);
         res.json(rows);
     } catch (error) {
         console.error("Fetch Apps Error:", error);

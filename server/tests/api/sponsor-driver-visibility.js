@@ -7,6 +7,7 @@
  */
 
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
 import {
   BASE_URL,
   log,
@@ -20,10 +21,30 @@ import {
 import { pool } from '../../src/db.js';
 
 const API_BASE_URL = `${BASE_URL}/api`;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production-fleetscore';
 
 const createdUserIds = [];
 const createdSponsorIds = [];
 const createdLicenseNumbers = [];
+
+function buildSessionCookie(user, originalUser = null) {
+  const payload = {
+    UserID: user.userId,
+    UserType: user.userType,
+    Username: user.username,
+  };
+
+  if (originalUser) {
+    payload.OriginalUser = {
+      UserID: originalUser.userId,
+      UserType: originalUser.userType,
+      Username: originalUser.username,
+    };
+  }
+
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: 60 * 60 * 24 });
+  return `sessionId=${token}`;
+}
 
 async function cleanupUsers(userIds) {
   if (!userIds || userIds.length === 0) return;
@@ -110,6 +131,19 @@ async function runTests() {
     } catch (err) {
       if (err.response?.status !== 404) throw err;
       console.log('PASS: Unknown userId returns 404');
+    }
+
+    // TEST 4: Session mismatch blocks route userId access
+    log('TEST 4: Mismatched effective user returns 403', `GET /api/sponsors/${sponsorA.userId}/my-drivers`);
+    const mismatchCookie = buildSessionCookie({ ...sponsorB, userType: 'sponsor' });
+    try {
+      await axios.get(`${API_BASE_URL}/sponsors/${sponsorA.userId}/my-drivers`, {
+        headers: { Cookie: mismatchCookie },
+      });
+      throw new Error('Expected 403 for mismatched effective session on my-drivers');
+    } catch (err) {
+      if (err.response?.status !== 403) throw err;
+      console.log('PASS: Mismatched effective user returns 403');
     }
 
     console.log('\nSponsor driver visibility isolation tests completed successfully!');

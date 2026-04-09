@@ -12,6 +12,7 @@
  */
 
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
 import {
   BASE_URL,
   log,
@@ -25,10 +26,30 @@ import {
 import { pool } from '../../src/db.js';
 
 const API_BASE_URL = `${BASE_URL}/api`;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production-fleetscore';
 
 const createdUserIds = [];
 const createdSponsorIds = [];
 const createdApplicationIds = [];
+
+function buildSessionCookie(user, originalUser = null) {
+  const payload = {
+    UserID: user.userId,
+    UserType: user.userType,
+    Username: user.username,
+  };
+
+  if (originalUser) {
+    payload.OriginalUser = {
+      UserID: originalUser.userId,
+      UserType: originalUser.userType,
+      Username: originalUser.username,
+    };
+  }
+
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: 60 * 60 * 24 });
+  return `sessionId=${token}`;
+}
 
 async function cleanupUsers(userIds) {
   if (!userIds || userIds.length === 0) return;
@@ -183,6 +204,40 @@ async function runTests() {
     } catch (err) {
       if (err.response?.status !== 400) throw err;
       console.log('PASS: Invalid status returns 400');
+    }
+
+    // TEST 7: session effective user mismatch returns 403 for list endpoint
+    log('TEST 7: Mismatched session userId is rejected on driver-applications list', `GET /api/sponsors/${sponsorA.userId}/driver-applications`);
+    const mismatchListCookie = buildSessionCookie({ ...driver, userType: 'driver' });
+    try {
+      await axios.get(`${API_BASE_URL}/sponsors/${sponsorA.userId}/driver-applications`, {
+        headers: { Cookie: mismatchListCookie },
+      });
+      throw new Error('Expected 403 for mismatched effective session on driver-applications list');
+    } catch (err) {
+      if (err.response?.status !== 403) throw err;
+      console.log('PASS: Session mismatch returns 403 for list endpoint');
+    }
+
+    // TEST 8: session effective user mismatch returns 403 for process endpoint
+    log('TEST 8: Mismatched session userId is rejected on process-application', `POST /api/sponsors/${sponsorA.userId}/process-application`);
+    const mismatchProcessCookie = buildSessionCookie({ ...driver, userType: 'driver' });
+    try {
+      await axios.post(
+        `${API_BASE_URL}/sponsors/${sponsorA.userId}/process-application`,
+        {
+          applicationId: appForA,
+          status: 'accepted',
+          explanation: 'should fail by session guard',
+        },
+        {
+          headers: { Cookie: mismatchProcessCookie },
+        }
+      );
+      throw new Error('Expected 403 for mismatched effective session on process-application');
+    } catch (err) {
+      if (err.response?.status !== 403) throw err;
+      console.log('PASS: Session mismatch returns 403 for process endpoint');
     }
 
     console.log('\nSponsor application accept/deny tests completed successfully!');
