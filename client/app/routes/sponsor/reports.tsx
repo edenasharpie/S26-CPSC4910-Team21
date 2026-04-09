@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useLoaderData } from 'react-router';
 import { Card, Button, Table, Badge, Alert } from '~/components';
+import { requireAuth } from '~/utils/session.server';
+import type { Route } from './+types/reports';
+import { createApiClient } from '~/utils/api';
 
-const BASE_URL = 'http://localhost:5000';
-// TODO: Replace with actual user ID from authentication
-const CURRENT_USER_ID = 1;
+export async function loader({ request }: Route.LoaderArgs) {
+  const user = requireAuth(request, ['sponsor']);
+  return { user };
+}
 
 interface ReportType {
   id: string;
@@ -43,7 +47,21 @@ interface ReportData {
   detailedRecords?: any[];
 }
 
+interface GeneratedReportRow {
+  ReportID: number;
+  SponsorCompanyID: number;
+  ReportType: 'driver-applications' | 'point-transactions' | 'orders';
+  ReportDate: string;
+  GeneratedAt: string;
+  SchedulerRunAt: string;
+  GenerationStatus: 'success' | 'failed';
+  GenerationError?: string | null;
+}
+
 export default function SponsorReports() {
+  const { user } = useLoaderData<typeof loader>();
+  const api = useMemo(() => createApiClient({ id: user.UserID, role: 'sponsor' }), [user.UserID]);
+
   const [reportTypes, setReportTypes] = useState<ReportType[]>([]);
   const [selectedReportType, setSelectedReportType] = useState<string>('');
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -51,15 +69,22 @@ export default function SponsorReports() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [dailyReports, setDailyReports] = useState<GeneratedReportRow[]>([]);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [dailyReportTypeFilter, setDailyReportTypeFilter] = useState<string>('');
+  const [dailyStartDate, setDailyStartDate] = useState<string>('');
+  const [dailyEndDate, setDailyEndDate] = useState<string>('');
+  const [dailyDownloadingId, setDailyDownloadingId] = useState<number | null>(null);
 
   // Fetch available report types on mount
   useEffect(() => {
     fetchReportTypes();
+    fetchDailyReports();
   }, []);
 
   const fetchReportTypes = async () => {
     try {
-      const response = await fetch(`${BASE_URL}/api/sponsor/${CURRENT_USER_ID}/reports/types`);
+      const response = await api.get('/reports/types');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setReportTypes(data.types || []);
@@ -70,6 +95,33 @@ export default function SponsorReports() {
     } catch (error: any) {
       console.error('Error fetching report types:', error);
       setError('Failed to load report types. Please refresh the page.');
+    }
+  };
+
+  const fetchDailyReports = async () => {
+    try {
+      setDailyLoading(true);
+
+      const queryParams = new URLSearchParams();
+      if (dailyReportTypeFilter) queryParams.set('reportType', dailyReportTypeFilter);
+      if (dailyStartDate) queryParams.set('startDate', dailyStartDate);
+      if (dailyEndDate) queryParams.set('endDate', dailyEndDate);
+      queryParams.set('limit', '50');
+      queryParams.set('offset', '0');
+
+      const response = await api.get(`/reports/generated?${queryParams.toString()}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setDailyReports(Array.isArray(data.reports) ? data.reports : []);
+    } catch (error: any) {
+      console.error('Error fetching daily reports:', error);
+      setError(error.message || 'Failed to load daily reports.');
+    } finally {
+      setDailyLoading(false);
     }
   };
 
@@ -92,9 +144,7 @@ export default function SponsorReports() {
       // Always include detailed records
       queryParams.append('includeDetails', 'true');
 
-      const response = await fetch(
-        `${BASE_URL}/api/sponsor/${CURRENT_USER_ID}/reports/${selectedReportType}?${queryParams.toString()}`
-      );
+      const response = await api.get(`/reports/${selectedReportType}?${queryParams.toString()}`);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -116,15 +166,9 @@ export default function SponsorReports() {
 
     try {
       setExporting(true);
-      const response = await fetch(`${BASE_URL}/api/sponsor/${CURRENT_USER_ID}/reports/export`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await api.post('/reports/export', {
           reportType: selectedReportType,
           reportData: reportData,
-        }),
       });
 
       if (!response.ok) {
@@ -150,6 +194,34 @@ export default function SponsorReports() {
     }
   };
 
+  const handleDownloadDailyReport = async (report: GeneratedReportRow) => {
+    try {
+      setDailyDownloadingId(report.ReportID);
+      const response = await api.get(`/reports/generated/${report.ReportID}/download`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to download daily report');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeDate = report.ReportDate ? report.ReportDate.slice(0, 10) : Date.now().toString();
+      a.href = url;
+      a.download = `${report.ReportType}-daily-${safeDate}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error: any) {
+      console.error('Error downloading daily report:', error);
+      setError(error.message || 'Failed to download daily report.');
+    } finally {
+      setDailyDownloadingId(null);
+    }
+  };
+
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
@@ -169,7 +241,7 @@ export default function SponsorReports() {
     <div className="container mx-auto px-4 py-8">
       <Link
         to="/"
-        className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6 block"
+        className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6"
       >
         ← Home
       </Link>
@@ -387,6 +459,85 @@ export default function SponsorReports() {
           )}
         </>
       )}
+
+      <Card title="Daily Reports History" className="mt-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+          <select
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            value={dailyReportTypeFilter}
+            onChange={(e) => setDailyReportTypeFilter(e.target.value)}
+          >
+            <option value="">All Categories</option>
+            <option value="driver-applications">Driver Applications</option>
+            <option value="point-transactions">Point Transactions</option>
+            <option value="orders">Orders</option>
+          </select>
+          <input
+            type="date"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            value={dailyStartDate}
+            onChange={(e) => setDailyStartDate(e.target.value)}
+          />
+          <input
+            type="date"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            value={dailyEndDate}
+            onChange={(e) => setDailyEndDate(e.target.value)}
+          />
+          <Button variant="secondary" onClick={fetchDailyReports} isLoading={dailyLoading}>
+            Refresh History
+          </Button>
+        </div>
+
+        <Table
+          isLoading={dailyLoading}
+          emptyMessage="No daily generated reports found yet."
+          data={dailyReports}
+          columns={[
+            {
+              key: 'ReportType',
+              header: 'Category',
+              render: (row: GeneratedReportRow) => (
+                <span className="capitalize">{row.ReportType.replace(/-/g, ' ')}</span>
+              ),
+            },
+            {
+              key: 'ReportDate',
+              header: 'Report Date',
+              render: (row: GeneratedReportRow) => row.ReportDate ? new Date(row.ReportDate).toLocaleDateString() : 'N/A',
+            },
+            {
+              key: 'GeneratedAt',
+              header: 'Generated',
+              render: (row: GeneratedReportRow) => row.GeneratedAt ? new Date(row.GeneratedAt).toLocaleString() : 'N/A',
+            },
+            {
+              key: 'GenerationStatus',
+              header: 'Status',
+              render: (row: GeneratedReportRow) => (
+                <Badge variant={row.GenerationStatus === 'success' ? 'success' : 'danger'}>
+                  {row.GenerationStatus}
+                </Badge>
+              ),
+            },
+            {
+              key: 'download',
+              header: 'Download',
+              render: (row: GeneratedReportRow) => (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={row.GenerationStatus !== 'success' || dailyDownloadingId === row.ReportID}
+                  isLoading={dailyDownloadingId === row.ReportID}
+                  onClick={() => handleDownloadDailyReport(row)}
+                >
+                  Download PDF
+                </Button>
+              ),
+            },
+          ]}
+        />
+      </Card>
     </div>
   );
 }

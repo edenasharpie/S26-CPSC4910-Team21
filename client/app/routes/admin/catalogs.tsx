@@ -94,19 +94,38 @@ export default function Catalogs() {
     }
   }, [selectedCatalog]);
 
+  const getCatalogFetchErrorMessage = async (response: Response) => {
+    if (response.status >= 500) {
+      return 'Failed to fetch catalogs. Please check your catalog connection.';
+    }
+
+    try {
+      const body = await response.json();
+      if (body && typeof body.error === 'string' && body.error.trim().length > 0) {
+        return body.error;
+      }
+    } catch {
+      // Ignore non-JSON responses and fall back to generic copy.
+    }
+
+    return 'Unable to load catalogs right now.';
+  };
+
   const fetchCatalogs = async () => {
     try {
       setError(null);
       const response = await api.get('/catalogs');
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        setCatalogs([]);
+        setError(await getCatalogFetchErrorMessage(response));
+        return;
       }
       const data = await response.json();
       console.log('Fetched catalogs:', data);
       setCatalogs(data);
     } catch (error) {
       console.error('Error fetching catalogs:', error);
-      setError('Failed to fetch catalogs. Please check your connection.');
+      setError('Unable to load catalogs right now. Please try again.');
     }
   };
 
@@ -517,10 +536,10 @@ export default function Catalogs() {
               )}
 
               {selectedStoreProduct && (
-                <div className="border-t pt-4">
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   <h3 className="font-semibold mb-2">Selected Product:</h3>
-                  <div className="bg-gray-50 p-3 rounded">
-                    <p className="font-medium">{selectedStoreProduct.title}</p>
+                  <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-3 rounded">
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{selectedStoreProduct.title}</p>
                   </div>
                 </div>
               )}

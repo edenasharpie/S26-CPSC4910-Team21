@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
+import { toApiUrl } from "~/utils/api-url";
 
 export function CreateReview({ itemId, userId }: { itemId: string, userId: string }) {
   const [rating, setRating] = useState(0);
@@ -10,7 +9,7 @@ export function CreateReview({ itemId, userId }: { itemId: string, userId: strin
 
     useEffect(() => {
     const loadDraft = async () => {
-        const res = await fetch(`${API_URL}/api/user/drafts/${userId}/${itemId}`);
+        const res = await fetch(toApiUrl(`/api/user/drafts/${userId}/${itemId}`));
         const draft = await res.json();
         if (draft) {
         setBody(draft.ReviewBody);
@@ -21,7 +20,7 @@ export function CreateReview({ itemId, userId }: { itemId: string, userId: strin
     }, [itemId, userId]);
 
     const saveDraft = async () => {
-    await fetch(`${API_URL}/api/user/drafts`, {
+    await fetch(toApiUrl("/api/user/drafts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId, userId, rating, body }),
@@ -33,7 +32,7 @@ export function CreateReview({ itemId, userId }: { itemId: string, userId: strin
         e.preventDefault();
         if (rating === 0) return alert("Please select a star rating!");
 
-        const res = await fetch(`${API_URL}/api/user/post-review`, {
+        const res = await fetch(toApiUrl("/api/user/post-review"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId, userId, rating, body }),

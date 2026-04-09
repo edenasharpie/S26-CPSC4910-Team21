@@ -1,11 +1,17 @@
 import express from 'express';
+import { pool } from '../db.js';
 import { 
   getAvailableReports,
   generateReport
 } from '../services/report-service.js';
+import {
+  getEffectiveSessionUser,
+  routeUserMatchesEffectiveSession,
+} from '../middleware/session-context.js';
 import { 
   getSponsorCompanyId,
-  userExists 
+  listGeneratedReportsForSponsor,
+  getGeneratedReportByIdForSponsor,
 } from '../utils/queries.js';
 import { generateReportPDF } from '../utils/pdf-generator.js';
 
@@ -20,10 +26,37 @@ async function validateSponsorAndGetCompanyId(req, res, next) {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
 
-    // Check if user exists
-    const exists = await userExists(userId);
-    if (!exists) {
+    if (!routeUserMatchesEffectiveSession(req, userId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    const effectiveSessionUser = getEffectiveSessionUser(req);
+    const effectiveRole = effectiveSessionUser?.UserType;
+
+    if (effectiveRole && effectiveRole !== 'sponsor') {
+      return res.status(403).json({
+        error: 'Access forbidden: User is not a sponsor'
+      });
+    }
+
+    const [userRows] = effectiveRole
+      ? await pool.execute(
+          'SELECT UserID, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
+          [userId]
+        )
+      : await pool.execute(
+          'SELECT UserID, UserType, ActiveStatus FROM USERS WHERE UserID = ? LIMIT 1',
+          [userId]
+        );
+
+    if (userRows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!effectiveRole && userRows[0].UserType !== 'sponsor') {
+      return res.status(403).json({
+        error: 'Access forbidden: User is not a sponsor'
+      });
     }
 
     // Get sponsor's company ID
@@ -45,6 +78,96 @@ async function validateSponsorAndGetCompanyId(req, res, next) {
 
 // Apply middleware to all routes
 router.use(validateSponsorAndGetCompanyId);
+
+// GET /sponsor/:userId/reports/generated - List generated daily reports for this sponsor company
+router.get('/generated', async (req, res) => {
+  try {
+    const allowedTypes = ['driver-applications', 'point-transactions', 'orders'];
+    const reportType = req.query.reportType;
+
+    if (reportType && !allowedTypes.includes(reportType)) {
+      return res.status(400).json({
+        error: 'Invalid reportType. Must be one of: driver-applications, point-transactions, orders',
+      });
+    }
+
+    if (req.query.startDate && isNaN(Date.parse(req.query.startDate))) {
+      return res.status(400).json({
+        error: 'Invalid startDate format. Must be ISO 8601 datetime or date',
+      });
+    }
+
+    if (req.query.endDate && isNaN(Date.parse(req.query.endDate))) {
+      return res.status(400).json({
+        error: 'Invalid endDate format. Must be ISO 8601 datetime or date',
+      });
+    }
+
+    const limit = Number.parseInt(req.query.limit, 10);
+    const offset = Number.parseInt(req.query.offset, 10);
+
+    if (req.query.limit && (Number.isNaN(limit) || limit < 1 || limit > 200)) {
+      return res.status(400).json({ error: 'Invalid limit. Must be between 1 and 200' });
+    }
+
+    if (req.query.offset && (Number.isNaN(offset) || offset < 0)) {
+      return res.status(400).json({ error: 'Invalid offset. Must be zero or greater' });
+    }
+
+    const reports = await listGeneratedReportsForSponsor(req.sponsorCompanyId, {
+      reportType,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+      limit: Number.isInteger(limit) ? limit : 20,
+      offset: Number.isInteger(offset) ? offset : 0,
+    });
+
+    res.json(reports);
+  } catch (error) {
+    console.error('Error listing generated reports:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET /sponsor/:userId/reports/generated/:reportId/download - Download generated daily report PDF
+router.get('/generated/:reportId/download', async (req, res) => {
+  try {
+    const reportId = Number.parseInt(req.params.reportId, 10);
+
+    if (Number.isNaN(reportId)) {
+      return res.status(400).json({ error: 'Invalid reportId' });
+    }
+
+    const generatedReport = await getGeneratedReportByIdForSponsor(reportId, req.sponsorCompanyId);
+
+    if (!generatedReport) {
+      return res.status(404).json({ error: 'Generated report not found' });
+    }
+
+    if (generatedReport.GenerationStatus !== 'success' || !generatedReport.ReportPayload) {
+      return res.status(400).json({
+        error: 'Generated report is not available for download',
+      });
+    }
+
+    const pdfBuffer = await generateReportPDF(generatedReport.ReportType, generatedReport.ReportPayload, {
+      reportDate: generatedReport.ReportDate,
+      generatedAt: generatedReport.GeneratedAt,
+      source: 'daily-generated',
+    });
+
+    const safeDate = String(generatedReport.ReportDate).slice(0, 10);
+    const filename = `${generatedReport.ReportType}-daily-${safeDate}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error downloading generated report:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // GET /sponsor/:userId/reports/types - Get available report types for sponsors
 router.get('/types', async (req, res) => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLoaderData } from 'react-router';
+import { Link, useLoaderData, Form } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
@@ -90,19 +90,38 @@ export default function SponsorCatalogs() {
     }
   }, [selectedCatalog]);
 
+  const getCatalogFetchErrorMessage = async (response: Response) => {
+    if (response.status >= 500) {
+      return 'Failed to fetch catalogs. Please check your catalog connection.';
+    }
+
+    try {
+      const body = await response.json();
+      if (body && typeof body.error === 'string' && body.error.trim().length > 0) {
+        return body.error;
+      }
+    } catch {
+      // Ignore non-JSON responses and fall back to generic copy.
+    }
+
+    return 'Unable to load catalogs right now.';
+  };
+
   const fetchCatalogs = async () => {
     try {
       setError(null);
       const response = await api.get('/catalogs');
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        setCatalogs([]);
+        setError(await getCatalogFetchErrorMessage(response));
+        return;
       }
       const data = await response.json();
       console.log('Fetched sponsor catalogs:', data);
       setCatalogs(data);
     } catch (error) {
       console.error('Error fetching catalogs:', error);
-      setError('Failed to fetch catalogs. Please check your connection.');
+      setError('Unable to load catalogs right now. Please try again.');
     }
   };
 
@@ -331,9 +350,16 @@ export default function SponsorCatalogs() {
       <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">My Catalogs</h1>
-        <Button variant="primary" onClick={() => setIsCreateCatalogOpen(true)}>
-          Create Catalog
-        </Button>
+        <div className="flex items-center gap-2">
+          {user.OriginalUser && (
+            <Form method="post" action="/exit-assumption">
+              <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
+            </Form>
+          )}
+          <Button variant="primary" onClick={() => setIsCreateCatalogOpen(true)}>
+            Create Catalog
+          </Button>
+        </div>
       </div>
 
       {/* Error Display */}
@@ -478,6 +504,15 @@ export default function SponsorCatalogs() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {selectedStoreProduct && (
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <h3 className="font-semibold mb-2">Selected Product:</h3>
+                  <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-3 rounded">
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{selectedStoreProduct.title}</p>
+                  </div>
                 </div>
               )}
             </div>

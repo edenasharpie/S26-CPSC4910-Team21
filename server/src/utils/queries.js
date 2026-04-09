@@ -84,9 +84,10 @@ export async function updateUserProfile(userId, updates) {
  * Change user password with history validation
  * @param {number} userId - The user ID
  * @param {string} newPassword - The new password (plain text)
+ * @param {'user_initiated'|'admin_initiated'|'password_reset'} [changeMethod='user_initiated']
  * @returns {Promise<Object>} Result object with success status
  */
-export async function changePasswordWithHistory(userId, newPassword) {
+export async function changePasswordWithHistory(userId, newPassword, changeMethod = 'user_initiated') {
   const connection = await pool.getConnection();
   
   try {
@@ -145,7 +146,7 @@ export async function changePasswordWithHistory(userId, newPassword) {
         'PasswordChange',
         JSON.stringify({
           success: true,
-          changeMethod: 'user_initiated',
+          changeMethod,
           oldHash,
         }),
       ]
@@ -565,11 +566,11 @@ export async function getDriverApplicationReport(filters = {}) {
             SponsorCompanyID,
             ApplicationStatus,
             TimeSubmitted,
-            TimeStatusChanged
+            NULL AS TimeStatusChanged
           FROM DRIVER_APPLICATIONS
           ${whereClause}
           ORDER BY TimeSubmitted DESC
-        `;
+        `; // NULL AS because apparently there wasnt any column in the database
         
         const [detailRows] = await connection.query(detailsQuery, params);
         report.detailedRecords = detailRows;
@@ -601,7 +602,9 @@ export async function getPointTransactionsReport(filters = {}) {
     
     try {
       // Build dynamic WHERE clause
-      let whereClause = 'WHERE 1=1';
+      let whereClause = `WHERE 1=1
+        AND TimeChanged IS NOT NULL
+        AND TimeChanged >= '2000-01-01 00:00:00'`;
       const params = [];
 
       if (filters.startDate) {
@@ -706,7 +709,9 @@ export async function getOrdersReport(filters = {}) {
     
     try {
       // Build dynamic WHERE clause
-      let whereClause = 'WHERE 1=1';
+      let whereClause = `WHERE 1=1
+        AND OrderDate IS NOT NULL
+        AND OrderDate >= '2000-01-01 00:00:00'`;
       const params = [];
 
       if (filters.startDate) {
@@ -811,14 +816,23 @@ export async function getOrdersReport(filters = {}) {
 
 /**
  * Get audit log entries from the EVENTS table.
- * @param {string[]} filters - Optional array of EventType values to filter by
- *                             (e.g. ['LoginAttempt', 'PasswordChange']).
- *                             Pass an empty array to return all event types.
+ * @param {Object|string[]} filters - Optional filter object or legacy event-type array.
+ * @param {string[]} [filters.eventTypes] - EventType values to include.
+ * @param {Date} [filters.startDate] - Lower timestamp bound.
+ * @param {Date} [filters.endDate] - Upper timestamp bound.
+ * @param {number} [filters.targetUserId] - Specific user to include.
  * @returns {Promise<Object[]>} Array of event rows joined with username.
  */
 export async function getAuditLogs(filters = []) {
   const connection = await pool.getConnection();
   try {
+    const normalizedFilters = Array.isArray(filters)
+      ? { eventTypes: filters }
+      : filters ?? {};
+    const eventTypes = Array.isArray(normalizedFilters.eventTypes)
+      ? normalizedFilters.eventTypes
+      : [];
+
     let query = `
       SELECT
         e.EventID,
@@ -830,18 +844,209 @@ export async function getAuditLogs(filters = []) {
       FROM EVENTS e
       LEFT JOIN USERS u ON e.UserID = u.UserID
     `;
+    const whereClauses = [];
     const params = [];
 
-    if (filters.length > 0) {
-      const placeholders = filters.map(() => '?').join(', ');
-      query += ` WHERE e.EventType IN (${placeholders})`;
-      params.push(...filters);
+    if (eventTypes.length > 0) {
+      const placeholders = eventTypes.map(() => '?').join(', ');
+      whereClauses.push(`e.EventType IN (${placeholders})`);
+      params.push(...eventTypes);
+    }
+
+    if (normalizedFilters.startDate) {
+      whereClauses.push('e.Timestamp >= ?');
+      params.push(normalizedFilters.startDate);
+    }
+
+    if (normalizedFilters.endDate) {
+      whereClauses.push('e.Timestamp <= ?');
+      params.push(normalizedFilters.endDate);
+    }
+
+    if (normalizedFilters.targetUserId) {
+      whereClauses.push('e.UserID = ?');
+      params.push(normalizedFilters.targetUserId);
+    }
+
+    if (whereClauses.length > 0) {
+      query += ` WHERE ${whereClauses.join(' AND ')}`;
     }
 
     query += ' ORDER BY e.Timestamp DESC LIMIT 500';
 
     const [rows] = await connection.execute(query, params);
     return rows;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Get all sponsor company IDs.
+ * @returns {Promise<number[]>} Array of sponsor company IDs.
+ */
+export async function getAllSponsorCompanyIds() {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.execute(
+      'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES ORDER BY SponsorCompanyID ASC'
+    );
+
+    return rows.map((row) => Number(row.SponsorCompanyID));
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Insert or update a generated daily report record.
+ * Enforces one report per sponsor/reportType/date using the table unique constraint.
+ * @param {Object} record - Report record to upsert.
+ * @returns {Promise<void>}
+ */
+export async function upsertGeneratedReport(record) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.execute(
+      `INSERT INTO GENERATED_REPORTS (
+         SponsorCompanyID,
+         ReportType,
+         ReportDate,
+         GeneratedAt,
+         SchedulerRunAt,
+         GenerationStatus,
+         GenerationError,
+         ReportPayload,
+         IsVisible
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+       ON DUPLICATE KEY UPDATE
+         GeneratedAt = VALUES(GeneratedAt),
+         SchedulerRunAt = VALUES(SchedulerRunAt),
+         GenerationStatus = VALUES(GenerationStatus),
+         GenerationError = VALUES(GenerationError),
+         ReportPayload = VALUES(ReportPayload),
+         IsVisible = 1`,
+      [
+        record.sponsorCompanyId,
+        record.reportType,
+        record.reportDate,
+        record.generatedAt,
+        record.schedulerRunAt,
+        record.generationStatus,
+        record.generationError,
+        record.reportPayload ? JSON.stringify(record.reportPayload) : null,
+      ]
+    );
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * List generated daily reports for a sponsor company.
+ * @param {number} sponsorCompanyId - Sponsor company ID.
+ * @param {Object} options - Optional filters and pagination.
+ * @returns {Promise<{reports: Object[], total: number, limit: number, offset: number}>}
+ */
+export async function listGeneratedReportsForSponsor(sponsorCompanyId, options = {}) {
+  const connection = await pool.getConnection();
+  try {
+    const limit = Number.isInteger(options.limit) ? options.limit : 20;
+    const offset = Number.isInteger(options.offset) ? options.offset : 0;
+
+    let whereClause = 'WHERE SponsorCompanyID = ? AND IsVisible = 1';
+    const params = [sponsorCompanyId];
+
+    if (options.reportType) {
+      whereClause += ' AND ReportType = ?';
+      params.push(options.reportType);
+    }
+
+    if (options.startDate) {
+      whereClause += ' AND ReportDate >= ?';
+      params.push(options.startDate);
+    }
+
+    if (options.endDate) {
+      whereClause += ' AND ReportDate <= ?';
+      params.push(options.endDate);
+    }
+
+    const [countRows] = await connection.query(
+      `SELECT COUNT(*) AS total
+       FROM GENERATED_REPORTS
+       ${whereClause}`,
+      params
+    );
+
+    const [rows] = await connection.query(
+      `SELECT
+         ReportID,
+         SponsorCompanyID,
+         ReportType,
+         ReportDate,
+         GeneratedAt,
+         SchedulerRunAt,
+         GenerationStatus,
+         GenerationError
+       FROM GENERATED_REPORTS
+       ${whereClause}
+       ORDER BY ReportDate DESC, ReportType ASC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    return {
+      reports: rows,
+      total: Number(countRows[0]?.total ?? 0),
+      limit,
+      offset,
+    };
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Fetch a generated report by id within a sponsor company boundary.
+ * @param {number} reportId - Generated report ID.
+ * @param {number} sponsorCompanyId - Sponsor company ID.
+ * @returns {Promise<Object|null>} Generated report row.
+ */
+export async function getGeneratedReportByIdForSponsor(reportId, sponsorCompanyId) {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.execute(
+      `SELECT
+         ReportID,
+         SponsorCompanyID,
+         ReportType,
+         ReportDate,
+         GeneratedAt,
+         SchedulerRunAt,
+         GenerationStatus,
+         GenerationError,
+         ReportPayload
+       FROM GENERATED_REPORTS
+       WHERE ReportID = ? AND SponsorCompanyID = ? AND IsVisible = 1
+       LIMIT 1`,
+      [reportId, sponsorCompanyId]
+    );
+
+    if (rows.length === 0) {
+      return null;
+    }
+
+    const row = rows[0];
+    if (typeof row.ReportPayload === 'string') {
+      try {
+        row.ReportPayload = JSON.parse(row.ReportPayload);
+      } catch {
+        row.ReportPayload = null;
+      }
+    }
+
+    return row;
   } finally {
     connection.release();
   }

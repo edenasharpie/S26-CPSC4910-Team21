@@ -1,161 +1,162 @@
-import { useState, useEffect } from "react";
-import { useParams, useLoaderData, Form, useActionData, Link, useNavigate, redirect } from "react-router"; 
+import { useEffect, useState } from "react";
+import { useLoaderData, useNavigate, useParams } from "react-router";
 import type { Route } from "./+types/edit";
-import { Input, Button, Alert } from "~/components";
+import {
+  Button,
+  Input,
+  ProfileEditLayout,
+  getProfileEditFieldClass,
+} from "~/components";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const BASE_URL = process.env.API_URL ?? 'http://localhost:5000';
+const BASE_URL = getApiBaseUrl();
+
+type NormalizedUser = {
+  userId: number;
+  username: string;
+  email: string;
+  phone: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  pronouns: string;
+  profilePicture: string;
+  bio: string;
+  userType: string;
+  accountType: string;
+  activeStatus: number;
+  lastLogin: string | null;
+};
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  requireAuth(request, ["admin"]);
+  const session = await requireAuth(request, ["admin"]);
   const res = await fetch(`${BASE_URL}/api/admin/users/${params.id}`);
-  if (!res.ok) throw new Response("User not found", { status: 404 });
+  if (!res.ok) {
+    throw new Response("User not found", { status: 404 });
+  }
+
   const user = await res.json();
-  return { user };
-}
-
-export async function action({ request, params }: Route.ActionArgs) {
-  const formData = await request.formData();
-  const userId = params.id;
-  const intent = formData.get("intent");
-
-  if (intent === "delete") {
-    try {
-      const res = await fetch(`${BASE_URL}/api/admin/users/${userId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const body = await res.json();
-        return { error: body.error ?? 'Delete failed' };
-      }
-      return redirect("/admin/dashboard");
-    } catch (error: any) {
-      return { error: error.message };
-    }
-  }
-
-  const updates = {
-    Username: formData.get("Username"),
-    Email: formData.get("Email"),
-    Phone: formData.get("Phone"),
-    PassHash: formData.get("PassHash"),
-    FirstName: formData.get("FirstName"),
-    MiddleName: formData.get("MiddleName"),
-    LastName: formData.get("LastName"),
-    Pronouns: formData.get("Pronouns"),
-    ProfilePicture: formData.get("ProfilePicture"),
-    Bio: formData.get("Bio"),
-    UserType: formData.get("UserType"),
-    ActiveStatus: formData.get("ActiveStatus") === "1" ? 1 : 0,
-  };
-
-  try {
-    const res = await fetch(`${BASE_URL}/api/admin/users/${userId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      return { error: body.error ?? 'Update failed' };
-    }
-    return { success: true };
-  } catch (error: any) {
-    return { error: error.message };
-  }
+  return { user, sessionUserId: Number(session.UserID) };
 }
 
 export default function EditUserProfile() {
   const { id } = useParams();
+  const { user: loaderUser, sessionUserId } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+
+  const [user, setUser] = useState<NormalizedUser | null>(normalizeUser(loaderUser));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
 
   useEffect(() => {
-    fetchUser();
-  }, [id]);
+    setUser(normalizeUser(loaderUser));
+    setLoading(false);
+    setError(null);
+  }, [loaderUser]);
 
   const fetchUser = async () => {
+    if (!id) return;
+
     try {
       setLoading(true);
       setError(null);
       const response = await fetch(`${BASE_URL}/api/admin/users/${id}`);
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error('User not found');
+          throw new Error("User not found");
         }
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP error: ${response.status}`);
       }
       const data = await response.json();
-      setUser(data);
-    } catch (error: any) {
-      console.error('Error fetching user:', error);
-      setError(error.message || 'Failed to fetch user');
+      setUser(normalizeUser(data));
+    } catch (fetchError: unknown) {
+      if (fetchError instanceof Error) {
+        setError(fetchError.message || "Failed to fetch user");
+      } else {
+        setError("Failed to fetch user");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!id) return;
+
     try {
       setError(null);
       setSuccessMessage(null);
-      const formData = new FormData(e.target as HTMLFormElement);
-      
-      const updates: any = {
-        username: formData.get('Username'),
-        email: formData.get('Email'),
-        phone: formData.get('Phone'),
-        firstName: formData.get('FirstName'),
-        middleName: formData.get('MiddleName'),
-        lastName: formData.get('LastName'),
-        pronouns: formData.get('Pronouns'),
-        profilePicture: formData.get('ProfilePicture'),
-        bio: formData.get('Bio'),
-        activeStatus: formData.get('ActiveStatus') === '1' ? 1 : 0,
+
+      const formData = new FormData(event.currentTarget);
+      const updates = {
+        username: String(formData.get("Username") ?? ""),
+        email: String(formData.get("Email") ?? ""),
+        phone: String(formData.get("Phone") ?? ""),
+        firstName: String(formData.get("FirstName") ?? ""),
+        middleName: String(formData.get("MiddleName") ?? ""),
+        lastName: String(formData.get("LastName") ?? ""),
+        pronouns: String(formData.get("Pronouns") ?? ""),
+        profilePicture: String(formData.get("ProfilePicture") ?? ""),
+        bio: String(formData.get("Bio") ?? ""),
+        activeStatus: formData.get("ActiveStatus") === "1" ? 1 : 0,
       };
 
       const response = await fetch(`${BASE_URL}/api/admin/users/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
       });
 
-      if (response.ok) {
-        setSuccessMessage('Profile updated successfully');
-        setIsEditing(false);
-        fetchUser(); // Refresh user data
-      } else {
-        const errData = await response.json();
-        setError(errData.error || 'Failed to update user');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        setError((errData as { error?: string }).error || "Failed to update user");
+        return;
       }
-    } catch (error: any) {
-      console.error('Error updating user:', error);
-      setError('Failed to update user. Please try again.');
+
+      setSuccessMessage("Profile updated successfully");
+      setIsEditing(false);
+      await fetchUser();
+    } catch {
+      setError("Failed to update user. Please try again.");
     }
   };
 
   const handleDelete = async () => {
+    if (!id) return;
     if (!confirm("Permanently delete this user?")) return;
-    
+
     try {
       setError(null);
       const response = await fetch(`${BASE_URL}/api/admin/users/${id}`, {
-        method: 'DELETE'
+        method: "DELETE",
       });
 
       if (response.ok || response.status === 204) {
-        navigate('/admin/dashboard');
-      } else {
-        const errData = await response.json();
-        setError(errData.error || 'Failed to delete user');
+        navigate("/admin/dashboard");
+        return;
       }
-    } catch (error: any) {
-      console.error('Error deleting user:', error);
-      setError('Failed to delete user. Please try again.');
+
+      const errData = await response.json().catch(() => ({}));
+      setError((errData as { error?: string }).error || "Failed to delete user");
+    } catch {
+      setError("Failed to delete user. Please try again.");
     }
+  };
+
+  const handleEditSaveClick = () => {
+    if (!isEditing) {
+      setIsEditing(true);
+      return;
+    }
+
+    const form = document.getElementById("admin-edit-form") as HTMLFormElement | null;
+    form?.requestSubmit();
   };
 
   if (loading) {
@@ -172,110 +173,159 @@ export default function EditUserProfile() {
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
           {error}
         </div>
-        <Link to="/admin/dashboard" className="text-blue-600 hover:underline">← Back to Dashboard</Link>
       </div>
     );
   }
 
   if (!user) return null;
 
+  const isOwnProfile = Number(user.userId) === Number(sessionUserId);
+
+  const handleDeactivateAccount = async () => {
+    const currentPassword = window.prompt("Enter current password to deactivate your account:");
+    if (!currentPassword) {
+      return;
+    }
+
+    try {
+      setIsDeactivating(true);
+      setError(null);
+      setSuccessMessage(null);
+
+      const response = await fetch(`${BASE_URL}/api/user/deactivate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.userId,
+          currentPassword,
+        }),
+      });
+
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError((body as { error?: string }).error || "Failed to deactivate account");
+        return;
+      }
+
+      await fetch("/logout", { method: "POST" });
+      window.location.assign("/login");
+    } catch {
+      setError("Connection error. Please try again.");
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-    <div className="p-8 max-w-5xl mx-auto space-y-10">
-      
-      {/* Navigation */}
-      <div className="flex items-center gap-4">
-        <Link 
-          to="/admin/dashboard" 
-          className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
-        >
-          ← Back to Dashboard
-        </Link>
-        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">Home</Link>
-      </div>
-
-      {/* Success/Error Messages */}
-      {successMessage && (
-        <div className="p-3 bg-green-50 text-green-700 text-sm rounded border border-green-200">
-          ✓ {successMessage}
-        </div>
-      )}
-      {error && (
-        <div className="p-3 bg-red-50 text-red-700 text-sm rounded border border-red-200">
-          {error}
-        </div>
-      )}
-
-      <div className="flex items-center gap-8 pb-6 border-b border-gray-100 dark:border-gray-800">
-        <div className="relative">
-          <img 
-            key={user.profilePicture}
-            src={
-              user.profilePicture && (user.profilePicture.includes('http') || user.profilePicture.startsWith('data:image'))
-                ? user.profilePicture 
-                : `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}&background=random&size=128`
-            } 
-            alt="Profile" 
-            className="w-24 h-24 rounded-full object-cover border border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900"
-          />
-        </div>
-        
-        <div className="flex-1 text-left">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{user.firstName} {user.lastName}</h1>
-          <div className="flex gap-6 mt-2 text-xs text-gray-400 dark:text-gray-500">
-            <span><strong>Last Login:</strong> {user.lastLogin || "Never"}</span>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          {!isEditing ? (
-            <Button type="button" onClick={() => setIsEditing(true)} variant="primary">
-              Edit Profile
+    <ProfileEditLayout
+      apiBaseUrl={BASE_URL}
+      backTo="/admin/dashboard"
+      backLabel="Back to Dashboard"
+      title={`${user.firstName} ${user.lastName}`.trim() || user.username}
+      subtitle={`@${user.username}`}
+      profilePicture={user.profilePicture}
+      initials={buildInitials(user.firstName, user.lastName)}
+      profileMeta={`Last Login: ${user.lastLogin || "Never"}`}
+      successMessage={successMessage}
+      errorMessage={error}
+      actions={
+        <>
+          {isEditing && !isOwnProfile && (
+            <Button
+              type="button"
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete User
             </Button>
-          ) : (
-            <>
-              <Button 
-                type="button" 
-                onClick={handleDelete}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                Delete User
-              </Button>
-
-              <Button type="button" variant="secondary" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" form="edit-form" variant="primary">
-                Update
-              </Button>
-            </>
           )}
-        </div>
-      </div>
-
-      <form method="post" id="edit-form" onSubmit={handleUpdate} className="space-y-8">
+          {isEditing && (
+            <Button type="button" variant="secondary" onClick={() => setIsEditing(false)}>
+              Cancel
+            </Button>
+          )}
+          <Button type="button" onClick={handleEditSaveClick} variant="primary">
+            {isEditing ? "Save" : "Edit"}
+          </Button>
+        </>
+      }
+    >
+      <form id="admin-edit-form" onSubmit={handleUpdate} className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-           <div className="space-y-4">
+          <div className="space-y-4">
             <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-left">Personal Info</h2>
             <div className="flex gap-2">
-              <Input label="First Name" name="FirstName" defaultValue={user.firstName} disabled={!isEditing} className={getFieldClass(isEditing)} />
-              <Input label="Middle" name="MiddleName" defaultValue={user.middleName} disabled={!isEditing} className={getFieldClass(isEditing)} />
-              <Input label="Last Name" name="LastName" defaultValue={user.lastName} disabled={!isEditing} className={getFieldClass(isEditing)} />
+              <Input
+                label="First Name"
+                name="FirstName"
+                defaultValue={user.firstName}
+                disabled={!isEditing}
+                className={getProfileEditFieldClass(isEditing)}
+              />
+              <Input
+                label="Middle"
+                name="MiddleName"
+                defaultValue={user.middleName}
+                disabled={!isEditing}
+                className={getProfileEditFieldClass(isEditing)}
+              />
+              <Input
+                label="Last Name"
+                name="LastName"
+                defaultValue={user.lastName}
+                disabled={!isEditing}
+                className={getProfileEditFieldClass(isEditing)}
+              />
             </div>
-            <Input label="Pronouns" name="Pronouns" defaultValue={user.pronouns} disabled={!isEditing} className={getFieldClass(isEditing)} />
-            <Input label="Bio" name="Bio" defaultValue={user.bio} disabled={!isEditing} className={getFieldClass(isEditing)} />
-            <Input label="Profile Picture URL" name="ProfilePicture" defaultValue={user.profilePicture} disabled={!isEditing} className={getFieldClass(isEditing)} />
+            <Input
+              label="Pronouns"
+              name="Pronouns"
+              defaultValue={user.pronouns}
+              disabled={!isEditing}
+              className={getProfileEditFieldClass(isEditing)}
+            />
+            <Input
+              label="Bio"
+              name="Bio"
+              defaultValue={user.bio}
+              disabled={!isEditing}
+              className={getProfileEditFieldClass(isEditing)}
+            />
+            <Input
+              label="Profile Picture URL"
+              name="ProfilePicture"
+              defaultValue={user.profilePicture}
+              disabled={!isEditing}
+              className={getProfileEditFieldClass(isEditing)}
+            />
           </div>
 
           <div className="space-y-4">
-            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-left">Account & Security</h2>
-            <Input label="Username" name="Username" defaultValue={user.username} disabled={!isEditing} className={getFieldClass(isEditing)} />
-            <Input label="Email" name="Email" defaultValue={user.email} disabled={!isEditing} className={getFieldClass(isEditing)} />
-            <Input label="Phone" name="Phone" defaultValue={user.phone} disabled={!isEditing} className={getFieldClass(isEditing)} />
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-left">Account and Security</h2>
+            <Input
+              label="Username"
+              name="Username"
+              defaultValue={user.username}
+              disabled={!isEditing}
+              className={getProfileEditFieldClass(isEditing)}
+            />
+            <Input
+              label="Email"
+              name="Email"
+              defaultValue={user.email}
+              disabled={!isEditing}
+              className={getProfileEditFieldClass(isEditing)}
+            />
+            <Input
+              label="Phone"
+              name="Phone"
+              defaultValue={user.phone}
+              disabled={!isEditing}
+              className={getProfileEditFieldClass(isEditing)}
+            />
           </div>
         </div>
 
-        {/* System Settings */}
         <div className="pt-6 border-t border-gray-100 dark:border-gray-800 flex flex-col md:flex-row gap-6 text-left">
           <div className="flex-1">
             <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">User Type</label>
@@ -285,25 +335,74 @@ export default function EditUserProfile() {
           </div>
           <div className="flex-1">
             <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">Status</label>
-            <select 
-              name="ActiveStatus" 
-              defaultValue={user.activeStatus} 
-              disabled={!isEditing}
-              className={`w-full p-2 border rounded transition-all h-10.5 outline-none ${getFieldClass(isEditing)}`}
-            >
-              <option value="1">Active</option>
-              <option value="0">Inactive</option>
-            </select>
+            {isOwnProfile ? (
+              <div className="flex items-center gap-3 h-10.5">
+                <span
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                    user.activeStatus === 1
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                  }`}
+                >
+                  Status: {user.activeStatus === 1 ? "Active" : "Inactive"}
+                </span>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  onClick={handleDeactivateAccount}
+                  disabled={isDeactivating || user.activeStatus !== 1}
+                  isLoading={isDeactivating}
+                >
+                  Deactivate Account
+                </Button>
+              </div>
+            ) : (
+              <select
+                name="ActiveStatus"
+                defaultValue={String(user.activeStatus)}
+                disabled={!isEditing}
+                className={`w-full p-2 border rounded h-10.5 outline-none ${getProfileEditFieldClass(isEditing)}`}
+              >
+                <option value="1">Active</option>
+                <option value="0">Inactive</option>
+              </select>
+            )}
           </div>
         </div>
       </form>
-    </div>
-    </div>
+    </ProfileEditLayout>
   );
 }
 
-function getFieldClass(isEditing: boolean) {
-  return isEditing
-    ? "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 shadow-sm text-gray-900 dark:text-gray-100 opacity-100"
-    : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-100 pointer-events-none appearance-none";
+function normalizeUser(raw: unknown): NormalizedUser | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const user = raw as Record<string, unknown>;
+
+  return {
+    userId: Number(user.userId ?? user.UserID ?? 0),
+    username: String(user.username ?? user.Username ?? ""),
+    email: String(user.email ?? user.Email ?? ""),
+    phone: String(user.phone ?? user.Phone ?? ""),
+    firstName: String(user.firstName ?? user.FirstName ?? ""),
+    middleName: String(user.middleName ?? user.MiddleName ?? ""),
+    lastName: String(user.lastName ?? user.LastName ?? ""),
+    pronouns: String(user.pronouns ?? user.Pronouns ?? ""),
+    profilePicture: String(user.profilePicture ?? user.ProfilePicture ?? ""),
+    bio: String(user.bio ?? user.Bio ?? ""),
+    userType: String(user.userType ?? user.UserType ?? ""),
+    accountType: String(user.accountType ?? user.userType ?? user.UserType ?? ""),
+    activeStatus: Number(user.activeStatus ?? user.ActiveStatus ?? 1),
+    lastLogin:
+      user.lastLogin === null || user.LastLogin === null
+        ? null
+        : String(user.lastLogin ?? user.LastLogin ?? ""),
+  };
+}
+
+function buildInitials(firstName: string, lastName: string) {
+  const first = firstName?.[0]?.toUpperCase() ?? "U";
+  const last = lastName?.[0]?.toUpperCase() ?? "U";
+  return `${first}${last}`;
 }

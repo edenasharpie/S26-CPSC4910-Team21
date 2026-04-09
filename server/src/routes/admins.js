@@ -1,5 +1,11 @@
 import express from 'express';
 import { pool } from '../db.js';
+import { getEffectiveSessionUser } from '../middleware/session-context.js';
+import {
+  getSystemAdminRetentionSettings,
+  saveSystemAdminRetentionSettings,
+} from '../services/admin-settings-service.js';
+import { validateAdminRetentionSettings } from '../utils/admin-settings.js';
 const router = express.Router();
 
 // GET /api/admins/invoices
@@ -54,6 +60,40 @@ router.get('/driver-report/:driverId', async (req, res) => {
   } catch (error) {
     console.error("Driver Report Error:", error);
     res.status(500).json({ error: "Failed to generate report" });
+  }
+});
+
+// GET /api/admin/settings/:userId - Get admin user settings
+router.get('/settings/:userId', async (req, res) => {
+  try {
+    // Route keeps :userId for client compatibility, but settings are system-wide.
+    const settings = await getSystemAdminRetentionSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Error fetching admin settings:', error);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// POST /api/admin/settings/:userId - Update admin user settings
+router.post('/settings/:userId', async (req, res) => {
+  try {
+    const validation = validateAdminRetentionSettings(req.body);
+    if (!validation.ok) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const effectiveSessionUser = getEffectiveSessionUser(req);
+    const actorUserId = effectiveSessionUser?.UserID ?? null;
+    const saved = await saveSystemAdminRetentionSettings(validation.value, actorUserId);
+
+    res.json({
+      success: true,
+      ...saved,
+    });
+  } catch (error) {
+    console.error('Error updating admin settings:', error);
+    res.status(500).json({ error: 'Failed to update settings' });
   }
 });
 

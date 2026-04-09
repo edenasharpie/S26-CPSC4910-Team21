@@ -85,6 +85,15 @@ paths:
   /admin/users/{id}/points/{transactionId}:
     $ref: './paths/admin/users.yaml#/userPointsTransaction'
 
+  /admin/assume-driver/{targetUserId}:
+    $ref: './paths/admin/users.yaml#/assumeDriver'
+
+  /admin/assume-sponsor/{targetUserId}:
+    $ref: './paths/admin/users.yaml#/assumeSponsor'
+
+  /auth/assumption-exit:
+    $ref: './paths/auth.yaml#/assumptionExit'
+
   ### catalogs - driver ###
 
   /driver/{userId}/catalogs:
@@ -95,6 +104,12 @@ paths:
 
   /driver/{userId}/catalogs/{catalogId}/items/{itemId}:
     $ref: './paths/driver/catalogs.yaml#/catalogItemById'
+
+  /driver/{userId}/orders:
+    $ref: './paths/driver/orders.yaml#/orders'
+
+  /driver/{userId}/orders/{orderId}:
+    $ref: './paths/driver/orders.yaml#/ordersById'
 
   /sponsor/{userId}/catalogs:
     $ref: './paths/sponsor/catalogs.yaml#/catalogs'
@@ -108,6 +123,9 @@ paths:
   /sponsor/{userId}/catalogs/{catalogId}/items/{itemId}:
     $ref: './paths/sponsor/catalogs.yaml#/catalogItemsById'
 
+  /sponsors/{userId}/assume-driver/{driverId}:
+    $ref: './paths/sponsor/catalogs.yaml#/assumeDriver'
+
   ### reports - admin ###
 
   /admin/reports/driver-applications:
@@ -117,6 +135,12 @@ paths:
   
   /sponsor/{userId}/reports/driver-applications:
     $ref: './paths/sponsor/reports.yaml#/driverApplications'
+
+  /sponsor/{userId}/reports/generated:
+    $ref: './paths/sponsor/reports.yaml#/generated'
+
+  /sponsor/{userId}/reports/generated/{reportId}/download:
+    $ref: './paths/sponsor/reports.yaml#/generatedDownload'
 
 components:
 # placeholder security schema for linting purposes

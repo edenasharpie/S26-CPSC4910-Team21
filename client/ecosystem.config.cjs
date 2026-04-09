@@ -3,11 +3,11 @@ module.exports = {
     name: "fleetscore-client",
     script: "npm",
     args: "start",
-    cwd: "/home/ubuntu/FleetScore/S26-CPSC4910-Team21/client",
+    cwd: __dirname,
     env: {
       NODE_ENV: "production",
       PORT: 3000,
-      API_URL: "http://localhost:5000"
+      API_URL: process.env.API_URL || "http://localhost:5000"
     },
     instances: 1,
     autorestart: true,

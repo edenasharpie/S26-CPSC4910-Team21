@@ -53,7 +53,7 @@ async function createTestDriver(userId, sponsorCompanyId) {
   try {
     await connection.query(
       `INSERT INTO DRIVERS (LicenseNumber, UserID, SponsorCompanyID, PointBalance, 
-       PerformanceStatus, AlertStatus, AlertOrders) 
+       PerformanceStatus, AlertPoints, AlertOrders) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [`LICENSE_${userId}`, userId, sponsorCompanyId, 1000, 'good', 0, 0]
     );
@@ -223,7 +223,7 @@ async function runTests() {
     try {
       await connection.query(
         `INSERT INTO DRIVERS (LicenseNumber, UserID, SponsorCompanyID, PointBalance, 
-         PerformanceStatus, AlertStatus, AlertOrders) 
+         PerformanceStatus, AlertPoints, AlertOrders) 
          VALUES (?, ?, NULL, ?, ?, ?, ?)`,
         [`LICENSE_${orphanDriverUserId}`, orphanDriverUserId, 1000, 'good', 0, 0]
       );

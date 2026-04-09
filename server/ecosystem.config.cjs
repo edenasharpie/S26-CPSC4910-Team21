@@ -2,10 +2,11 @@ module.exports = {
   apps: [{
     name: "fleetscore-server",
     script: "./index.js",
-    cwd: "/home/ubuntu/FleetScore/S26-CPSC4910-Team21/server",
+    cwd: __dirname,
     env: {
       NODE_ENV: "production",
-      PORT: 5000
+      PORT: process.env.PORT || 5000,
+      HOST: process.env.HOST || "0.0.0.0"
     },
     instances: 1,
     autorestart: true,

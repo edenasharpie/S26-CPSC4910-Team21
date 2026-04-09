@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
+import { toApiUrl } from "~/utils/api-url";
 
 export function CommentSystem({ reviewId, currentUserId }: { reviewId: string, currentUserId: string }) {
   const [comments, setComments] = useState<any[]>([]);
@@ -8,7 +7,7 @@ export function CommentSystem({ reviewId, currentUserId }: { reviewId: string, c
   const [replyTo, setReplyTo] = useState<number | null>(null);
 
   const fetchComments = async () => {
-    const res = await fetch(`${API_URL}/api/user/review/${reviewId}/comments`);
+    const res = await fetch(toApiUrl(`/api/user/review/${reviewId}/comments`));
     const data = await res.json();
     setComments(data);
   };
@@ -20,7 +19,7 @@ export function CommentSystem({ reviewId, currentUserId }: { reviewId: string, c
     
     if (!text) return;
 
-    await fetch(`${API_URL}/api/user/comments`, {
+    await fetch(toApiUrl("/api/user/comments"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

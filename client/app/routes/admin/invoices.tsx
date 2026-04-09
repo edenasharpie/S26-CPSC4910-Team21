@@ -1,9 +1,10 @@
 import { useLoaderData, useNavigate, Link } from "react-router";
 import type { Route } from "./+types/invoices";
-import { Table, Button } from "~/components";
+import { Table, Button, Badge } from "~/components";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? 'http://localhost:5000';
+const API_URL = getApiBaseUrl();
 
 export async function loader({ request }: Route.LoaderArgs) {
   requireAuth(request, ["admin"]);

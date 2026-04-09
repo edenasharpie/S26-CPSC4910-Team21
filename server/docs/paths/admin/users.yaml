@@ -572,3 +572,141 @@ userPointsTransaction:
         $ref: '../../schemas/common.yaml#/Responses/500Error'
       '503':
         $ref: '../../schemas/common.yaml#/Responses/503Error'
+
+assumeDriver:
+  parameters:
+    - name: targetUserId
+      in: path
+      description: The user ID of the driver account to assume.
+      required: true
+      schema:
+        type: integer
+  post:
+    tags:
+      - views
+    summary: Admin assume driver view
+    description: Switch to a driver view context for an active driver account. Requires admin requester with canAssumeDriverView permission.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - requesterUserId
+            properties:
+              requesterUserId:
+                type: integer
+                description: The admin user ID initiating the assume action.
+                example: 1
+    responses:
+      '200':
+        description: Assume driver view started successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                assumedUser:
+                  type: object
+                  properties:
+                    UserID:
+                      type: integer
+                      example: 27
+                    UserType:
+                      type: string
+                      enum: [driver]
+                      example: driver
+                    Username:
+                      type: string
+                      example: driver_jdoe
+                    FirstName:
+                      type: string
+                      nullable: true
+                      example: John
+                    LastName:
+                      type: string
+                      nullable: true
+                      example: Doe
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+assumeSponsor:
+  parameters:
+    - name: targetUserId
+      in: path
+      description: The user ID of the sponsor account to assume.
+      required: true
+      schema:
+        type: integer
+  post:
+    tags:
+      - views
+    summary: Admin assume sponsor view
+    description: Switch to a sponsor view context for an active sponsor account. Requires admin requester with canAssumeSponsorView permission.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - requesterUserId
+            properties:
+              requesterUserId:
+                type: integer
+                description: The admin user ID initiating the assume action.
+                example: 1
+    responses:
+      '200':
+        description: Assume sponsor view started successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                assumedUser:
+                  type: object
+                  properties:
+                    UserID:
+                      type: integer
+                      example: 11
+                    UserType:
+                      type: string
+                      enum: [sponsor]
+                      example: sponsor
+                    Username:
+                      type: string
+                      example: sponsor_jane
+                    FirstName:
+                      type: string
+                      nullable: true
+                      example: Jane
+                    LastName:
+                      type: string
+                      nullable: true
+                      example: Smith
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'

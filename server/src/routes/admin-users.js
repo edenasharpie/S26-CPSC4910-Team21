@@ -9,9 +9,77 @@ import {
   updatePointTransaction,
   getAllPointTransactions,
 } from '../db.js';
-import { hashPassword } from '../utils/auth.js';
+import { hashPassword, hasBooleanPermission } from '../utils/auth.js';
 
 const router = Router();
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+
+function parseLimit(rawLimit) {
+  const parsed = Number.parseInt(String(rawLimit ?? ''), 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return DEFAULT_PAGE_SIZE;
+  }
+  return Math.min(parsed, MAX_PAGE_SIZE);
+}
+
+function parseOffset(rawOffset) {
+  const parsed = Number.parseInt(String(rawOffset ?? ''), 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return 0;
+  }
+  return parsed;
+}
+
+function normalizeUserType(rawUserType) {
+  if (typeof rawUserType !== 'string') return null;
+  const normalized = rawUserType.trim().toLowerCase();
+  return ['driver', 'sponsor', 'admin'].includes(normalized) ? normalized : null;
+}
+
+function normalizeActiveStatus(rawActiveStatus) {
+  if (rawActiveStatus === undefined || rawActiveStatus === null) {
+    return 'all';
+  }
+
+  const normalized = String(rawActiveStatus).trim().toLowerCase();
+  if (normalized === '0' || normalized === '1' || normalized === 'all') {
+    return normalized;
+  }
+
+  return 'all';
+}
+
+function normalizeUserForSession(user) {
+  return {
+    UserID: Number(user.UserID),
+    UserType: user.UserType,
+    Username: user.Username,
+    FirstName: user.FirstName ?? null,
+    LastName: user.LastName ?? null,
+  };
+}
+
+async function getUserForAssume(connection, userId) {
+  const [rows] = await connection.query(
+    `SELECT
+      u.UserID,
+      u.UserType,
+      u.Username,
+      u.FirstName,
+      u.LastName,
+      u.ActiveStatus,
+      u.Permissions,
+      s.SponsorCompanyID
+     FROM USERS u
+     LEFT JOIN SPONSORS s ON s.UserID = u.UserID
+     WHERE u.UserID = ?
+     LIMIT 1`,
+    [userId]
+  );
+
+  return rows[0] ?? null;
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/users — list all users with optional pagination + filtering
@@ -21,11 +89,11 @@ router.get('/users', async (request, response) => {
   try {
     connection = await pool.getConnection();
 
-    const limit = parseInt(request.query.limit) || 10;
-    const offset = parseInt(request.query.offset) || 0;
-    const userType = request.query.userType; // filter by 'driver', 'sponsor', or 'admin'
-    const activeStatus = request.query.activeStatus; // filter by '0' or '1'
-    const search = request.query.search; // search by username, email, first name, or last name
+    const limit = parseLimit(request.query.limit);
+    const offset = parseOffset(request.query.offset);
+    const userType = normalizeUserType(request.query.userType);
+    const activeStatus = normalizeActiveStatus(request.query.activeStatus);
+    const search = typeof request.query.search === 'string' ? request.query.search.trim().slice(0, 100) : '';
 
     // Build dynamic query with filters
     let query = `
@@ -44,6 +112,7 @@ router.get('/users', async (request, response) => {
         u.ActiveStatus,
         DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
         DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange,
+        COALESCE(d.PointBalance, 0) AS PointBalance,
         CASE
           WHEN u.UserType = 'driver'  THEN COALESCE(sc.CompanyName, 'Unassigned')
           WHEN u.UserType = 'sponsor' THEN COALESCE(sc2.CompanyName, 'N/A')
@@ -67,7 +136,7 @@ router.get('/users', async (request, response) => {
 
     // Only apply activeStatus filter if it's a valid numeric value (0 or 1)
     // Skip filter for 'all' or undefined
-    if (activeStatus !== undefined && activeStatus !== 'all' && (activeStatus === '0' || activeStatus === '1')) {
+    if (activeStatus !== 'all') {
       query += ' AND u.ActiveStatus = ?';
       params.push(parseInt(activeStatus));
     }
@@ -93,7 +162,7 @@ router.get('/users', async (request, response) => {
     }
 
     // Only apply activeStatus filter if it's a valid numeric value (0 or 1)
-    if (activeStatus !== undefined && activeStatus !== 'all' && (activeStatus === '0' || activeStatus === '1')) {
+    if (activeStatus !== 'all') {
       countQuery += ' AND u.ActiveStatus = ?';
       countParams.push(parseInt(activeStatus));
     }
@@ -109,8 +178,8 @@ router.get('/users', async (request, response) => {
     response.json({
       users: result[0],
       totalCount: countResult[0][0].total,
-      limit: limit,
-      offset: offset
+      limit,
+      offset
     });
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -330,7 +399,7 @@ router.post('/users', async (request, response) => {
     // Fetch and return the newly created user
     const newUserQuery = `
       SELECT
-        UserID, Username, Email, Phone,
+        UserID as id, UserID, Username, Email, Phone,
         FirstName, MiddleName, LastName, Pronouns,
         ProfilePicture, Bio, UserType, ActiveStatus,
         DATE_FORMAT(LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
@@ -532,7 +601,7 @@ router.delete('/users/:id', async (request, response) => {
 
     // Check if user exists
     const checkUser = await connection.query(
-      'SELECT UserID, ActiveStatus FROM USERS WHERE UserID = ?',
+      'SELECT UserID, UserType, ActiveStatus FROM USERS WHERE UserID = ?',
       [id]
     );
 
@@ -547,6 +616,12 @@ router.delete('/users/:id', async (request, response) => {
       [id]
     );
 
+    await connection.query(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountStatusChange', JSON_OBJECT('newStatus', false, 'targetUserId', ?, 'adminNotes', 'admin_deactivate'))`,
+      [Number(id), Number(id)]
+    );
+
     await connection.commit();
     response.status(204).send();
   } catch (error) {
@@ -555,6 +630,129 @@ router.delete('/users/:id', async (request, response) => {
     }
     console.error('Error deleting user:', error);
     response.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+// POST /api/admin/assume-driver/:targetUserId
+router.post('/assume-driver/:targetUserId', async (request, response) => {
+  let connection;
+  try {
+    const requesterUserId = Number(request.body?.requesterUserId);
+    const targetUserId = Number(request.params.targetUserId);
+
+    if (!Number.isInteger(requesterUserId) || !Number.isInteger(targetUserId)) {
+      return response.status(400).json({
+        success: false,
+        error: 'requesterUserId and targetUserId must be valid integers.',
+      });
+    }
+
+    connection = await pool.getConnection();
+
+    const requester = await getUserForAssume(connection, requesterUserId);
+    if (!requester || requester.UserType !== 'admin') {
+      return response.status(403).json({ success: false, error: 'Only admins can assume driver view.' });
+    }
+
+    if (!Boolean(requester.ActiveStatus)) {
+      return response.status(403).json({ success: false, error: 'Inactive accounts cannot assume another view.' });
+    }
+
+    if (!hasBooleanPermission(requester.UserType, requester.Permissions, 'canAssumeDriverView')) {
+      return response.status(403).json({ success: false, error: 'Missing canAssumeDriverView permission.' });
+    }
+
+    const targetUser = await getUserForAssume(connection, targetUserId);
+    if (!targetUser || targetUser.UserType !== 'driver') {
+      return response.status(404).json({ success: false, error: 'Driver target not found.' });
+    }
+
+    if (!Boolean(targetUser.ActiveStatus)) {
+      return response.status(409).json({ success: false, error: 'Cannot assume an inactive driver account.' });
+    }
+
+    await connection.query(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('assumedView:driver'), 'isSelfUpdate', false, 'success', true))`,
+      [requesterUserId]
+    );
+
+    return response.json({
+      success: true,
+      assumedUser: normalizeUserForSession(targetUser),
+    });
+  } catch (error) {
+    console.error('Assume driver error:', error);
+    return response.status(500).json({ success: false, error: 'Internal Server Error' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+// POST /api/admin/assume-sponsor/:targetUserId
+router.post('/assume-sponsor/:targetUserId', async (request, response) => {
+  let connection;
+  try {
+    const requesterUserId = Number(request.body?.requesterUserId);
+    const targetUserId = Number(request.params.targetUserId);
+
+    if (!Number.isInteger(requesterUserId) || !Number.isInteger(targetUserId)) {
+      return response.status(400).json({
+        success: false,
+        error: 'requesterUserId and targetUserId must be valid integers.',
+      });
+    }
+
+    connection = await pool.getConnection();
+
+    const requester = await getUserForAssume(connection, requesterUserId);
+    if (!requester || requester.UserType !== 'admin') {
+      return response.status(403).json({ success: false, error: 'Only admins can assume sponsor view.' });
+    }
+
+    if (!Boolean(requester.ActiveStatus)) {
+      return response.status(403).json({ success: false, error: 'Inactive accounts cannot assume another view.' });
+    }
+
+    if (!hasBooleanPermission(requester.UserType, requester.Permissions, 'canAssumeSponsorView')) {
+      return response.status(403).json({ success: false, error: 'Missing canAssumeSponsorView permission.' });
+    }
+
+    const targetUser = await getUserForAssume(connection, targetUserId);
+    if (!targetUser || targetUser.UserType !== 'sponsor') {
+      return response.status(404).json({ success: false, error: 'Sponsor target not found.' });
+    }
+
+    if (!targetUser.SponsorCompanyID) {
+      return response.status(409).json({
+        success: false,
+        error: 'Sponsor target is missing sponsor-company linkage.',
+      });
+    }
+
+    if (!Boolean(targetUser.ActiveStatus)) {
+      return response.status(409).json({ success: false, error: 'Cannot assume an inactive sponsor account.' });
+    }
+
+    await connection.query(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('assumedView:sponsor'), 'isSelfUpdate', false, 'success', true))`,
+      [requesterUserId]
+    );
+
+    return response.json({
+      success: true,
+      assumedUser: normalizeUserForSession(targetUser),
+    });
+  } catch (error) {
+    console.error('Assume sponsor error:', error);
+    return response.status(500).json({ success: false, error: 'Internal Server Error' });
   } finally {
     if (connection) {
       connection.release();
@@ -604,6 +802,117 @@ router.put('/point-transactions/:transactionId', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Per-driver points
 // ---------------------------------------------------------------------------
+
+// GET /api/admin/users/:userId/points
+router.get('/users/:userId/points', async (req, res) => {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'Invalid userId' });
+    }
+
+    const driver = await getDriverPoints(userId);
+    if (!driver) {
+      return res.status(404).json({ error: 'Driver not found' });
+    }
+
+    const history = await getPointHistory(userId);
+    return res.json({ driver, history });
+  } catch (err) {
+    console.error('GET /admin/users/:userId/points error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/admin/users/:userId/points
+// Body: { pointChange, reason, adminUserId }
+router.post('/users/:userId/points', async (req, res) => {
+  const { pointChange, reason, adminUserId } = req.body ?? {};
+
+  if (reason === undefined || reason === null || String(reason).trim().length === 0) {
+    return res.status(400).json({ error: 'Missing required field: reason' });
+  }
+
+  if (String(reason).length > 45) {
+    return res.status(400).json({ error: 'Reason exceeds 45 characters' });
+  }
+
+  if (typeof pointChange !== 'number' || Number.isNaN(pointChange)) {
+    return res.status(400).json({ error: 'pointChange must be a number' });
+  }
+
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'Invalid userId' });
+    }
+
+    const existingDriver = await getDriverPoints(userId);
+    if (!existingDriver) {
+      return res.status(404).json({ error: 'Driver not found' });
+    }
+
+    await addPointTransaction(userId, adminUserId ?? null, pointChange, reason);
+
+    const driver = await getDriverPoints(userId);
+    const history = await getPointHistory(userId);
+
+    return res.status(201).json({
+      message: 'Points added',
+      driver,
+      history,
+    });
+  } catch (err) {
+    console.error('POST /admin/users/:userId/points error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/users/:userId/points/:transactionId
+// Body: { pointChange, reason, adminUserId }
+router.patch('/users/:userId/points/:transactionId', async (req, res) => {
+  const { pointChange, reason, adminUserId } = req.body ?? {};
+
+  if (reason === undefined || reason === null || String(reason).trim().length === 0) {
+    return res.status(400).json({ error: 'Missing required field: reason' });
+  }
+
+  if (String(reason).length > 45) {
+    return res.status(400).json({ error: 'Reason exceeds 45 characters' });
+  }
+
+  if (typeof pointChange !== 'number' || Number.isNaN(pointChange)) {
+    return res.status(400).json({ error: 'pointChange must be a number' });
+  }
+
+  try {
+    const userId = Number(req.params.userId);
+    const transactionId = Number(req.params.transactionId);
+
+    if (!Number.isInteger(userId) || !Number.isInteger(transactionId)) {
+      return res.status(400).json({ error: 'Invalid userId or transactionId' });
+    }
+
+    const existingDriver = await getDriverPoints(userId);
+    if (!existingDriver) {
+      return res.status(404).json({ error: 'Driver not found' });
+    }
+
+    await updatePointTransaction(transactionId, pointChange, reason, adminUserId ?? null);
+
+    const driver = await getDriverPoints(userId);
+    const history = await getPointHistory(userId);
+
+    return res.json({
+      message: 'Transaction updated',
+      driver,
+      history,
+    });
+  } catch (err) {
+    console.error('PATCH /admin/users/:userId/points/:transactionId error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 // GET /api/admin/drivers/:driverUserId/points
 router.get('/drivers/:driverUserId/points', async (req, res) => {
@@ -708,7 +1017,7 @@ router.get('/audit-reports', async (req, res) => {
       `SELECT
         p.PointChange,
         p.ReasonForChange,
-        p.TimeChanged,
+        DATE_FORMAT(p.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged,
         u.FirstName AS DriverFirstName,
         u.LastName AS DriverLastName,
         admin.FirstName AS AdminFirstName
@@ -716,6 +1025,8 @@ router.get('/audit-reports', async (req, res) => {
        JOIN DRIVERS d ON p.DriverID = d.LicenseNumber
        JOIN USERS u ON d.UserID = u.UserID
        JOIN USERS admin ON p.UserChanged = admin.UserID
+       WHERE p.TimeChanged IS NOT NULL
+         AND p.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY p.TimeChanged DESC`
     );
     res.json(rows);

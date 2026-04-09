@@ -1,7 +1,8 @@
 import { Link, useLoaderData } from "react-router";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 interface User {
   UserID: string;
@@ -36,6 +37,9 @@ export default function UserDirectory() {
   return (
     <div className="min-h-screen bg-[#0f172a] p-12">
       <div className="max-w-5xl mx-auto">
+        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-300 hover:underline mb-6">
+          &larr; Home
+        </Link>
         
         {/* Header (Text must be white to match screenshot/dark theme) */}
         <h1 className="text-4xl font-extrabold text-white mb-10 tracking-tight">

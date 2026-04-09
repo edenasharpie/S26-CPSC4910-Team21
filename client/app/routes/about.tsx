@@ -1,14 +1,10 @@
 import { useLoaderData, Link } from "react-router";
 import type { Route } from "./+types/about";
+import { toApiUrl } from "~/utils/api-url";
 
 // fetch data before rendering anything
 export async function loader({ params }: Route.LoaderArgs) {
-  // absolute URL for server-side fetches, relative for client-side
-  const apiUrl = typeof window === 'undefined' 
-    ? process.env.API_URL || 'http://localhost:5001'
-    : '';
-    
-  const response = await fetch(`${apiUrl}/api/about`);
+  const response = await fetch(toApiUrl("/api/about"));
   
   if (!response.ok) {
     throw new Response('Failed to load "About" information', { status: 500 });

@@ -1,5 +1,6 @@
-import { useLoaderData } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import { toApiUrl } from "~/utils/api-url";
 import { requireAuth } from "~/utils/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -7,10 +8,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // requireAuth likely returns the user object stored in the cookie
   const user = await requireAuth(request, ["driver"]);
   
-  // 2. Use the real ID from the session (e.g., user.username or user.id)
-  const driverId = user.Username || user.UserID; 
+  // 2. Use the authenticated user id; server resolves it to LicenseNumber.
+  const driverId = user.UserID;
 
-  const res = await fetch(`http://localhost:5001/api/users/my-applications/${driverId}`);
+  const res = await fetch(toApiUrl(`/api/user/my-applications/${driverId}`));
   if (!res.ok) throw new Error("Could not load applications");
   
   return await res.json();
@@ -29,6 +30,9 @@ export default function MyApplications() {
   return (
     <div className="p-8 max-w-5xl mx-auto min-h-screen">
       <header className="mb-10">
+        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline mb-3">
+          &larr; Home
+        </Link>
         <h1 className="text-3xl font-bold text-slate-900">Your Applications</h1>
         <p className="text-slate-500">Track your status with sponsor companies.</p>
       </header>

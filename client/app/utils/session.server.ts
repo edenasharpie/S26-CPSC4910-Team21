@@ -15,16 +15,17 @@ import { redirect } from "react-router";
 
 export type UserRole = "driver" | "sponsor" | "admin";
 
-export interface SessionUser {
+export interface SessionIdentity {
   UserID: number;
   UserType: UserRole;
   Username: string;
+  FirstName?: string;
+  LastName?: string;
+  ProfilePicture?: string;
+}
 
-  originalUser?: {
-    UserID: number;
-    Username: string;
-    UserType: UserRole;
-  };
+export interface SessionUser extends SessionIdentity {
+  OriginalUser?: SessionIdentity;
 }
 
 // ---------------------------------------------------------------------------
@@ -45,10 +46,19 @@ const MAX_AGE_SECONDS = 60 * 60 * 24;
 // Single object so future route renames (e.g. /catalogs) are one-line changes.
 // ---------------------------------------------------------------------------
 export const ROLE_HOME: Record<UserRole, string> = {
-  driver: "/driver/catalogs",
-  sponsor: "/sponsor/catalogs",
+  driver: "/driver/dashboard",
+  sponsor: "/sponsor/dashboard",
   admin: "/admin/dashboard",
 };
+
+function normalizeUserRole(role: unknown): UserRole | null {
+  if (typeof role !== "string") return null;
+  const normalized = role.trim().toLowerCase();
+  if (normalized === "driver" || normalized === "sponsor" || normalized === "admin") {
+    return normalized;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // JWT helpers
@@ -56,13 +66,84 @@ export const ROLE_HOME: Record<UserRole, string> = {
 
 /** Sign a JWT for the given user and return it as a string. */
 export function signToken(user: SessionUser): string {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: MAX_AGE_SECONDS });
+  const normalizedRole = normalizeUserRole(user.UserType);
+  const payload: SessionUser = {
+    ...user,
+    UserType: normalizedRole ?? user.UserType,
+  };
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: MAX_AGE_SECONDS });
 }
 
 /** Verify a JWT string. Returns the decoded payload or null if invalid/expired. */
 export function verifyToken(token: string): SessionUser | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as SessionUser;
+    const decoded = jwt.verify(token, JWT_SECRET) as Record<string, unknown>;
+    const rawUserId = decoded.UserID ?? decoded.userID;
+    const rawUserType = decoded.UserType ?? decoded.userType;
+    const rawUsername = decoded.Username ?? decoded.username;
+
+    const normalizedRole = normalizeUserRole(rawUserType);
+    const userId = typeof rawUserId === "number" ? rawUserId : Number(rawUserId);
+    const username = typeof rawUsername === "string" ? rawUsername : "";
+
+    if (!normalizedRole || !Number.isFinite(userId) || !username) {
+      return null;
+    }
+
+    const rawOriginal =
+      (decoded.OriginalUser as Record<string, unknown> | undefined) ??
+      (decoded.originalUser as Record<string, unknown> | undefined);
+
+    let originalUser: SessionIdentity | undefined;
+    if (rawOriginal) {
+      const originalRole = normalizeUserRole(rawOriginal.UserType ?? rawOriginal.userType);
+      const originalUserId =
+        typeof rawOriginal.UserID === "number"
+          ? rawOriginal.UserID
+          : Number(rawOriginal.UserID ?? rawOriginal.userID);
+      const originalUsername =
+        typeof rawOriginal.Username === "string"
+          ? rawOriginal.Username
+          : typeof rawOriginal.username === "string"
+          ? rawOriginal.username
+          : "";
+
+      if (originalRole && Number.isFinite(originalUserId) && originalUsername) {
+        originalUser = {
+          UserID: originalUserId,
+          UserType: originalRole,
+          Username: originalUsername,
+          FirstName:
+            typeof rawOriginal.FirstName === "string"
+              ? rawOriginal.FirstName
+              : typeof rawOriginal.firstName === "string"
+              ? rawOriginal.firstName
+              : undefined,
+          LastName:
+            typeof rawOriginal.LastName === "string"
+              ? rawOriginal.LastName
+              : typeof rawOriginal.lastName === "string"
+              ? rawOriginal.lastName
+              : undefined,
+          ProfilePicture:
+            typeof rawOriginal.ProfilePicture === "string"
+              ? rawOriginal.ProfilePicture
+              : typeof rawOriginal.profilePicture === "string"
+              ? rawOriginal.profilePicture
+              : undefined,
+        };
+      }
+    }
+
+    return {
+      UserID: userId,
+      UserType: normalizedRole,
+      Username: username,
+      FirstName: typeof decoded.FirstName === "string" ? decoded.FirstName : undefined,
+      LastName: typeof decoded.LastName === "string" ? decoded.LastName : undefined,
+      ProfilePicture: typeof decoded.ProfilePicture === "string" ? decoded.ProfilePicture : undefined,
+      OriginalUser: originalUser,
+    };
   } catch {
     return null;
   }
@@ -130,19 +211,45 @@ export function requireAuth(
     throw redirect("/login");
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.UserType)) {
-    // Authenticated but wrong role — redirect to their own dashboard
-    throw redirect(ROLE_HOME[user.UserType] ?? "/login");
+  const normalizedRole = normalizeUserRole(user.UserType);
+  if (!normalizedRole) {
+    throw redirect("/login");
   }
 
-  return user;
+  if (allowedRoles && !allowedRoles.includes(normalizedRole)) {
+    // Authenticated but wrong role — redirect to their own dashboard
+    throw redirect(ROLE_HOME[normalizedRole] ?? "/login");
+  }
+
+  return {
+    ...user,
+    UserType: normalizedRole,
+  };
+}
+
+export function isAssumedSession(user: SessionUser | null | undefined): boolean {
+  return Boolean(user?.OriginalUser);
+}
+
+export function buildAssumedSession(
+  original: SessionIdentity,
+  assumed: SessionIdentity
+): SessionUser {
+  return {
+    ...assumed,
+    OriginalUser: { ...original },
+  };
+}
+
+export function getEffectiveRole(user: SessionUser): UserRole {
+  return user.UserType;
 }
 
 /*
  * Generates a new JWT that "wraps" the current user's identity around a target driver.
  */
 export function assumeDriverIdentity(
-  currentUser: SessionUser, 
+  currentUser: SessionUser,
   targetDriver: { UserID: number, Username: string }
 ): string {
   if (currentUser.UserType === "driver") {
@@ -151,9 +258,9 @@ export function assumeDriverIdentity(
 
   const newSession: SessionUser = {
     UserID: targetDriver.UserID,
-    UserType: "driver", 
+    UserType: "driver",
     Username: targetDriver.Username,
-    originalUser: {
+    OriginalUser: {
       UserID: currentUser.UserID,
       Username: currentUser.Username,
       UserType: currentUser.UserType

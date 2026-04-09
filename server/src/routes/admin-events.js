@@ -17,12 +17,63 @@ const router = Router();
 // ---------------------------------------------------------------------------
 router.get('/', async (req, res) => {
   try {
-    const filterParam = req.query.filter;
-    const filters = filterParam
-      ? String(filterParam).split(',').map((f) => f.trim()).filter(Boolean)
-      : [];
+    const validEventTypes = new Set([
+      'LoginAttempt',
+      'PasswordChange',
+      'AccountUpdate',
+      'AccountStatusChange',
+      'ApplicationStatusUpdate',
+      'ReviewModerationEvent',
+      'Notification',
+      'PointTransaction',
+    ]);
 
-    const logs = await getAuditLogs(filters);
+    const rawFilterParam = req.query.filter;
+    const filterValues = Array.isArray(rawFilterParam)
+      ? rawFilterParam
+      : rawFilterParam
+        ? [rawFilterParam]
+        : [];
+
+    const eventTypes = filterValues
+      .flatMap((value) => String(value).split(','))
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    const invalidEventType = eventTypes.find((eventType) => !validEventTypes.has(eventType));
+    if (invalidEventType) {
+      return res.status(400).json({ error: `Invalid filter value: ${invalidEventType}` });
+    }
+
+    const auditFilters = {
+      eventTypes,
+    };
+
+    if (req.query.startDate) {
+      const startDate = new Date(String(req.query.startDate));
+      if (Number.isNaN(startDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid startDate format.' });
+      }
+      auditFilters.startDate = startDate;
+    }
+
+    if (req.query.endDate) {
+      const endDate = new Date(String(req.query.endDate));
+      if (Number.isNaN(endDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid endDate format.' });
+      }
+      auditFilters.endDate = endDate;
+    }
+
+    if (req.query.targetUserId) {
+      const targetUserId = Number.parseInt(String(req.query.targetUserId), 10);
+      if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+        return res.status(400).json({ error: 'Invalid targetUserId.' });
+      }
+      auditFilters.targetUserId = targetUserId;
+    }
+
+    const logs = await getAuditLogs(auditFilters);
     return res.json(logs);
   } catch (err) {
     console.error('GET /api/admin/audit-logs error:', err);

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { Card, Button, Table, Badge, Alert } from '~/components';
+import { getApiBaseUrl } from "~/utils/api-url";
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = getApiBaseUrl();
 
 interface ReportType {
   id: string;

@@ -101,6 +101,76 @@ async function runTests() {
     log('Created admin user:', createAdminResponse.data);
     console.log('Status:', createAdminResponse.status);
 
+    // test 3b: create a pagination probe dataset and verify users are discoverable across pages
+    const paginationProbePrefix = `pg${Date.now().toString().slice(-6)}`;
+    const paginationProbeIds = [];
+    for (let i = 0; i < 21; i += 1) {
+      const probeUsername = `${paginationProbePrefix}_${i}`;
+      const probeEmail = `${paginationProbePrefix}${i}@ex.com`;
+
+      const probeResponse = await axios.post(API_URL, {
+        username: probeUsername,
+        email: probeEmail,
+        firstName: 'Page',
+        lastName: `Probe${i}`,
+        userType: 'admin',
+        activeStatus: 1,
+      });
+
+      paginationProbeIds.push(probeResponse.data.id);
+      createdUserIds.push(probeResponse.data.id);
+    }
+
+    log('TEST 3b: Validating pagination dataset across pages...', 'GET /api/admin/users with search+limit+offset');
+    const probePage1 = await axios.get(API_URL, {
+      params: {
+        search: paginationProbePrefix,
+        activeStatus: 'all',
+        limit: 10,
+        offset: 0,
+      },
+    });
+
+    const probePage2 = await axios.get(API_URL, {
+      params: {
+        search: paginationProbePrefix,
+        activeStatus: 'all',
+        limit: 10,
+        offset: 10,
+      },
+    });
+
+    const probePage3 = await axios.get(API_URL, {
+      params: {
+        search: paginationProbePrefix,
+        activeStatus: 'all',
+        limit: 10,
+        offset: 20,
+      },
+    });
+
+    const discoveredProbeUserIds = new Set([
+      ...probePage1.data.users,
+      ...probePage2.data.users,
+      ...probePage3.data.users,
+    ].map((user) => Number(user.UserID)));
+
+    if (Number(probePage1.data.totalCount) !== paginationProbeIds.length) {
+      throw new Error(
+        `Expected pagination probe totalCount ${paginationProbeIds.length}, got ${probePage1.data.totalCount}`
+      );
+    }
+
+    if (discoveredProbeUserIds.size !== paginationProbeIds.length) {
+      throw new Error(
+        `Expected to discover ${paginationProbeIds.length} pagination probe users across pages, got ${discoveredProbeUserIds.size}`
+      );
+    }
+
+    if (probePage3.data.users.length < 1) {
+      throw new Error('Expected at least one result on page 3 of pagination probe dataset');
+    }
+
     // test 4: get all users with pagination
     log('TEST 4: Fetching all users with default pagination...', 'GET /api/admin/users');
     const allUsersResponse = await axios.get(API_URL, {
@@ -331,7 +401,7 @@ async function runTests() {
     const addPositivePointsResponse = await axios.post(`${API_URL}/${driverId}/points`, {
       pointChange: 100,
       reason: 'Monthly bonus',
-      adminUserId: 1
+      adminUserId: adminId
     });
     log('Added positive points:', {
       message: addPositivePointsResponse.data.message,
@@ -355,7 +425,7 @@ async function runTests() {
     const addNegativePointsResponse = await axios.post(`${API_URL}/${driverId}/points`, {
       pointChange: -25,
       reason: 'Product purchase',
-      adminUserId: 1
+      adminUserId: adminId
     });
     log('Added negative points:', {
       message: addNegativePointsResponse.data.message,
@@ -369,7 +439,7 @@ async function runTests() {
     const addThirdPointsResponse = await axios.post(`${API_URL}/${driverId}/points`, {
       pointChange: 50,
       reason: 'Safety milestone',
-      adminUserId: 1
+      adminUserId: adminId
     });
     log('Added third transaction:', {
       newBalance: addThirdPointsResponse.data.driver.PointBalance,
@@ -381,7 +451,7 @@ async function runTests() {
     const updateTransactionResponse = await axios.patch(`${API_URL}/${driverId}/points/${firstTransactionId}`, {
       pointChange: 150,
       reason: 'Monthly bonus (adjusted)',
-      adminUserId: 1
+      adminUserId: adminId
     });
     log('Updated transaction:', {
       message: updateTransactionResponse.data.message,
@@ -404,7 +474,7 @@ async function runTests() {
     const updateToNegativeResponse = await axios.patch(`${API_URL}/${driverId}/points/${secondTransactionId}`, {
       pointChange: -50,
       reason: 'Larger purchase (corrected)',
-      adminUserId: 1
+      adminUserId: adminId
     });
     log('Updated to larger negative:', {
       newBalance: updateToNegativeResponse.data.driver.PointBalance,
@@ -540,7 +610,7 @@ async function runTests() {
     const zeroPointsResponse = await axios.post(`${API_URL}/${driverId}/points`, {
       pointChange: 0,
       reason: 'Correction entry',
-      adminUserId: 1
+      adminUserId: adminId
     });
     log('Zero point transaction added:', {
       message: zeroPointsResponse.data.message,
@@ -552,7 +622,7 @@ async function runTests() {
     const largePointsResponse = await axios.post(`${API_URL}/${driverId}/points`, {
       pointChange: 10000,
       reason: 'Year-end bonus',
-      adminUserId: 1
+      adminUserId: adminId
     });
     log('Large point transaction added:', {
       message: largePointsResponse.data.message,
