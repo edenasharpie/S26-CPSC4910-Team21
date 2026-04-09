@@ -76,6 +76,31 @@ async function createTestCatalogItem(catalogId, itemName, pointCost) {
   }
 }
 
+async function createLegacyOrder(driverLicense, sponsorCompanyId, itemId) {
+  const connection = await pool.getConnection();
+  try {
+    const [orderResult] = await connection.query(
+      `INSERT INTO ORDERS
+       (DriverID, SponsorCompanyID, OrderDate, OrderPointsSpent, OrderDollarsSpent, OrderStatus)
+       VALUES (?, ?, ?, ?, ?, 'confirmed')`,
+      [driverLicense, sponsorCompanyId, '1970-01-01 00:00:00', 25, 0.25]
+    );
+
+    const orderId = orderResult.insertId;
+
+    await connection.query(
+      `INSERT INTO ORDER_ITEMS
+       (OrderID, ItemID, Quantity, UnitPointCost, UnitDollarCost)
+       VALUES (?, ?, 1, 25, 0.25)`,
+      [orderId, itemId]
+    );
+
+    return orderId;
+  } finally {
+    connection.release();
+  }
+}
+
 async function getDriverPointBalance(userId) {
   const connection = await pool.getConnection();
   try {
@@ -156,6 +181,9 @@ async function runTests() {
     const forbiddenItem = await createTestCatalogItem(otherCatalogId, 'Other Sponsor Item', 50);
     createdItemIds.push(forbiddenItem);
 
+    const legacyOrderId = await createLegacyOrder(license, sponsorCompanyId, itemA);
+    createdOrderIds.push(legacyOrderId);
+
     // Test 1: list orders initially empty
     log('TEST 1: Listing orders before creation...', `GET /api/driver/${driverUserId}/orders`);
     const emptyListResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/orders`);
@@ -198,6 +226,15 @@ async function runTests() {
     const createdOrder = listResponse.data.find((o) => o.orderId === orderId);
     if (!createdOrder || !Array.isArray(createdOrder.items) || createdOrder.items.length !== 2) {
       throw new Error('Expected created order with two items in listing');
+    }
+
+    if (typeof createdOrder.orderDate !== 'string' || !createdOrder.orderDate.trim()) {
+      throw new Error('Expected orderDate to be a non-empty string in order listing');
+    }
+
+    const createdOrderDate = new Date(createdOrder.orderDate);
+    if (Number.isNaN(createdOrderDate.getTime()) || createdOrderDate.getUTCFullYear() < 2000) {
+      throw new Error(`Expected orderDate to be a valid modern timestamp, got ${createdOrder.orderDate}`);
     }
 
     // Test 4: update confirmed order

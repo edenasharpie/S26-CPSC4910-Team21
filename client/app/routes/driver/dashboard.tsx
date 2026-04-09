@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { Table, Button } from "~/components";
 import { useNavigate, useLoaderData, Link, Form } from "react-router";
 import { requireAuth } from "~/utils/session.server";
+import { getApiBaseUrl } from "~/utils/api-url";
 import { 
   Line, 
   XAxis, 
@@ -14,39 +15,89 @@ import {
   Area 
 } from "recharts";
 
-const API_URL = process.env.API_URL || "http://localhost:5000";
+const API_URL = getApiBaseUrl();
+
+function normalizePointChange(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseDateValue(value: unknown): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value as string | number | Date);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateDisplay(value: unknown): string {
+  const parsed = parseDateValue(value);
+  return parsed ? parsed.toLocaleDateString() : "Unknown";
+}
+
+function formatChartDate(value: unknown): string {
+  const parsed = parseDateValue(value);
+  if (!parsed) return "Unknown";
+
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
-  // 1. Authenticate and get the session data
   const session = await requireAuth(request, ["driver", "admin"]);
-  
-  // 2. Use the UserID from the session
-  const userId = session.UserID;
+  const effectiveUserId = String(session.UserID);
 
-  // 3. Fetch data using the dynamic userId and absolute URL
-  const [driverRes, historyRes, sponsorsRes] = await Promise.all([
-    fetch(`${API_URL}/api/admin/drivers/${userId}/points`),
-    fetch(`${API_URL}/api/admin/drivers/${userId}/point-history`),
-    fetch(`${API_URL}/api/drivers/${userId}/sponsors`),
-  ]);
+  try {
+    // Use the existing driver endpoints and gracefully degrade on partial failures.
+    const [pointsRes, performanceRes] = await Promise.all([
+      fetch(`${API_URL}/api/drivers/my-points/${effectiveUserId}`),
+      fetch(`${API_URL}/api/drivers/performance/${effectiveUserId}`),
+    ]);
 
-  const [driver, history, sponsors] = await Promise.all([
-    driverRes.json(),
-    historyRes.ok ? historyRes.json() : [],
-    sponsorsRes.ok ? sponsorsRes.json() : [],
-  ]);
+    const pointsPayload = pointsRes.ok ? await pointsRes.json() : null;
+    const performancePayload = performanceRes.ok ? await performanceRes.json() : null;
 
-  return { 
-    driver, 
-    history: Array.isArray(history) ? history : [], 
-    sponsors: Array.isArray(sponsors) ? sponsors : [],
-    session 
-  };
+    const history = Array.isArray(pointsPayload?.history) ? pointsPayload.history : [];
+    const pointBalance = Number(pointsPayload?.balance ?? 0);
+
+    const driver = {
+      UserID: session.UserID,
+      Username: session.Username,
+      FirstName: session.FirstName,
+      LastName: session.LastName,
+      PointBalance: Number.isFinite(pointBalance) ? pointBalance : 0,
+      PerformanceStatus: performancePayload?.performanceStatus,
+    };
+
+    return {
+      driver,
+      history,
+      sponsors: [],
+      session,
+      effectiveUserId,
+    };
+  } catch (error) {
+    console.error("driver/dashboard loader error:", error);
+    return {
+      driver: {
+        UserID: session.UserID,
+        Username: session.Username,
+        FirstName: session.FirstName,
+        LastName: session.LastName,
+        PointBalance: 0,
+        PerformanceStatus: undefined,
+      },
+      history: [],
+      sponsors: [],
+      session,
+      effectiveUserId,
+    };
+  }
 }
 
 
 export default function DriverDashboard() {
-  const { driver, history, sponsors, session } = useLoaderData<typeof loader>();
+  const { driver, history, sponsors, effectiveUserId } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
   // Performance status logic
@@ -59,28 +110,41 @@ export default function DriverDashboard() {
   
   const currentStatus = statusConfig[driver?.PerformanceStatus?.toLowerCase() as keyof typeof statusConfig] || statusConfig.good;
 
-  // Compute chart data
+  const validHistory = useMemo(() => {
+    if (!Array.isArray(history)) return [];
+
+    return history
+      .map((item: any) => {
+        const pointChange = normalizePointChange(item?.PointChange);
+        const parsedDate = parseDateValue(item?.TimeChanged);
+        return {
+          ...item,
+          PointChange: pointChange,
+          parsedDate,
+        };
+      })
+      .filter((item: any) => item.parsedDate && item.parsedDate.getFullYear() >= 2000);
+  }, [history]);
+
+  // Compute chart data exactly like the Points Page logic
   const chartData = useMemo(() => {
-    if (!history || history.length === 0) return [];
+      if (validHistory.length === 0) return [];
 
-    const sortedHistory = [...history].sort((a: any, b: any) =>
-      new Date(a.TimeChanged).getTime() - new Date(b.TimeChanged).getTime()
-    );
+      const sortedHistory = [...validHistory].sort(
+        (a: any, b: any) => a.parsedDate.getTime() - b.parsedDate.getTime()
+      );
 
-    const totalChange = history.reduce((sum: number, item: any) => sum + Number(item.PointChange), 0);
-    let runningBalance = (driver?.PointBalance ?? 0) - totalChange;
+      const totalChange = validHistory.reduce((sum: number, item: any) => sum + item.PointChange, 0);
+      let runningBalance = (driver?.PointBalance ?? 0) - totalChange;
 
-    return sortedHistory.map((item: any) => {
-      runningBalance += Number(item.PointChange);
-      return {
-        date: new Date(item.TimeChanged).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        }),
-        balance: runningBalance,
-      };
-    });
-  }, [history, driver?.PointBalance]);
+      return sortedHistory.map((item: any) => {
+        runningBalance += item.PointChange;
+        return {
+          date: formatChartDate(item.TimeChanged),
+          balance: runningBalance,
+        };
+      });
+    }, [validHistory, driver?.PointBalance]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -98,7 +162,7 @@ export default function DriverDashboard() {
                   Driver Dashboard
                 </h1>
                 <p className="text-gray-500 text-sm mt-1 font-medium italic">
-                  ID: <span className="font-mono text-indigo-500">{session.UserID}</span>
+                  ID: <span className="font-mono text-indigo-500">{effectiveUserId}</span>
                 </p>
               </div>
               
@@ -128,10 +192,8 @@ export default function DriverDashboard() {
             </Form>
             <button
               type="button"
-              onClick={() => navigate("/profile")}
-              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow"
-              aria-label="Open account information"
-              title="Open account information"
+              onClick={() => navigate(`/driver/profile/${effectiveUserId}/edit`)}
+              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm"
             >
               <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase">
                 {driver?.FirstName?.[0]}{driver?.LastName?.[0]}
@@ -253,12 +315,12 @@ export default function DriverDashboard() {
 
             <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl border dark:border-gray-800 overflow-hidden text-left">
               <Table 
-                data={history} 
+                data={validHistory} 
                 columns={[
                   {
                     key: "Date",
                     header: "Date",
-                    render: (t: any) => <span className="text-xs text-gray-500 font-mono">{new Date(t.TimeChanged).toLocaleDateString()}</span>,
+                    render: (t: any) => <span className="text-xs text-gray-500 font-mono">{formatDateDisplay(t.TimeChanged)}</span>,
                   },
                   {
                     key: "Reason",
@@ -268,11 +330,14 @@ export default function DriverDashboard() {
                   {
                     key: "Change",
                     header: "Points",
-                    render: (t: any) => (
-                      <span className={`font-bold ${t.PointChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {t.PointChange >= 0 ? `+${t.PointChange}` : t.PointChange}
+                    render: (t: any) => {
+                      const pointChange = normalizePointChange(t.PointChange);
+                      return (
+                      <span className={`font-bold ${pointChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        {pointChange >= 0 ? `+${pointChange}` : pointChange}
                       </span>
-                    ),
+                    );
+                    },
                   },
                 ]} 
               />

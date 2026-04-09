@@ -8,6 +8,18 @@ import { getApiBaseUrl } from "~/utils/api-url";
 
 const API_URL = getApiBaseUrl();
 
+function parseDisplayDate(value: unknown): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value as string | number | Date);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function isDisplayableDate(value: unknown): boolean {
+  const parsed = parseDisplayDate(value);
+  return Boolean(parsed && parsed.getFullYear() >= 2000);
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
   const sessionUser = await requireAuth(request, ["admin"]);
   const userId = params.id;
@@ -87,11 +99,16 @@ export default function PointsPage() {
   const tooltipText = isDarkMode ? "#e2e8f0" : "#1e293b";
   const tooltipBorder = isDarkMode ? "#334155" : "#cbd5e1";
 
+  const validHistory = useMemo(
+    () => history.filter((item: any) => isDisplayableDate(item.TimeChanged)),
+    [history]
+  );
+
   // Compute chart data and linear regression trendline
   const chartData = useMemo(() => {
 
     let currentBalance = 0;
-    const sortedHistory = [...history].sort((a: any, b: any) =>
+    const sortedHistory = [...validHistory].sort((a: any, b: any) =>
       new Date(a.TimeChanged).getTime() - new Date(b.TimeChanged).getTime()
     );
 
@@ -125,7 +142,7 @@ export default function PointsPage() {
       ...p,
       trend: parseFloat((slope * p.x + intercept).toFixed(2)),
     }));
-  }, [history]);
+  }, [validHistory]);
 
   return (
     <div className="p-8 max-w-400 mx-auto space-y-10 text-left text-gray-900 dark:text-gray-100">
@@ -219,7 +236,7 @@ export default function PointsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {history.map((row: any) => (
+                {validHistory.map((row: any) => (
                   <tr
                     key={row.TransactionID}
                     className="hover:bg-indigo-50/50 dark:hover:bg-gray-800/70 transition-colors group"

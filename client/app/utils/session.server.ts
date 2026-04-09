@@ -90,6 +90,51 @@ export function verifyToken(token: string): SessionUser | null {
       return null;
     }
 
+    const rawOriginal =
+      (decoded.OriginalUser as Record<string, unknown> | undefined) ??
+      (decoded.originalUser as Record<string, unknown> | undefined);
+
+    let originalUser: SessionIdentity | undefined;
+    if (rawOriginal) {
+      const originalRole = normalizeUserRole(rawOriginal.UserType ?? rawOriginal.userType);
+      const originalUserId =
+        typeof rawOriginal.UserID === "number"
+          ? rawOriginal.UserID
+          : Number(rawOriginal.UserID ?? rawOriginal.userID);
+      const originalUsername =
+        typeof rawOriginal.Username === "string"
+          ? rawOriginal.Username
+          : typeof rawOriginal.username === "string"
+          ? rawOriginal.username
+          : "";
+
+      if (originalRole && Number.isFinite(originalUserId) && originalUsername) {
+        originalUser = {
+          UserID: originalUserId,
+          UserType: originalRole,
+          Username: originalUsername,
+          FirstName:
+            typeof rawOriginal.FirstName === "string"
+              ? rawOriginal.FirstName
+              : typeof rawOriginal.firstName === "string"
+              ? rawOriginal.firstName
+              : undefined,
+          LastName:
+            typeof rawOriginal.LastName === "string"
+              ? rawOriginal.LastName
+              : typeof rawOriginal.lastName === "string"
+              ? rawOriginal.lastName
+              : undefined,
+          ProfilePicture:
+            typeof rawOriginal.ProfilePicture === "string"
+              ? rawOriginal.ProfilePicture
+              : typeof rawOriginal.profilePicture === "string"
+              ? rawOriginal.profilePicture
+              : undefined,
+        };
+      }
+    }
+
     return {
       UserID: userId,
       UserType: normalizedRole,
@@ -97,6 +142,7 @@ export function verifyToken(token: string): SessionUser | null {
       FirstName: typeof decoded.FirstName === "string" ? decoded.FirstName : undefined,
       LastName: typeof decoded.LastName === "string" ? decoded.LastName : undefined,
       ProfilePicture: typeof decoded.ProfilePicture === "string" ? decoded.ProfilePicture : undefined,
+      OriginalUser: originalUser,
     };
   } catch {
     return null;
@@ -197,4 +243,29 @@ export function buildAssumedSession(
 
 export function getEffectiveRole(user: SessionUser): UserRole {
   return user.UserType;
+}
+
+/*
+ * Generates a new JWT that "wraps" the current user's identity around a target driver.
+ */
+export function assumeDriverIdentity(
+  currentUser: SessionUser,
+  targetDriver: { UserID: number, Username: string }
+): string {
+  if (currentUser.UserType === "driver") {
+    throw new Error("Drivers cannot impersonate others.");
+  }
+
+  const newSession: SessionUser = {
+    UserID: targetDriver.UserID,
+    UserType: "driver",
+    Username: targetDriver.Username,
+    OriginalUser: {
+      UserID: currentUser.UserID,
+      Username: currentUser.Username,
+      UserType: currentUser.UserType
+    }
+  };
+
+  return signToken(newSession);
 }

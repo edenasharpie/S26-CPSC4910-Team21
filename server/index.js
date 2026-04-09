@@ -1,9 +1,12 @@
+//import dotenv from 'dotenv';
+//dotenv.config({ path: '../../.fs-env' });
+
 import dotenv from 'dotenv';
-dotenv.config({ path: '../../.fs-env' });
+dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
-import { pool, verifyDatabaseConnection } from './src/db.js';
+import { pool, verifyDatabaseConnection, initializeSystemAuditUserCache } from './src/db.js';
 import aboutRoutes from './src/routes/about.js';
 import loginRoutes from './src/routes/login.js';
 import adminCatalogsRoutes from './src/routes/admin-catalogs.js';
@@ -23,6 +26,7 @@ import driverOrdersRoutes from './src/routes/driver-orders.js';
 import imagesRoutes from './src/routes/images.js';
 import { startDailyReportScheduler } from './src/services/daily-report-scheduler.js';
 import { attachSessionContext } from './src/middleware/session-context.js';
+import reviewRoutes from './src/routes/reviews.js';
 
 
 const app = express();
@@ -59,7 +63,8 @@ app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/driver/:userId/orders', driverOrdersRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
-//app.use('/api/admin', adminRoute);
+app.use('/api/sponsor/:userId/reviews', reviewRoutes);
+app.use('/api/admin', adminRoute);
 
 app.use((err, _req, res, _next) => {
   console.error('Unhandled server error:', err);
@@ -72,6 +77,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 const startServer = async () => {
   await verifyDatabaseConnection();
+  await initializeSystemAuditUserCache();
 
   app.listen(PORT, HOST, () => {
     console.log(`Backend running on ${HOST}:${PORT}`);

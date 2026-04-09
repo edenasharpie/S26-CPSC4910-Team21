@@ -30,6 +30,24 @@ interface DriverOrder {
   items: OrderItem[];
 }
 
+function parseOrderDate(value: unknown): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value as string | number | Date);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function isDisplayableOrderDate(value: unknown): boolean {
+  const parsed = parseOrderDate(value);
+  return Boolean(parsed && parsed.getFullYear() >= 2000);
+}
+
+function formatOrderDate(value: unknown): string {
+  const parsed = parseOrderDate(value);
+  if (!parsed) return "";
+  return parsed.toLocaleString();
+}
+
 export default function DriverOrders() {
   const { user } = useLoaderData<typeof loader>();
   const api = useMemo(() => createApiClient({ id: user.UserID, role: "driver" }), [user.UserID]);
@@ -54,7 +72,10 @@ export default function DriverOrders() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setOrders(Array.isArray(data) ? data : []);
+      const filteredOrders = Array.isArray(data)
+        ? data.filter((order: DriverOrder) => isDisplayableOrderDate(order.orderDate))
+        : [];
+      setOrders(filteredOrders);
     } catch (err: any) {
       console.error("Error fetching orders:", err);
       setError("Failed to load orders. Please try again.");
@@ -207,7 +228,7 @@ export default function DriverOrders() {
                       Order #{order.orderId}
                     </h2>
                     <p className="text-sm text-gray-500">
-                      {new Date(order.orderDate).toLocaleString()} - {order.sponsorCompanyName || "Sponsor"}
+                      {formatOrderDate(order.orderDate)} - {order.sponsorCompanyName || "Sponsor"}
                     </p>
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-300">

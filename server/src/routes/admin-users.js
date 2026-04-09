@@ -12,6 +12,43 @@ import {
 import { hashPassword, hasBooleanPermission } from '../utils/auth.js';
 
 const router = Router();
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+
+function parseLimit(rawLimit) {
+  const parsed = Number.parseInt(String(rawLimit ?? ''), 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return DEFAULT_PAGE_SIZE;
+  }
+  return Math.min(parsed, MAX_PAGE_SIZE);
+}
+
+function parseOffset(rawOffset) {
+  const parsed = Number.parseInt(String(rawOffset ?? ''), 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return 0;
+  }
+  return parsed;
+}
+
+function normalizeUserType(rawUserType) {
+  if (typeof rawUserType !== 'string') return null;
+  const normalized = rawUserType.trim().toLowerCase();
+  return ['driver', 'sponsor', 'admin'].includes(normalized) ? normalized : null;
+}
+
+function normalizeActiveStatus(rawActiveStatus) {
+  if (rawActiveStatus === undefined || rawActiveStatus === null) {
+    return 'all';
+  }
+
+  const normalized = String(rawActiveStatus).trim().toLowerCase();
+  if (normalized === '0' || normalized === '1' || normalized === 'all') {
+    return normalized;
+  }
+
+  return 'all';
+}
 
 function normalizeUserForSession(user) {
   return {
@@ -52,11 +89,11 @@ router.get('/users', async (request, response) => {
   try {
     connection = await pool.getConnection();
 
-    const limit = parseInt(request.query.limit) || 10;
-    const offset = parseInt(request.query.offset) || 0;
-    const userType = request.query.userType; // filter by 'driver', 'sponsor', or 'admin'
-    const activeStatus = request.query.activeStatus; // filter by '0' or '1'
-    const search = request.query.search; // search by username, email, first name, or last name
+    const limit = parseLimit(request.query.limit);
+    const offset = parseOffset(request.query.offset);
+    const userType = normalizeUserType(request.query.userType);
+    const activeStatus = normalizeActiveStatus(request.query.activeStatus);
+    const search = typeof request.query.search === 'string' ? request.query.search.trim().slice(0, 100) : '';
 
     // Build dynamic query with filters
     let query = `
@@ -99,7 +136,7 @@ router.get('/users', async (request, response) => {
 
     // Only apply activeStatus filter if it's a valid numeric value (0 or 1)
     // Skip filter for 'all' or undefined
-    if (activeStatus !== undefined && activeStatus !== 'all' && (activeStatus === '0' || activeStatus === '1')) {
+    if (activeStatus !== 'all') {
       query += ' AND u.ActiveStatus = ?';
       params.push(parseInt(activeStatus));
     }
@@ -125,7 +162,7 @@ router.get('/users', async (request, response) => {
     }
 
     // Only apply activeStatus filter if it's a valid numeric value (0 or 1)
-    if (activeStatus !== undefined && activeStatus !== 'all' && (activeStatus === '0' || activeStatus === '1')) {
+    if (activeStatus !== 'all') {
       countQuery += ' AND u.ActiveStatus = ?';
       countParams.push(parseInt(activeStatus));
     }
@@ -141,8 +178,8 @@ router.get('/users', async (request, response) => {
     response.json({
       users: result[0],
       totalCount: countResult[0][0].total,
-      limit: limit,
-      offset: offset
+      limit,
+      offset
     });
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -980,7 +1017,7 @@ router.get('/audit-reports', async (req, res) => {
       `SELECT
         p.PointChange,
         p.ReasonForChange,
-        p.TimeChanged,
+        DATE_FORMAT(p.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged,
         u.FirstName AS DriverFirstName,
         u.LastName AS DriverLastName,
         admin.FirstName AS AdminFirstName
@@ -988,6 +1025,8 @@ router.get('/audit-reports', async (req, res) => {
        JOIN DRIVERS d ON p.DriverID = d.LicenseNumber
        JOIN USERS u ON d.UserID = u.UserID
        JOIN USERS admin ON p.UserChanged = admin.UserID
+       WHERE p.TimeChanged IS NOT NULL
+         AND p.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY p.TimeChanged DESC`
     );
     res.json(rows);

@@ -33,7 +33,7 @@ export default [
   //route("admin/profile/:id", "routes/admin/profile/$id/edit.tsx"),
   route("sponsor/profile/:id/edit", "routes/sponsor/profile/$id/edit.tsx"),
   //route("sponsor/profile/:id", "routes/sponsor/profile/$id/edit.tsx"),
-  route("profile", "routes/profile.tsx"),
+  route("driver/profile/:id/edit", "routes/driver/profile/$id/edit.tsx"),
 
   //INVOICES
   route("admin/invoices", "routes/admin/invoices.tsx"),
@@ -45,6 +45,7 @@ export default [
   //REPORTS
   route("admin/reports", "routes/admin/reports.tsx"),
   route("sponsor/reports", "routes/sponsor/reports.tsx"),
+  route("sponsor/reviews", "routes/sponsor/reviews.tsx"),
 
   //CATALOGS
   route("admin/catalogs", "routes/admin/catalogs.tsx"),
@@ -57,7 +58,6 @@ export default [
   route("admin/add-sponsor", "routes/admin/add-sponsor.tsx"),
 
   //SPONSOR FLEET MANAGEMENT
-  route("sponsor/deduct-points", "routes/sponsor/deduct-points.tsx"),
   route("sponsor/driver-purchases", "routes/sponsor/driver-purchases.tsx"),
   route("sponsor/manage-users", "routes/sponsor/manage-users.tsx"),
   route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),

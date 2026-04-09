@@ -22,6 +22,12 @@ interface PerformanceData {
   performanceStatus?: string;
 }
 
+function isDisplayableDate(value: unknown): boolean {
+  if (!value) return false;
+  const parsed = new Date(value as string | number | Date);
+  return !Number.isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000;
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const session = await requireAuth(request, ["driver"]);
   const userId = params.id ?? session.UserID;
@@ -57,6 +63,7 @@ export default function DriverDashboard() {
   const data = useLoaderData<typeof loader>();
   
   const { session, balance = 0, history = [], performanceStatus } = data || {};
+  const displayHistory = history.filter((row: PointTransaction) => isDisplayableDate(row.TimeChanged));
   const normalizedPerformanceStatus = (performanceStatus ?? "").toLowerCase();
   const performanceBadgeVariant =
     normalizedPerformanceStatus === "excellent"
@@ -124,7 +131,7 @@ export default function DriverDashboard() {
 
         <section className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border p-6">
           <h2 className="text-xl font-semibold mb-6">Transaction History</h2>
-          <Table data={history} columns={columns} />
+          <Table data={displayHistory} columns={columns} />
         </section>
       </div>
     </div>
