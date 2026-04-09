@@ -210,6 +210,8 @@ export default function AdminPortal() {
   const [isAuditOpen, setIsAuditOpen]     = useState(false);
   const [selectedType, setSelectedType]   = useState("driver");
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [auditUserType, setAuditUserType] = useState("all");
+  const [auditTargetUserId, setAuditTargetUserId] = useState("");
 
   const totalPages = Math.max(1, Math.ceil(totalCount / Math.max(pageSize, 1)));
   const hasPrevPage = page > 1;
@@ -250,6 +252,17 @@ export default function AdminPortal() {
   const adminLastName = session?.LastName ?? currentAdmin?.LastName ?? "User";
   const adminUsername = session?.Username ?? currentAdmin?.Username ?? "admin";
   const adminProfilePicture = currentAdmin?.ProfilePicture ?? "";
+
+  const auditUsersByType = users
+    .filter((u: any) => {
+      const type = String(u.UserType ?? "").toLowerCase();
+      return auditUserType === "all" || type === auditUserType;
+    })
+    .sort((a: any, b: any) => {
+      const aName = `${a.LastName ?? ""} ${a.FirstName ?? ""} ${a.Username ?? ""}`.trim().toLowerCase();
+      const bName = `${b.LastName ?? ""} ${b.FirstName ?? ""} ${b.Username ?? ""}`.trim().toLowerCase();
+      return aName.localeCompare(bName);
+    });
 
   // Close add-user modal on successful action
   const addUserSuccess = (actionData as any)?.success === true;
@@ -620,14 +633,36 @@ export default function AdminPortal() {
 
           <div className="space-y-1 text-left">
             <label className="text-xs font-bold text-gray-400 uppercase">
+              User Group
+            </label>
+            <select
+              name="targetUserType"
+              value={auditUserType}
+              onChange={(e) => {
+                setAuditUserType(e.target.value);
+                setAuditTargetUserId("");
+              }}
+              className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 text-sm"
+            >
+              <option value="all">All Users</option>
+              <option value="admin">All Admins</option>
+              <option value="driver">All Drivers</option>
+              <option value="sponsor">All Sponsors</option>
+            </select>
+          </div>
+
+          <div className="space-y-1 text-left">
+            <label className="text-xs font-bold text-gray-400 uppercase">
               Specific User (Optional)
             </label>
             <select
               name="targetUserId"
+              value={auditTargetUserId}
+              onChange={(e) => setAuditTargetUserId(e.target.value)}
               className="w-full p-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 text-sm"
             >
-              <option value="">All Users</option>
-              {users.map((u: any) => (
+              <option value="">All Users in Selected Group</option>
+              {auditUsersByType.map((u: any) => (
                 <option key={u.UserID} value={u.UserID}>
                   {u.FirstName} {u.LastName} ({u.Username})
                 </option>

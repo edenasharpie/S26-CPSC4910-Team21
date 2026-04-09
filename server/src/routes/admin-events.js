@@ -73,6 +73,17 @@ router.get('/', async (req, res) => {
       auditFilters.targetUserId = targetUserId;
     }
 
+    if (req.query.targetUserType) {
+      const targetUserType = String(req.query.targetUserType).trim().toLowerCase();
+      const allowedUserTypes = new Set(['all', 'admin', 'driver', 'sponsor']);
+      if (!allowedUserTypes.has(targetUserType)) {
+        return res.status(400).json({ error: 'Invalid targetUserType. Must be all, admin, driver, or sponsor.' });
+      }
+      if (targetUserType !== 'all') {
+        auditFilters.targetUserType = targetUserType;
+      }
+    }
+
     const logs = await getAuditLogs(auditFilters);
     return res.json(logs);
   } catch (err) {

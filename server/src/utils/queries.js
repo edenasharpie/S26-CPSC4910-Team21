@@ -821,6 +821,7 @@ export async function getOrdersReport(filters = {}) {
  * @param {Date} [filters.startDate] - Lower timestamp bound.
  * @param {Date} [filters.endDate] - Upper timestamp bound.
  * @param {number} [filters.targetUserId] - Specific user to include.
+ * @param {'admin'|'driver'|'sponsor'} [filters.targetUserType] - User role to include.
  * @returns {Promise<Object[]>} Array of event rows joined with username.
  */
 export async function getAuditLogs(filters = []) {
@@ -866,6 +867,11 @@ export async function getAuditLogs(filters = []) {
     if (normalizedFilters.targetUserId) {
       whereClauses.push('e.UserID = ?');
       params.push(normalizedFilters.targetUserId);
+    }
+
+    if (normalizedFilters.targetUserType) {
+      whereClauses.push('u.UserType = ?');
+      params.push(normalizedFilters.targetUserType);
     }
 
     if (whereClauses.length > 0) {
