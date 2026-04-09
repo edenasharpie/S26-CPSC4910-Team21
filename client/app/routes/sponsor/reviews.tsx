@@ -1,5 +1,5 @@
 import { useLoaderData, useFetcher } from "react-router";
-import { Button } from "~/components/Button"; // Adjust based on your UI library
+import { Button } from "~/components/Button"; 
 
 export async function loader() {
   const response = await fetch("http://localhost:5001/api/reviews/sponsor-list");
