@@ -2,7 +2,7 @@ import { Link, Form, useLoaderData } from "react-router";
 import type { Route } from "./+types/home";
 import { Card } from "~/components";
 import { Button } from "~/components/Button";
-import { getSession } from "~/utils/session.server";
+import { getSession, ROLE_HOME } from "~/utils/session.server";
 
 export function loader({ request }: Route.LoaderArgs) {
   const session = getSession(request);
@@ -11,147 +11,156 @@ export function loader({ request }: Route.LoaderArgs) {
 
 export function meta(_: Route.MetaArgs) {
   return [
-    { title: "FleetScore" },
-    { name: "description", content: "FleetScore Homepage" },
-  ];
-}
-
-function buildNavSections(user: { UserID: number; UserType: string } | null) {
-  const userId = user?.UserID;
-
-  return [
+    { title: "FleetScore | Trucking Rewards That Drive Performance" },
     {
-      label: "Driver",
-      links: [
-        { to: "/driver/dashboard", label: "Dashboard" },
-        { to: "/driver/catalogs", label: "Catalogs" },
-        { to: "/driver/orders", label: "Orders" },
-      ],
-    },
-    {
-      label: "Sponsor",
-      links: [
-        { to: "/sponsor/dashboard", label: "Dashboard" },
-        { to: "/sponsor/catalogs", label: "Catalogs" },
-        { to: "/sponsor/reviews", label: "Manage Driver Reviews" },
-        { to: "/sponsor/invoices", label: "Invoices" },
-        { to: "/sponsor/reports", label: "Reports" },
-        { to: "/sponsor/manage-users", label: "Manage Users" },
-        { to: "/sponsor/driver-purchases", label: "Driver Purchases" },
-        ...(userId ? [{ to: `/sponsor/settings/${userId}`, label: "My Settings" }] : []),
-      ],
-    },
-    {
-      label: "Admin",
-      links: [
-        { to: "/admin/dashboard", label: "Dashboard" },
-        { to: "/admin/audit-logs", label: "Audit Logs" },
-        { to: "/admin/catalogs", label: "Catalogs" },
-        { to: "/admin/invoices", label: "Invoices" },
-        { to: "/admin/reports", label: "Reports" },
-        { to: "/admin/add-driver", label: "Add Driver" },
-        { to: "/admin/add-sponsor", label: "Add Sponsor" },
-        ...(userId
-          ? [
-              { to: `/admin/settings/${userId}`, label: "My Settings" },
-              { to: `/admin/profile/${userId}/edit`, label: "My Profile Edit" },
-              { to: `/admin/profile/${userId}/points`, label: "My Profile Points" },
-            ]
-          : []),
-      ],
-    },
-    {
-      label: "General",
-      links: [
-        { to: "/about", label: "About" },
-        { to: "/components-demo", label: "Components Demo" },
-      ],
+      name: "description",
+      content:
+        "FleetScore helps sponsors reward safe, reliable drivers with points that convert into real catalog value.",
     },
   ];
 }
 
 export default function Home() {
   const { user } = useLoaderData<typeof loader>();
-  const navSections = buildNavSections(user ?? null);
+  const dashboardHref = user ? ROLE_HOME[user.UserType] ?? "/" : "/login";
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="container-padding section-spacing">
-        <div className="max-w-4xl mx-auto space-y-8">
-          {/* Title Hero */}
-          <div className="text-center space-y-4">
-            <h1 className="text-3xl sm:text-4xl font-bold">
-              {user?.UserType === 'sponsor' ? `Sponsor Portal: Welcome ${user.Username}` : "Welcome to FleetScore!"}
-            </h1>
-            
-            {user ? (
-              <div className="flex flex-col items-center gap-4">
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  Signed in as <span className="font-semibold text-gray-700 dark:text-gray-200">{user.Username}</span>
-                  {" "}({user.UserType})
-                </div>
-                <Form method="post" action="/logout">
-                  <Button variant="secondary" size="lg" type="submit">Sign Out</Button>
-                </Form>
+    <div className="min-h-screen bg-gray-950 text-white">
+      <div className="relative overflow-hidden border-b border-orange-300/20 bg-[radial-gradient(circle_at_20%_10%,rgba(251,146,60,0.28),transparent_46%),radial-gradient(circle_at_78%_26%,rgba(14,165,233,0.22),transparent_48%),linear-gradient(130deg,#020617_0%,#0b1120_48%,#172554_100%)]">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:38px_38px]" />
+        <div className="container-padding section-spacing relative">
+          <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-12 lg:items-center">
+            <div className="space-y-6 lg:col-span-7">
+              <p className="landing-fade-up inline-flex rounded-full border border-orange-200/30 bg-orange-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-100">
+                Fleet Incentive Platform
+              </p>
+              <h1 className="font-display landing-fade-up landing-delay-1 text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">
+                Reward the driving habits your fleet depends on.
+              </h1>
+              <p className="landing-fade-up landing-delay-2 max-w-2xl text-base text-slate-200 sm:text-lg">
+                FleetScore helps sponsors turn performance into meaningful rewards while drivers
+                track progress, redeem points, and stay motivated with transparent feedback.
+              </p>
+              <div className="landing-fade-up landing-delay-3 flex flex-wrap items-center gap-3">
+                <Link to={dashboardHref}>
+                  <Button className="bg-orange-500 hover:bg-orange-400 text-slate-950 font-extrabold" size="lg">
+                    {user ? "Go To My Dashboard" : "Get Started"}
+                  </Button>
+                </Link>
+                <Link to="/about">
+                  <Button variant="secondary" size="lg" className="border border-white/20 bg-white/10 text-white hover:bg-white/20">
+                    Learn More
+                  </Button>
+                </Link>
+                {user ? (
+                  <Form method="post" action="/logout">
+                    <Button variant="ghost" size="lg" className="text-white hover:bg-white/10">
+                      Sign Out
+                    </Button>
+                  </Form>
+                ) : (
+                  <Link to="/login" className="text-sm font-semibold text-cyan-200 hover:text-cyan-100">
+                    Already have an account? Sign in
+                  </Link>
+                )}
               </div>
-            ) : (
-              <Link to="/login">
-                <Button variant="primary" size="lg">Sign In</Button>
-              </Link>
-            )}
+              {user ? (
+                <p className="text-sm text-slate-300">
+                  Signed in as <span className="font-bold text-white">{user.Username}</span> ({user.UserType})
+                </p>
+              ) : null}
+            </div>
+
+            <div className="lg:col-span-5">
+              <Card className="border-white/20 bg-white/10 p-6 backdrop-blur-sm dark:bg-white/10">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">Live Impact</p>
+                <div className="mt-5 grid grid-cols-2 gap-4">
+                  <div className="rounded-lg border border-white/20 bg-white/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-slate-200">Driver Retention</p>
+                    <p className="mt-2 text-3xl font-black text-white">+22%</p>
+                  </div>
+                  <div className="rounded-lg border border-white/20 bg-white/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-slate-200">Reward Usage</p>
+                    <p className="mt-2 text-3xl font-black text-white">89%</p>
+                  </div>
+                  <div className="rounded-lg border border-white/20 bg-white/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-slate-200">Sponsor Visibility</p>
+                    <p className="mt-2 text-3xl font-black text-white">24/7</p>
+                  </div>
+                  <div className="rounded-lg border border-white/20 bg-white/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-slate-200">Audit Readiness</p>
+                    <p className="mt-2 text-3xl font-black text-white">Full</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="container-padding py-14 sm:py-16 lg:py-20">
+        <div className="mx-auto max-w-7xl space-y-10">
+          <div className="max-w-3xl space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">Why Teams Choose FleetScore</p>
+            <h2 className="font-display text-3xl font-black text-white sm:text-4xl">One platform for rewards, accountability, and growth.</h2>
           </div>
 
-          {/* Role-Specific Dashboard View (Sponsor Landing Page Requirement) */}
-          {user?.UserType === 'sponsor' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="p-6 border-blue-200 bg-blue-50/50">
-                <h2 className="text-xl font-bold mb-2">Fleet Management</h2>
-                <p className="text-sm text-gray-600 mb-4">Review applications and manage driver feedback.</p>
-                <div className="flex gap-2">
-                  <Link to="/sponsor/reviews">
-                    <Button variant="primary" size="sm">Manage Reviews</Button>
-                  </Link>
-                  <Link to="/sponsor/dashboard">
-                    <Button variant="secondary" size="sm">Dashboard</Button>
-                  </Link>
-                </div>
-              </Card>
-              <Card className="p-6">
-                <h2 className="text-xl font-bold mb-2">Quick Stats</h2>
-                <p className="text-sm text-gray-600">View performance reports and generated invoices.</p>
-                <Link to="/sponsor/reports" className="text-blue-600 text-sm hover:underline mt-2 inline-block">
-                  View Reports &rarr;
-                </Link>
-              </Card>
-            </div>
-          )}
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <Card className="border-slate-800 bg-slate-900 p-6 dark:bg-slate-900">
+              <p className="text-xs font-semibold uppercase tracking-wider text-orange-300">Sponsors</p>
+              <h3 className="mt-2 text-2xl font-black text-white">Award with confidence</h3>
+              <p className="mt-2 text-sm text-slate-300">
+                Issue points for positive performance, apply deductions with clear reasons, and keep every change visible.
+              </p>
+            </Card>
 
-          {/* Debug Navigation */}
-          <div className="border border-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg p-4 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-yellow-700 dark:text-yellow-400">
-              Debug Navigation
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {navSections.map((section) => (
-                <Card key={section.label} className="p-4 space-y-2">
-                  <h2 className="font-semibold text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    {section.label}
-                  </h2>
-                  <ul className="space-y-1">
-                    {section.links.map((link) => (
-                      <li key={link.to}>
-                        <Link
-                          to={link.to}
-                          className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
-                        >
-                          {link.label}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
-              ))}
+            <Card className="border-slate-800 bg-slate-900 p-6 dark:bg-slate-900">
+              <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Drivers</p>
+              <h3 className="mt-2 text-2xl font-black text-white">Track every point</h3>
+              <p className="mt-2 text-sm text-slate-300">
+                View balances, history, and redemptions in one place so performance results are always understandable.
+              </p>
+            </Card>
+
+            <Card className="border-slate-800 bg-slate-900 p-6 dark:bg-slate-900 md:col-span-2 xl:col-span-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-rose-300">Admins</p>
+              <h3 className="mt-2 text-2xl font-black text-white">Control at platform scale</h3>
+              <p className="mt-2 text-sm text-slate-300">
+                Manage organizations, monitor audits, and enforce policy without losing operational speed.
+              </p>
+            </Card>
+          </div>
+
+          <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6 sm:p-8">
+            <div className="grid gap-6 lg:grid-cols-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Step 01</p>
+                <h3 className="mt-2 text-xl font-black text-white">Define performance rules</h3>
+                <p className="mt-2 text-sm text-slate-300">Set how points are awarded and deducted with clear sponsor-level standards.</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Step 02</p>
+                <h3 className="mt-2 text-xl font-black text-white">Track behavior in real time</h3>
+                <p className="mt-2 text-sm text-slate-300">Drivers and sponsors view the same point story, reducing confusion and dispute risk.</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Step 03</p>
+                <h3 className="mt-2 text-xl font-black text-white">Redeem meaningful rewards</h3>
+                <p className="mt-2 text-sm text-slate-300">Points become tangible value through curated catalogs tied to sponsor programs.</p>
+              </div>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-cyan-200/20 bg-cyan-950/40 p-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Ready to launch your rewards program?</p>
+              <p className="mt-2 text-sm text-slate-200">Use FleetScore to align driver performance with sponsor priorities.</p>
+            </div>
+            <Link to={dashboardHref}>
+              <Button className="bg-cyan-300 text-slate-950 hover:bg-cyan-200 font-bold" size="lg">
+                {user ? "Open My Dashboard" : "Start With FleetScore"}
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

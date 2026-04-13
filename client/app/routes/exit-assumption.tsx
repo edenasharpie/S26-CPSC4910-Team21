@@ -10,13 +10,21 @@ import { getApiBaseUrl } from "~/utils/api-url";
 const API_URL = getApiBaseUrl();
 
 export async function action({ request }: { request: Request }) {
+  const requestUrl = new URL(request.url);
+  const isUnloadMode = requestUrl.searchParams.get("mode") === "unload";
   const session = getSession(request);
 
   if (!session) {
+    if (isUnloadMode) {
+      return new Response(null, { status: 204 });
+    }
     return redirect("/login");
   }
 
   if (!session.OriginalUser) {
+    if (isUnloadMode) {
+      return new Response(null, { status: 204 });
+    }
     return redirect(ROLE_HOME[session.UserType] ?? "/");
   }
 
@@ -41,9 +49,21 @@ export async function action({ request }: { request: Request }) {
     LastName: session.OriginalUser.LastName,
   });
 
+  const restoredCookieHeader = buildSetCookieHeader(restoredToken);
+
+  if (isUnloadMode) {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Set-Cookie": restoredCookieHeader,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   return redirect(ROLE_HOME[session.OriginalUser.UserType] ?? "/", {
     headers: {
-      "Set-Cookie": buildSetCookieHeader(restoredToken),
+      "Set-Cookie": restoredCookieHeader,
     },
   });
 }

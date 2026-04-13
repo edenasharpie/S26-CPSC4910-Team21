@@ -4,6 +4,7 @@ build/
 .github/*.csv
 .DS_Store
 .fs-env
+scripts/*seed*.js
 setup-dev-server.sh
 scripts/seed-admin.js
 

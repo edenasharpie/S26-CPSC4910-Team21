@@ -510,6 +510,13 @@ export default function AdminPortal() {
               >
                 Invoices
               </Button>
+              <Button
+                variant="secondary"
+                onClick={() => navigate("/admin/debug-navigation")}
+                className="w-full py-4 text-sm font-bold bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 transition-all shadow-sm"
+              >
+                Internal Debug Routes
+              </Button>
             </div>
           </aside>
 

@@ -137,3 +137,7 @@ ApplicationStatusUpdate:
         reviewNotes:
           type: string
           maxLength: 1000
+        applicationId:
+          type: integer
+        driverId:
+          type: string

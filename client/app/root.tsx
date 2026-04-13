@@ -8,12 +8,14 @@ import {
   ScrollRestoration,
   useLoaderData,
 } from "react-router";
+import { useEffect, useRef } from "react";
 
 import type { Route } from "./+types/root";
 import "./app.css";
 import { Badge } from "~/components/Badge";
 import { Button } from "~/components/Button";
-import { getSession, isAssumedSession } from "~/utils/session.server";
+import { TopNav } from "~/components";
+import { getSession, isAssumedSession, ROLE_HOME } from "~/utils/session.server";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -24,7 +26,7 @@ export const links: Route.LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Space+Grotesk:wght@400;500;600;700&display=swap",
   },
 ];
 
@@ -108,12 +110,64 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const { session, assumed, originalRole } = useLoaderData<typeof loader>();
+  const autoExitTriggeredRef = useRef(false);
+  const dashboardHref = session ? ROLE_HOME[session.UserType] ?? "/" : undefined;
+
+  useEffect(() => {
+    if (!assumed || typeof window === "undefined") {
+      autoExitTriggeredRef.current = false;
+      return;
+    }
+
+    autoExitTriggeredRef.current = false;
+
+    const triggerAutoExit = () => {
+      if (autoExitTriggeredRef.current) {
+        return;
+      }
+
+      autoExitTriggeredRef.current = true;
+
+      try {
+        void fetch("/exit-assumption?mode=unload", {
+          method: "POST",
+          keepalive: true,
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "text/plain;charset=UTF-8",
+          },
+          body: "mode=unload",
+        });
+      } catch {
+        // Fail silently to avoid blocking browser navigation or tab close.
+      }
+    };
+
+    window.addEventListener("pagehide", triggerAutoExit);
+    window.addEventListener("beforeunload", triggerAutoExit);
+
+    return () => {
+      window.removeEventListener("pagehide", triggerAutoExit);
+      window.removeEventListener("beforeunload", triggerAutoExit);
+    };
+  }, [assumed]);
 
   return (
     <>
       {assumed ? (
         <AssumptionTopBanner session={session} originalRole={originalRole} />
       ) : null}
+      <TopNav
+        user={
+          session
+            ? {
+                username: session.Username,
+                role: session.UserType,
+              }
+            : null
+        }
+        dashboardHref={dashboardHref}
+      />
       <Outlet />
     </>
   );

@@ -54,6 +54,7 @@ app.use('/api/accounts', accountsRoute);
 app.use('/api/sponsors', sponsorRoute);
 app.use('/api/drivers', driverRoute);
 app.use('/api/admin/store', storeRoutes);
+app.use('/api/admin', adminRoute);
 app.use('/api/admin/catalogs', adminCatalogsRoutes);
 app.use('/api/admin', adminUsersRoutes);
 app.use('/api/admin/reports', adminReportsRoutes);
@@ -64,7 +65,7 @@ app.use('/api/driver/:userId/orders', driverOrdersRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
 app.use('/api/sponsor/:userId/reviews', reviewRoutes);
-app.use('/api/admin', adminRoute);
+
 
 app.use((err, _req, res, _next) => {
   console.error('Unhandled server error:', err);
@@ -72,7 +73,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // Start the server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const HOST = process.env.HOST || '0.0.0.0';
 
 const startServer = async () => {

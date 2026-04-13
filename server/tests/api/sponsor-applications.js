@@ -22,6 +22,8 @@ import {
   createTestUser,
   createTestDriverProfile,
   createTestSponsorProfile,
+  getEventsByUserId,
+  setUserPermissions,
 } from '../setup.js';
 import { pool } from '../../src/db.js';
 
@@ -96,6 +98,46 @@ async function createTestApplication(licenseNumber, sponsorCompanyId, status = '
   }
 }
 
+async function getApplicationById(applicationId) {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.query(
+      `SELECT ApplicationID, DriverID, SponsorCompanyID, ApplicationStatus
+       FROM DRIVER_APPLICATIONS
+       WHERE ApplicationID = ?`,
+      [applicationId]
+    );
+    return rows[0] ?? null;
+  } finally {
+    connection.release();
+  }
+}
+
+async function getDriverByLicense(licenseNumber) {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.query(
+      `SELECT LicenseNumber, SponsorCompanyID
+       FROM DRIVERS
+       WHERE LicenseNumber = ?`,
+      [licenseNumber]
+    );
+    return rows[0] ?? null;
+  } finally {
+    connection.release();
+  }
+}
+
+function parseEventProperties(rawProperties) {
+  if (!rawProperties) return {};
+  if (typeof rawProperties === 'object') return rawProperties;
+  try {
+    return JSON.parse(rawProperties);
+  } catch {
+    return {};
+  }
+}
+
 async function runTests() {
   try {
     console.log('Starting sponsor application accept/deny tests...\n');
@@ -127,10 +169,13 @@ async function runTests() {
     // TEST 1: Sponsor A sees their application, not Company B's
     log('TEST 1: Sponsor A sees only Company A applications', `GET /api/sponsors/${sponsorA.userId}/driver-applications`);
     const resA = await axios.get(`${API_BASE_URL}/sponsors/${sponsorA.userId}/driver-applications`);
-    if (resA.status !== 200 || !Array.isArray(resA.data)) {
-      throw new Error('Expected 200 and array from Sponsor A driver-applications');
+    if (resA.status !== 200 || !Array.isArray(resA.data?.applications)) {
+      throw new Error('Expected 200 and payload with applications array from Sponsor A driver-applications');
     }
-    const appIdsSeenByA = resA.data.map((a) => Number(a.ApplicationID));
+    if (resA.data?.permissions?.canViewDriverApplications !== true) {
+      throw new Error('Expected canViewDriverApplications permission in Sponsor A response');
+    }
+    const appIdsSeenByA = resA.data.applications.map((a) => Number(a.ApplicationID));
     if (!appIdsSeenByA.includes(appForA)) {
       throw new Error('Sponsor A should see their own application');
     }
@@ -142,10 +187,13 @@ async function runTests() {
     // TEST 2: Sponsor B sees their application, not Company A's
     log('TEST 2: Sponsor B sees only Company B applications', `GET /api/sponsors/${sponsorB.userId}/driver-applications`);
     const resB = await axios.get(`${API_BASE_URL}/sponsors/${sponsorB.userId}/driver-applications`);
-    if (resB.status !== 200 || !Array.isArray(resB.data)) {
-      throw new Error('Expected 200 and array from Sponsor B driver-applications');
+    if (resB.status !== 200 || !Array.isArray(resB.data?.applications)) {
+      throw new Error('Expected 200 and payload with applications array from Sponsor B driver-applications');
     }
-    const appIdsSeenByB = resB.data.map((a) => Number(a.ApplicationID));
+    if (resB.data?.permissions?.canViewDriverApplications !== true) {
+      throw new Error('Expected canViewDriverApplications permission in Sponsor B response');
+    }
+    const appIdsSeenByB = resB.data.applications.map((a) => Number(a.ApplicationID));
     if (!appIdsSeenByB.includes(appForB)) {
       throw new Error('Sponsor B should see their own application');
     }
@@ -164,6 +212,33 @@ async function runTests() {
     if (acceptRes.status !== 200) {
       throw new Error(`Expected 200 on accept, got ${acceptRes.status}`);
     }
+
+    const acceptedApp = await getApplicationById(appForA);
+    if (!acceptedApp || acceptedApp.ApplicationStatus !== 'accepted') {
+      throw new Error('Expected application status to update to accepted in DB');
+    }
+
+    const acceptedDriver = await getDriverByLicense(driverProfile.licenseNumber);
+    if (!acceptedDriver || Number(acceptedDriver.SponsorCompanyID) !== Number(companyA)) {
+      throw new Error('Expected accepted driver to be linked to Sponsor Company A in DB');
+    }
+
+    const sponsorAEvents = await getEventsByUserId(sponsorA.userId, 'ApplicationStatusUpdate', 20);
+    const acceptedEvent = sponsorAEvents.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return Number(properties.applicationId) === Number(appForA);
+    });
+    if (!acceptedEvent) {
+      throw new Error('Expected an ApplicationStatusUpdate event for accepted application');
+    }
+
+    const acceptedEventProperties = parseEventProperties(acceptedEvent.Properties);
+    if (acceptedEventProperties.status !== 'accepted') {
+      throw new Error('Expected accepted event to include status=accepted');
+    }
+    if (acceptedEventProperties.reviewNotes !== 'Great safety record') {
+      throw new Error('Expected accepted event to include reviewNotes');
+    }
     console.log('PASS: Sponsor A accepted their application');
 
     // TEST 4: Sponsor B can reject their own application
@@ -175,6 +250,28 @@ async function runTests() {
     });
     if (rejectRes.status !== 200) {
       throw new Error(`Expected 200 on reject, got ${rejectRes.status}`);
+    }
+
+    const rejectedApp = await getApplicationById(appForB);
+    if (!rejectedApp || rejectedApp.ApplicationStatus !== 'rejected') {
+      throw new Error('Expected application status to update to rejected in DB');
+    }
+
+    const sponsorBEvents = await getEventsByUserId(sponsorB.userId, 'ApplicationStatusUpdate', 20);
+    const rejectedEvent = sponsorBEvents.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return Number(properties.applicationId) === Number(appForB);
+    });
+    if (!rejectedEvent) {
+      throw new Error('Expected an ApplicationStatusUpdate event for rejected application');
+    }
+
+    const rejectedEventProperties = parseEventProperties(rejectedEvent.Properties);
+    if (rejectedEventProperties.status !== 'rejected') {
+      throw new Error('Expected rejected event to include status=rejected');
+    }
+    if (rejectedEventProperties.reviewNotes !== 'Too many violations') {
+      throw new Error('Expected rejected event to include reviewNotes');
     }
     console.log('PASS: Sponsor B rejected their application');
 
@@ -208,6 +305,7 @@ async function runTests() {
 
     // TEST 7: session effective user mismatch returns 403 for list endpoint
     log('TEST 7: Mismatched session userId is rejected on driver-applications list', `GET /api/sponsors/${sponsorA.userId}/driver-applications`);
+
     const mismatchListCookie = buildSessionCookie({ ...driver, userType: 'driver' });
     try {
       await axios.get(`${API_BASE_URL}/sponsors/${sponsorA.userId}/driver-applications`, {
@@ -239,6 +337,82 @@ async function runTests() {
       if (err.response?.status !== 403) throw err;
       console.log('PASS: Session mismatch returns 403 for process endpoint');
     }
+
+    // TEST 9: A processed application cannot be re-processed
+    log('TEST 9: Re-processing a finalized application returns 409', `POST /api/sponsors/${sponsorA.userId}/process-application`);
+    try {
+      await axios.post(`${API_BASE_URL}/sponsors/${sponsorA.userId}/process-application`, {
+        applicationId: appForA,
+        status: 'rejected',
+        explanation: 'second decision should fail',
+      });
+      throw new Error('Expected 409 when re-processing a finalized application');
+    } catch (err) {
+      if (err.response?.status !== 409) throw err;
+      console.log('PASS: Re-processing finalized application returns 409');
+    }
+
+    // TEST 10: Sponsor without canAcceptDriverApplications gets 403
+    const permissionAppAccept = await createTestApplication(driverProfile.licenseNumber, companyA, 'pending');
+    createdApplicationIds.push(permissionAppAccept);
+    await setUserPermissions(sponsorA.userId, {
+      canViewDriverApplications: true,
+      canAcceptDriverApplications: false,
+      canRejectDriverApplications: true,
+    });
+
+    log('TEST 10: Missing accept permission returns 403', `POST /api/sponsors/${sponsorA.userId}/process-application`);
+    try {
+      await axios.post(`${API_BASE_URL}/sponsors/${sponsorA.userId}/process-application`, {
+        applicationId: permissionAppAccept,
+        status: 'accepted',
+        explanation: 'attempt without accept permission',
+      });
+      throw new Error('Expected 403 when accept permission is disabled');
+    } catch (err) {
+      if (err.response?.status !== 403) throw err;
+      console.log('PASS: Missing accept permission returns 403');
+    }
+
+    // TEST 11: Sponsor without canRejectDriverApplications gets 403
+    const permissionAppReject = await createTestApplication(driverProfile.licenseNumber, companyA, 'pending');
+    createdApplicationIds.push(permissionAppReject);
+    await setUserPermissions(sponsorA.userId, {
+      canViewDriverApplications: true,
+      canAcceptDriverApplications: true,
+      canRejectDriverApplications: false,
+    });
+
+    log('TEST 11: Missing reject permission returns 403', `POST /api/sponsors/${sponsorA.userId}/process-application`);
+    try {
+      await axios.post(`${API_BASE_URL}/sponsors/${sponsorA.userId}/process-application`, {
+        applicationId: permissionAppReject,
+        status: 'rejected',
+        explanation: 'attempt without reject permission',
+      });
+      throw new Error('Expected 403 when reject permission is disabled');
+    } catch (err) {
+      if (err.response?.status !== 403) throw err;
+      console.log('PASS: Missing reject permission returns 403');
+    }
+
+    // TEST 12: Sponsor without canViewDriverApplications gets 403 on list endpoint
+    await setUserPermissions(sponsorA.userId, {
+      canViewDriverApplications: false,
+      canAcceptDriverApplications: true,
+      canRejectDriverApplications: true,
+    });
+
+    log('TEST 12: Missing view permission returns 403', `GET /api/sponsors/${sponsorA.userId}/driver-applications`);
+    try {
+      await axios.get(`${API_BASE_URL}/sponsors/${sponsorA.userId}/driver-applications`);
+      throw new Error('Expected 403 when view permission is disabled');
+    } catch (err) {
+      if (err.response?.status !== 403) throw err;
+      console.log('PASS: Missing view permission returns 403');
+    }
+
+    await setUserPermissions(sponsorA.userId, {});
 
     console.log('\nSponsor application accept/deny tests completed successfully!');
   } catch (error) {
