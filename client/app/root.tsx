@@ -15,7 +15,13 @@ import "./app.css";
 import { Badge } from "~/components/Badge";
 import { Button } from "~/components/Button";
 import { TopNav } from "~/components";
-import { getSession, isAssumedSession, ROLE_HOME } from "~/utils/session.server";
+import { getSession, isAssumedSession } from "~/utils/session.server";
+
+const ROLE_HOME_PATHS = {
+  driver: "/driver/dashboard",
+  sponsor: "/sponsor/dashboard",
+  admin: "/admin/dashboard",
+} as const;
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -111,7 +117,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   const { session, assumed, originalRole } = useLoaderData<typeof loader>();
   const autoExitTriggeredRef = useRef(false);
-  const dashboardHref = session ? ROLE_HOME[session.UserType] ?? "/" : undefined;
+  const dashboardHref = session
+    ? ROLE_HOME_PATHS[session.UserType as keyof typeof ROLE_HOME_PATHS] ?? "/"
+    : undefined;
 
   useEffect(() => {
     if (!assumed || typeof window === "undefined") {

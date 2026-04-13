@@ -2,7 +2,13 @@ import { Link, Form, useLoaderData } from "react-router";
 import type { Route } from "./+types/home";
 import { Card } from "~/components";
 import { Button } from "~/components/Button";
-import { getSession, ROLE_HOME } from "~/utils/session.server";
+import { getSession } from "~/utils/session.server";
+
+const ROLE_HOME_PATHS = {
+  driver: "/driver/dashboard",
+  sponsor: "/sponsor/dashboard",
+  admin: "/admin/dashboard",
+} as const;
 
 export function loader({ request }: Route.LoaderArgs) {
   const session = getSession(request);
@@ -22,7 +28,9 @@ export function meta(_: Route.MetaArgs) {
 
 export default function Home() {
   const { user } = useLoaderData<typeof loader>();
-  const dashboardHref = user ? ROLE_HOME[user.UserType] ?? "/" : "/login";
+  const dashboardHref = user
+    ? ROLE_HOME_PATHS[user.UserType as keyof typeof ROLE_HOME_PATHS] ?? "/"
+    : "/login";
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
