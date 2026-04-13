@@ -1,4 +1,4 @@
-const LOCAL_API_FALLBACK = "http://localhost:5001";
+const LOCAL_API_FALLBACK = "http://localhost:5000";
 
 function getEnvApiUrl(): string | undefined {
   if (typeof process !== "undefined" && process.env?.API_URL) {
