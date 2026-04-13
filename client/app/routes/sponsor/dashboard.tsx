@@ -1,4 +1,4 @@
-// --- IMPORTS ---
+//Imports
 import type { Route } from "./+types/dashboard";
 import { useState, useEffect } from "react";
 import { Table, Input, Button, Modal } from "~/components";
@@ -14,15 +14,15 @@ import { getApiBaseUrl } from "~/utils/api-url";
 
 const API_URL = getApiBaseUrl();
 
-// --- LOADER ---
+//Loader
 export async function loader({ request }: Route.LoaderArgs) {
-  const user = requireAuth(request, ['sponsor']);
+  const user = await requireAuth(request, ['sponsor']);
   try {
     const companyRes = await fetch(`${API_URL}/api/sponsors/user/${user.UserID}`);
     if (!companyRes.ok) throw new Error(`Could not load company info (${companyRes.status})`);
     const company = await companyRes.json();
 
-    const driversRes = await fetch(`${API_URL}/api/sponsors/my-drivers/${company.sponsorCompanyId}`);
+    const driversRes = await fetch(`${API_URL}/api/sponsors/${user.UserID}/my-drivers`);
     if (!driversRes.ok) throw new Error(`Could not load drivers (${driversRes.status})`);
     const drivers = await driversRes.json();
 
@@ -243,7 +243,7 @@ export default function SponsorPortal() {
             <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Home</Link>
             <div className="flex items-center gap-4">
               <div>
-                <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Portal</h1>
+                <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Dashboard</h1>
                 <p className="text-gray-500 text-sm mt-1 font-medium italic">{companyName}</p>
               </div>
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
@@ -259,8 +259,8 @@ export default function SponsorPortal() {
                 <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
               </Form>
             )}
-            <button
-              onClick={() => navigate(`/sponsor/settings/${user.UserID}`)}
+            <Link
+              to={`/sponsor/settings/${user.UserID}`}
               className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
               aria-label="Settings"
               title="Settings"
@@ -269,13 +269,12 @@ export default function SponsorPortal() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-            </button>
+            </Link>
             <Form method="post" action="/logout">
               <Button variant="secondary" size="sm" type="submit">Sign out</Button>
             </Form>
-            <button 
-              type="button"
-              onClick={() => navigate(`/sponsor/profile/${user.UserID}/edit`)}
+            <Link
+              to={`/sponsor/profile/${user.UserID}/edit`}
               className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
             >
             <div className="relative">
@@ -292,7 +291,7 @@ export default function SponsorPortal() {
               <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{user.Username}</p>
               <p className="text-[10px] text-gray-400 font-mono mt-0.5">{companyName}</p>
             </div>
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -325,6 +324,13 @@ export default function SponsorPortal() {
                 className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all shadow-sm"
               >
                 Invoices
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => navigate("/sponsor/applications")} 
+                className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all shadow-sm"
+              >
+                Applications
               </Button>
             </div>
           </aside>

@@ -1,9 +1,10 @@
 import { data, redirect, Form, Link, useActionData, useNavigation } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Alert, Button, Input } from "~/components";
+import { getApiBaseUrl } from "~/utils/api-url";
 import { getSession, ROLE_HOME } from "~/utils/session.server";
 
-const API_URL = process.env.API_URL ?? "http://localhost:5000";
+const API_URL = getApiBaseUrl();
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = getSession(request);

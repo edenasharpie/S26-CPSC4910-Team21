@@ -2,6 +2,29 @@ import express from 'express';
 const router = express.Router();
 import { pool } from '../db.js';
 import { verifyPassword } from '../utils/auth.js';
+import { routeUserMatchesEffectiveSession } from '../middleware/session-context.js';
+
+function getAssumedSponsorOriginalUser(req, expectedDriverUserId) {
+  const sessionContext = req.sessionContext;
+  if (!sessionContext?.isAssumed) {
+    return null;
+  }
+
+  const effectiveUser = sessionContext.effectiveUser;
+  const originalUser = sessionContext.originalUser;
+
+  if (
+    !effectiveUser ||
+    !originalUser ||
+    String(effectiveUser.UserType).toLowerCase() !== 'driver' ||
+    String(originalUser.UserType).toLowerCase() !== 'sponsor' ||
+    Number(effectiveUser.UserID) !== Number(expectedDriverUserId)
+  ) {
+    return null;
+  }
+
+  return originalUser;
+}
 
 // GET /api/drivers/my-points/:userId
 router.get('/my-points/:userId', async (req, res) => {
@@ -36,16 +59,34 @@ router.get('/my-points/:userId', async (req, res) => {
 
     // 3. Get transaction history from POINT_TRANSACTIONS
     const [history] = await pool.execute(
-      `SELECT PointChange, ReasonForChange, TimeChanged 
-       FROM POINT_TRANSACTIONS 
-       WHERE DriverID = ? 
+      `SELECT
+         PointChange,
+         ReasonForChange,
+         DATE_FORMAT(TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
+       FROM POINT_TRANSACTIONS
+       WHERE DriverID = ?
+         AND TimeChanged IS NOT NULL
+         AND TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY TimeChanged DESC`,
       [LicenseNumber]
     );
 
+    const normalizedHistory = history.map((entry) => {
+      const pointChange = Number(entry.PointChange);
+      const timeChanged = typeof entry.TimeChanged === 'string' && entry.TimeChanged.trim()
+        ? entry.TimeChanged
+        : null;
+
+      return {
+        PointChange: Number.isFinite(pointChange) ? pointChange : 0,
+        ReasonForChange: entry.ReasonForChange ?? 'Point update',
+        TimeChanged: timeChanged,
+      };
+    });
+
     res.json({
       balance: PointBalance,
-      history: history
+      history: normalizedHistory
     });
   } catch (error) {
     console.error("Driver Points Error:", error);
@@ -83,6 +124,79 @@ router.get('/performance/:userId', async (req, res) => {
     return res.json({ performanceStatus: rows[0].PerformanceStatus });
   } catch (error) {
     console.error('Driver Performance Error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/drivers/sponsors/:userId
+// Returns the driver's affiliated sponsor company for dashboard display.
+router.get('/sponsors/:userId', async (req, res) => {
+  const driverUserId = Number(req.params.userId);
+
+  if (!Number.isInteger(driverUserId)) {
+    return res.status(400).json({ error: 'Invalid driver user ID.' });
+  }
+
+  if (!routeUserMatchesEffectiveSession(req, driverUserId)) {
+    return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+  }
+
+  try {
+    const [accountRows] = await pool.execute(
+      'SELECT ActiveStatus FROM USERS WHERE UserID = ? AND UserType = "driver"',
+      [driverUserId]
+    );
+
+    if (accountRows.length === 0) {
+      return res.status(404).json({ error: 'Driver account not found.' });
+    }
+
+    if (!Boolean(accountRows[0].ActiveStatus)) {
+      return res.status(403).json({ error: 'Driver account is inactive.' });
+    }
+
+    let assumedSponsorCompanyId = null;
+    const assumedOriginalSponsor = getAssumedSponsorOriginalUser(req, driverUserId);
+
+    if (assumedOriginalSponsor) {
+      const [sponsorRows] = await pool.execute(
+        'SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ? LIMIT 1',
+        [assumedOriginalSponsor.UserID]
+      );
+
+      if (sponsorRows.length === 0) {
+        return res.status(403).json({ error: 'Assumed sponsor context is invalid.' });
+      }
+
+      assumedSponsorCompanyId = Number(sponsorRows[0].SponsorCompanyID);
+    }
+
+    const query =
+      `SELECT
+         sc.SponsorCompanyID AS SponsorID,
+         sc.SponsorCompanyID,
+         sc.CompanyName
+       FROM DRIVERS d
+       JOIN SPONSOR_COMPANIES sc ON d.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE d.UserID = ?` +
+      (Number.isInteger(assumedSponsorCompanyId) ? ' AND sc.SponsorCompanyID = ?' : '');
+
+    const queryParams = Number.isInteger(assumedSponsorCompanyId)
+      ? [driverUserId, assumedSponsorCompanyId]
+      : [driverUserId];
+
+    const [rows] = await pool.execute(query, queryParams);
+
+    const sponsors = rows.map((row) => ({
+      SponsorID: Number(row.SponsorID),
+      SponsorCompanyID: Number(row.SponsorCompanyID),
+      CompanyName: row.CompanyName,
+      Description: 'Official Program Sponsor',
+    }));
+
+    return res.json(sponsors);
+  } catch (error) {
+    console.error('Driver Sponsors Error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

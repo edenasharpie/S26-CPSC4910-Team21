@@ -45,12 +45,14 @@ export async function action({ request, params }: Route.ActionArgs) {
     return { success: false, error: "Invalid request method" };
   }
 
-  const auditLogRetentionDays = parseInt(
-    formData.get("auditLogRetentionDays") as string
-  ) || 365;
-  const userDataRetentionDays = parseInt(
-    formData.get("userDataRetentionDays") as string
-  ) || 90;
+  const auditLogRetentionRaw = String(formData.get("auditLogRetentionDays") ?? "");
+  const userDataRetentionRaw = String(formData.get("userDataRetentionDays") ?? "");
+  const auditLogRetentionDays = Number.parseInt(auditLogRetentionRaw, 10);
+  const userDataRetentionDays = Number.parseInt(userDataRetentionRaw, 10);
+
+  if (!Number.isInteger(auditLogRetentionDays) || !Number.isInteger(userDataRetentionDays)) {
+    return { success: false, error: "Retention values must be valid integers." };
+  }
 
   try {
     // Save settings

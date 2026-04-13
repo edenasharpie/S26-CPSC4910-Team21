@@ -110,6 +110,7 @@ function buildUniqueValue(prefix) {
  * @param {string} [options.email]
  * @param {string} [options.firstName]
  * @param {string} [options.lastName]
+ * @param {string} [options.passHash]
  * @returns {Promise<{ userId: number, username: string, email: string }>}
  */
 export async function createTestUser(options = {}) {
@@ -121,6 +122,7 @@ export async function createTestUser(options = {}) {
     email = `${buildUniqueValue(`mail_${userType}`)}@example.com`,
     firstName = 'Test',
     lastName = 'User',
+    passHash = 'salt:hash',
   } = options;
 
   const timestamp = buildTimestamp();
@@ -132,10 +134,21 @@ export async function createTestUser(options = {}) {
       `INSERT INTO USERS
         (Username, Email, PassHash, UserType, FirstName, LastName, ActiveStatus, LastLogin, LastPasswordChange, Permissions)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [username, email, 'salt:hash', userType, firstName, lastName, activeStatus, timestamp, timestamp, permissionsJson]
+      [username, email, passHash, userType, firstName, lastName, activeStatus, timestamp, timestamp, permissionsJson]
     );
 
-    return { userId: result.insertId, username, email };
+    const [storedRows] = await connection.query(
+      'SELECT Username, Email FROM USERS WHERE UserID = ?',
+      [result.insertId]
+    );
+
+    const storedUser = storedRows[0] ?? {};
+
+    return {
+      userId: result.insertId,
+      username: storedUser.Username ?? username,
+      email: storedUser.Email ?? email,
+    };
   } finally {
     connection.release();
   }

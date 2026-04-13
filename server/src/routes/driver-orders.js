@@ -102,7 +102,7 @@ router.get('/', async (req, res) => {
     const [rows] = await connection.query(
       `SELECT
          o.OrderID,
-         o.OrderDate,
+        DATE_FORMAT(o.OrderDate, '%Y-%m-%d %H:%i:%s') AS OrderDate,
          o.OrderPointsSpent,
          o.OrderDollarsSpent,
          o.OrderStatus,
@@ -120,6 +120,8 @@ router.get('/', async (req, res) => {
        JOIN CATALOG_ITEMS ci ON oi.ItemID = ci.ItemID
        LEFT JOIN SPONSOR_COMPANIES sc ON o.SponsorCompanyID = sc.SponsorCompanyID
        WHERE o.DriverID = ?
+         AND o.OrderDate IS NOT NULL
+         AND o.OrderDate >= '2000-01-01 00:00:00'
        ORDER BY o.OrderDate DESC, oi.OrderItemID ASC`,
       [req.driver.licenseNumber]
     );
@@ -129,7 +131,7 @@ router.get('/', async (req, res) => {
       if (!ordersById.has(row.OrderID)) {
         ordersById.set(row.OrderID, {
           orderId: row.OrderID,
-          orderDate: row.OrderDate,
+          orderDate: row.OrderDate ?? null,
           orderPointsSpent: Number(row.OrderPointsSpent ?? 0),
           orderDollarsSpent: Number(row.OrderDollarsSpent ?? 0),
           orderStatus: row.OrderStatus,

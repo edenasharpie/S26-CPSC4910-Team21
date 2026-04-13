@@ -602,7 +602,9 @@ export async function getPointTransactionsReport(filters = {}) {
     
     try {
       // Build dynamic WHERE clause
-      let whereClause = 'WHERE 1=1';
+      let whereClause = `WHERE 1=1
+        AND TimeChanged IS NOT NULL
+        AND TimeChanged >= '2000-01-01 00:00:00'`;
       const params = [];
 
       if (filters.startDate) {
@@ -707,7 +709,9 @@ export async function getOrdersReport(filters = {}) {
     
     try {
       // Build dynamic WHERE clause
-      let whereClause = 'WHERE 1=1';
+      let whereClause = `WHERE 1=1
+        AND OrderDate IS NOT NULL
+        AND OrderDate >= '2000-01-01 00:00:00'`;
       const params = [];
 
       if (filters.startDate) {
@@ -817,6 +821,7 @@ export async function getOrdersReport(filters = {}) {
  * @param {Date} [filters.startDate] - Lower timestamp bound.
  * @param {Date} [filters.endDate] - Upper timestamp bound.
  * @param {number} [filters.targetUserId] - Specific user to include.
+ * @param {'admin'|'driver'|'sponsor'} [filters.targetUserType] - User role to include.
  * @returns {Promise<Object[]>} Array of event rows joined with username.
  */
 export async function getAuditLogs(filters = []) {
@@ -828,12 +833,21 @@ export async function getAuditLogs(filters = []) {
     const eventTypes = Array.isArray(normalizedFilters.eventTypes)
       ? normalizedFilters.eventTypes
       : [];
+    const pointUserScope =
+      normalizedFilters.pointUserScope === 'changedBy' || normalizedFilters.pointUserScope === 'affected'
+        ? normalizedFilters.pointUserScope
+        : 'any';
+    const wantsPointTransactions =
+      eventTypes.length === 0 || eventTypes.includes('PointTransaction');
+    const nonPointEventTypes = eventTypes.filter((eventType) => eventType !== 'PointTransaction');
 
     let query = `
       SELECT
         e.EventID,
         e.UserID,
         u.Username,
+        u.FirstName,
+        u.LastName,
         e.Timestamp,
         e.EventType,
         e.Properties
@@ -843,10 +857,18 @@ export async function getAuditLogs(filters = []) {
     const whereClauses = [];
     const params = [];
 
-    if (eventTypes.length > 0) {
-      const placeholders = eventTypes.map(() => '?').join(', ');
+    if (nonPointEventTypes.length > 0) {
+      const placeholders = nonPointEventTypes.map(() => '?').join(', ');
       whereClauses.push(`e.EventType IN (${placeholders})`);
-      params.push(...eventTypes);
+      params.push(...nonPointEventTypes);
+    }
+
+    if (eventTypes.length > 0 && nonPointEventTypes.length === 0) {
+      whereClauses.push('1 = 0');
+    }
+
+    if (wantsPointTransactions) {
+      whereClauses.push("e.EventType <> 'PointTransaction'");
     }
 
     if (normalizedFilters.startDate) {
@@ -864,14 +886,117 @@ export async function getAuditLogs(filters = []) {
       params.push(normalizedFilters.targetUserId);
     }
 
+    if (normalizedFilters.targetUserType) {
+      whereClauses.push('u.UserType = ?');
+      params.push(normalizedFilters.targetUserType);
+    }
+
     if (whereClauses.length > 0) {
       query += ` WHERE ${whereClauses.join(' AND ')}`;
     }
 
     query += ' ORDER BY e.Timestamp DESC LIMIT 500';
 
-    const [rows] = await connection.execute(query, params);
-    return rows;
+    const [eventRows] = await connection.execute(query, params);
+
+    let pointRows = [];
+    if (wantsPointTransactions) {
+      let pointQuery = `
+        SELECT
+          -pt.TransactionID AS EventID,
+          pt.UserChanged AS UserID,
+          actor.Username,
+          actor.FirstName,
+          actor.LastName,
+          targetUser.Username AS TargetUsername,
+          targetUser.FirstName AS TargetFirstName,
+          targetUser.LastName AS TargetLastName,
+          DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS Timestamp,
+          'PointTransaction' AS EventType,
+          pt.PointChange,
+          pt.ReasonForChange,
+          pt.DriverID,
+          d.UserID AS TargetDriverUserID,
+          pt.TransactionID AS PointTransactionID
+        FROM POINT_TRANSACTIONS pt
+        LEFT JOIN USERS actor ON pt.UserChanged = actor.UserID
+        LEFT JOIN DRIVERS d ON (d.LicenseNumber = pt.DriverID OR CAST(d.UserID AS CHAR) COLLATE utf8mb4_unicode_ci = pt.DriverID COLLATE utf8mb4_unicode_ci)
+        LEFT JOIN USERS targetUser ON targetUser.UserID = d.UserID
+      `;
+
+      const pointWhereClauses = [
+        'pt.TimeChanged IS NOT NULL',
+        "pt.TimeChanged >= '2000-01-01 00:00:00'",
+      ];
+      const pointParams = [];
+
+      if (normalizedFilters.startDate) {
+        pointWhereClauses.push('pt.TimeChanged >= ?');
+        pointParams.push(normalizedFilters.startDate);
+      }
+
+      if (normalizedFilters.endDate) {
+        pointWhereClauses.push('pt.TimeChanged <= ?');
+        pointParams.push(normalizedFilters.endDate);
+      }
+
+      if (normalizedFilters.targetUserId) {
+        if (pointUserScope === 'changedBy') {
+          pointWhereClauses.push('pt.UserChanged = ?');
+          pointParams.push(normalizedFilters.targetUserId);
+        } else if (pointUserScope === 'affected') {
+          pointWhereClauses.push('d.UserID = ?');
+          pointParams.push(normalizedFilters.targetUserId);
+        } else {
+          pointWhereClauses.push('(pt.UserChanged = ? OR d.UserID = ?)');
+          pointParams.push(normalizedFilters.targetUserId, normalizedFilters.targetUserId);
+        }
+      }
+
+      if (normalizedFilters.targetUserType) {
+        if (pointUserScope === 'changedBy') {
+          pointWhereClauses.push('actor.UserType = ?');
+          pointParams.push(normalizedFilters.targetUserType);
+        } else if (pointUserScope === 'affected') {
+          pointWhereClauses.push('targetUser.UserType = ?');
+          pointParams.push(normalizedFilters.targetUserType);
+        } else {
+          pointWhereClauses.push('(actor.UserType = ? OR targetUser.UserType = ?)');
+          pointParams.push(normalizedFilters.targetUserType, normalizedFilters.targetUserType);
+        }
+      }
+
+      pointQuery += ` WHERE ${pointWhereClauses.join(' AND ')}`;
+      pointQuery += ' ORDER BY pt.TimeChanged DESC LIMIT 500';
+
+      const [rows] = await connection.execute(pointQuery, pointParams);
+      pointRows = rows.map((row) => {
+        const useAffectedIdentity = pointUserScope === 'affected';
+        return {
+        EventID: row.EventID,
+        UserID: useAffectedIdentity ? row.TargetDriverUserID : row.UserID,
+        Username: useAffectedIdentity ? row.TargetUsername : row.Username,
+        FirstName: useAffectedIdentity ? row.TargetFirstName : row.FirstName,
+        LastName: useAffectedIdentity ? row.TargetLastName : row.LastName,
+        Timestamp: row.Timestamp,
+        EventType: row.EventType,
+        Properties: {
+          pointsDelta: row.PointChange,
+          reason: row.ReasonForChange,
+          driverId: row.DriverID,
+          targetDriverUserId: row.TargetDriverUserID,
+          changedByUserId: row.UserID,
+          transactionId: row.PointTransactionID,
+        },
+        };
+      });
+    }
+
+    const mergedRows = [...eventRows, ...pointRows]
+      .sort((a, b) => new Date(b.Timestamp).getTime() - new Date(a.Timestamp).getTime())
+      .slice(0, 500);
+
+    return mergedRows;
   } finally {
     connection.release();
   }

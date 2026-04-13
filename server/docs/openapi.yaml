@@ -126,6 +126,12 @@ paths:
   /sponsors/{userId}/assume-driver/{driverId}:
     $ref: './paths/sponsor/catalogs.yaml#/assumeDriver'
 
+  /sponsors/{userId}/driver-applications:
+    $ref: './paths/sponsor/applications.yaml#/driverApplications'
+
+  /sponsors/{userId}/process-application:
+    $ref: './paths/sponsor/applications.yaml#/processApplication'
+
   ### reports - admin ###
 
   /admin/reports/driver-applications:

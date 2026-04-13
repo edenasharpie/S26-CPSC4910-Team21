@@ -89,6 +89,9 @@ const ROLE_PERMISSION_DEFAULTS = {
   sponsor: {
     canAssumeDriverView: true,
     canAssumeSponsorView: false,
+    canViewDriverApplications: true,
+    canAcceptDriverApplications: true,
+    canRejectDriverApplications: true,
   },
   admin: {
     canAssumeDriverView: true,

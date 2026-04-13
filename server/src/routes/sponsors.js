@@ -33,7 +33,16 @@ router.get('/', async (req, res) => {
 // GET /api/sponsors/user/:userId - Get sponsor company for a given sponsor user
 router.get('/user/:userId', async (req, res) => {
   try {
-    const { userId } = req.params;
+    const sponsorUserId = Number(req.params.userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
     const [rows] = await pool.execute(
       `SELECT sc.SponsorCompanyID as sponsorCompanyId,
               sc.CompanyName      as companyName,
@@ -46,7 +55,7 @@ router.get('/user/:userId', async (req, res) => {
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        JOIN USERS u ON s.UserID = u.UserID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Sponsor company not found for this user' });
     res.json(rows[0]);
@@ -56,10 +65,30 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
-// Get drivers based off performance
-router.get('/my-drivers/:companyId', async (req, res) => {
+// Get drivers for the authenticated sponsor's company
+// Security: companyId is resolved server-side from userId — callers cannot
+// supply an arbitrary companyId to view another company's drivers.
+router.get('/:userId/my-drivers', async (req, res) => {
   try {
-    const { companyId } = req.params;
+    const sponsorUserId = Number(req.params.userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    const [sponsorRows] = await pool.execute(
+      `SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ?`,
+      [sponsorUserId]
+    );
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+    const companyId = sponsorRows[0].SponsorCompanyID;
+
     const [drivers] = await pool.execute(
       `SELECT
          u.UserID, u.FirstName, u.LastName, u.Username, u.ProfilePicture,
@@ -85,6 +114,16 @@ router.get('/my-drivers/:companyId', async (req, res) => {
 router.get('/:userId/drivers/:driverId/points', async (req, res) => {
   try {
     const { userId, driverId } = req.params;
+    const sponsorUserId = Number(userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
     console.log(`[SPONSOR_GET_POINTS] userId=${userId}, driverId=${driverId}`);
     
     // Get the sponsor's company
@@ -93,7 +132,7 @@ router.get('/:userId/drivers/:driverId/points', async (req, res) => {
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
     
     if (sponsorRows.length === 0) {
@@ -106,6 +145,7 @@ router.get('/:userId/drivers/:driverId/points', async (req, res) => {
     const [drivers] = await pool.execute(
       `SELECT
          u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
+         d.LicenseNumber,
          d.PerformanceStatus, d.PointBalance, u.ActiveStatus
        FROM USERS u
        JOIN DRIVERS d ON u.UserID = d.UserID
@@ -128,7 +168,16 @@ router.get('/:userId/drivers/:driverId/points', async (req, res) => {
 router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
   try {
     const { userId, driverId } = req.params;
+    const sponsorUserId = Number(userId);
     console.log(`[SPONSOR_GET_HISTORY] userId=${userId}, driverId=${driverId}`);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
     
     // Get the sponsor's company
     const [sponsorRows] = await pool.execute(
@@ -149,11 +198,17 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
     const [history] = await pool.execute(
       `SELECT
          pt.TransactionID, pt.DriverID, pt.UserChanged, pt.PointChange, 
-         pt.ReasonForChange, pt.TimeChanged, u.Username as ChangedByUsername
+         pt.ReasonForChange,
+         DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged,
+         u.Username as ChangedByUsername,
+         u.FirstName as ChangedByFirstName,
+         u.LastName as ChangedByLastName
        FROM POINT_TRANSACTIONS pt
        JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
        LEFT JOIN USERS u ON pt.UserChanged = u.UserID
        WHERE d.UserID = ? AND d.SponsorCompanyID = ?
+         AND pt.TimeChanged IS NOT NULL
+         AND pt.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY pt.TimeChanged DESC
        LIMIT 100`,
       [driverId, companyId]
@@ -170,6 +225,15 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
 router.get('/:userId/point-transactions', async (req, res) => {
   try {
     const { userId } = req.params;
+    const sponsorUserId = Number(userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
 
     const [sponsorRows] = await pool.execute(
       `SELECT sc.SponsorCompanyID
@@ -192,13 +256,19 @@ router.get('/:userId/point-transactions', async (req, res) => {
          u.FirstName,
          u.LastName,
          pt.UserChanged AS AdminUserID,
+         actor.Username AS ChangedByUsername,
+         actor.FirstName AS ChangedByFirstName,
+         actor.LastName AS ChangedByLastName,
          pt.PointChange,
          pt.ReasonForChange,
          DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
        FROM POINT_TRANSACTIONS pt
        JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
        JOIN USERS u ON d.UserID = u.UserID
+       LEFT JOIN USERS actor ON pt.UserChanged = actor.UserID
        WHERE d.SponsorCompanyID = ?
+         AND pt.TimeChanged IS NOT NULL
+         AND pt.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY pt.TimeChanged DESC`,
       [companyId]
     );
@@ -212,115 +282,174 @@ router.get('/:userId/point-transactions', async (req, res) => {
 
 // POST /api/sponsors/:userId/drivers/:driverId/point-transactions - Add point transaction
 router.post('/:userId/drivers/:driverId/point-transactions', async (req, res) => {
+  let connection;
   try {
     const { userId, driverId } = req.params;
     const { pointChange, reason } = req.body;
-    
-    if (!pointChange || !reason) {
+
+    const sponsorUserId = Number(userId);
+    const driverUserId = Number(driverId);
+    const pointDelta = Number(pointChange);
+    const reasonText = typeof reason === 'string' ? reason.trim() : '';
+
+    if (!Number.isInteger(sponsorUserId) || !Number.isInteger(driverUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID or driver user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    if (!Number.isFinite(pointDelta) || pointDelta === 0 || !reasonText) {
       return res.status(400).json({ error: 'pointChange and reason are required' });
     }
-    
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
     // Get the sponsor's company
-    const [sponsorRows] = await pool.execute(
+    const [sponsorRows] = await connection.execute(
       `SELECT sc.SponsorCompanyID
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
-    
+
     if (sponsorRows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Sponsor not found' });
     }
-    
+
     const companyId = sponsorRows[0].SponsorCompanyID;
-    
+
     // Verify driver belongs to sponsor
-    const [drivers] = await pool.execute(
-      `SELECT u.UserID, d.PointBalance
+    const [drivers] = await connection.execute(
+      `SELECT u.UserID, d.LicenseNumber, d.PointBalance
        FROM USERS u
        JOIN DRIVERS d ON u.UserID = d.UserID
        WHERE u.UserID = ? AND d.SponsorCompanyID = ?`,
-      [driverId, companyId]
+      [driverUserId, companyId]
     );
-    
+
     if (drivers.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Driver not found for this sponsor' });
     }
-    
+
     // Create transaction
-    await pool.execute(
+    await connection.execute(
       `INSERT INTO POINT_TRANSACTIONS (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
        VALUES (?, ?, ?, ?, NOW())`,
-      [driverId, userId, pointChange, reason]
+      [drivers[0].LicenseNumber, sponsorUserId, pointDelta, reasonText]
     );
-    
+
     // Update driver's point balance
-    const newBalance = drivers[0].PointBalance + pointChange;
-    await pool.execute(
-      `UPDATE DRIVERS SET PointBalance = ? WHERE UserID = ?`,
-      [newBalance, driverId]
+    const newBalance = Number(drivers[0].PointBalance) + pointDelta;
+    await connection.execute(
+      `UPDATE DRIVERS SET PointBalance = ? WHERE LicenseNumber = ?`,
+      [newBalance, drivers[0].LicenseNumber]
     );
-    
+
+    await connection.commit();
     res.json({ success: true, newBalance });
   } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
     console.error('Error creating transaction:', error);
     res.status(500).json({ error: 'Failed to create transaction' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
 // PUT /api/sponsors/:userId/point-transactions/:tId - Edit a transaction
 router.put('/:userId/point-transactions/:tId', async (req, res) => {
+  let connection;
   try {
     const { userId, tId } = req.params;
     const { newPoints, newReason } = req.body;
-    
-    if (newPoints === undefined || !newReason) {
+
+    const sponsorUserId = Number(userId);
+    const transactionId = Number(tId);
+    const pointValue = Number(newPoints);
+    const reasonText = typeof newReason === 'string' ? newReason.trim() : '';
+
+    if (!Number.isInteger(sponsorUserId) || !Number.isInteger(transactionId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID or transaction ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    if (!Number.isFinite(pointValue) || !reasonText) {
       return res.status(400).json({ error: 'newPoints and newReason are required' });
     }
-    
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
     // Get the sponsor's company
-    const [sponsorRows] = await pool.execute(
+    const [sponsorRows] = await connection.execute(
       `SELECT sc.SponsorCompanyID
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
-    
+
     if (sponsorRows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Sponsor not found' });
     }
-    
+
+    const companyId = sponsorRows[0].SponsorCompanyID;
+
     // Get the transaction
-    const [transactions] = await pool.execute(
-      `SELECT * FROM POINT_TRANSACTIONS WHERE TransactionID = ?`,
-      [tId]
+    const [transactions] = await connection.execute(
+      `SELECT pt.TransactionID, pt.DriverID, pt.PointChange
+       FROM POINT_TRANSACTIONS pt
+       JOIN DRIVERS d ON d.LicenseNumber = pt.DriverID
+       WHERE pt.TransactionID = ? AND d.SponsorCompanyID = ?`,
+      [transactionId, companyId]
     );
-    
+
     if (transactions.length === 0) {
-      return res.status(404).json({ error: 'Transaction not found' });
+      await connection.rollback();
+      return res.status(404).json({ error: 'Transaction not found for this sponsor' });
     }
-    
+
     const oldPoints = transactions[0].PointChange;
-    const pointDifference = newPoints - oldPoints;
-    
+    const pointDifference = pointValue - oldPoints;
+
     // Update transaction
-    await pool.execute(
+    await connection.execute(
       `UPDATE POINT_TRANSACTIONS SET PointChange = ?, ReasonForChange = ? WHERE TransactionID = ?`,
-      [newPoints, newReason, tId]
+      [pointValue, reasonText, transactionId]
     );
-    
+
     // Update driver's point balance by the difference
-    await pool.execute(
-      `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = (SELECT DriverID FROM POINT_TRANSACTIONS WHERE TransactionID = ?)`,
-      [pointDifference, tId]
+    await connection.execute(
+      `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = ?`,
+      [pointDifference, transactions[0].DriverID]
     );
-    
+
+    await connection.commit();
     res.json({ success: true });
   } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
     console.error('Error updating transaction:', error);
     res.status(500).json({ error: 'Failed to update transaction' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
@@ -456,6 +585,16 @@ router.patch('/:userId/drivers/:driverId', async (req, res) => {
 router.get('/:userId/drivers/:driverId', async (req, res) => {
   try {
     const { userId, driverId } = req.params;
+    const sponsorUserId = Number(userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
     console.log(`[SPONSOR_GET_DRIVER] userId=${userId}, driverId=${driverId}`);
     
     // Get the sponsor's company
@@ -464,7 +603,7 @@ router.get('/:userId/drivers/:driverId', async (req, res) => {
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
     
     if (sponsorRows.length === 0) {
@@ -511,6 +650,10 @@ router.post('/:userId/assume-driver/:driverId', async (req, res) => {
         success: false,
         error: 'userId and driverId must be valid integers.',
       });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ success: false, error: 'Access forbidden for requested user context.' });
     }
 
     connection = await pool.getConnection();
@@ -723,49 +866,6 @@ router.patch('/:companyId/description', async (req, res) => {
 //  }
 //});
 
-// POST /api/sponsors/deduct-points
-router.post('/deduct-points', async (req, res) => {
-    const { driverId, points, reason, sponsorId } = req.body;
-    const connection = await pool.getConnection();
-
-    try {
-        await connection.beginTransaction();
-
-        // Update Driver's balance 
-        const [updateResult] = await connection.execute(
-            "UPDATE DRIVERS SET PointBalance = PointBalance - ? WHERE UserID = ?",
-            [points, driverId]
-        );
-
-        if (updateResult.affectedRows === 0) {
-            throw new Error("Driver not found");
-        }
-
-        // Get Driver's LicenseNumber for transaction log
-        const [driver] = await connection.execute(
-            "SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?",
-            [driverId]
-        );
-
-        // Log transaction as negative value
-        await connection.execute(
-            `INSERT INTO POINT_TRANSACTIONS 
-            (DriverID, PointChange, ReasonForChange, TimeChanged, UserChanged) 
-            VALUES (?, ?, ?, NOW(), ?)`,
-            [driver[0].LicenseNumber, -Math.abs(points), reason, sponsorId]
-        );
-
-        await connection.commit();
-        res.json({ message: `Successfully deducted ${points} points.` });
-    } catch (error) {
-        await connection.rollback();
-        console.error("Deduction Error:", error);
-        res.status(500).json({ error: error.message || "Failed to deduct points" });
-    } finally {
-        connection.release();
-    }
-});
-
 // GET /api/sponsors/driver-purchases/:companyId
 router.get('/driver-purchases/:companyId', async (req, res) => {
   const { companyId } = req.params;
@@ -776,13 +876,15 @@ router.get('/driver-purchases/:companyId', async (req, res) => {
           t.TransactionID,
           t.PointChange,
           t.ReasonForChange,
-          t.TimeChanged,
+          DATE_FORMAT(t.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged,
           u.FirstName,
           u.LastName
        FROM POINT_TRANSACTIONS t
        JOIN DRIVERS d ON t.DriverID = d.LicenseNumber
        JOIN USERS u ON d.UserID = u.UserID
        WHERE d.SponsorCompanyID = ?
+         AND t.TimeChanged IS NOT NULL
+         AND t.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY t.TimeChanged DESC`,
       [companyId]
     );
@@ -860,51 +962,265 @@ router.put('/user/:id', async (req, res) => {
     }
 });
 
-// Sponsors to view Driver Applications
-router.get('/view-applications', async (req, res) => {
+// GET /api/sponsors/:userId/driver-applications
+// Returns all applications for the sponsor's company, scoped by userId.
+router.get('/:userId/driver-applications', async (req, res) => {
     try {
-        const [rows] = await pool.execute(
-            `SELECT 
-                u.UserID, 
-                u.FirstName, 
-                u.LastName, 
-                u.Email, 
-                u.DateApplied, 
-                d.LicenseNumber
+        const sponsorUserId = Number(req.params.userId);
+
+        if (!Number.isInteger(sponsorUserId)) {
+          return res.status(400).json({ error: 'Invalid sponsor user ID' });
+        }
+
+        if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+          return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+        }
+
+        const [sponsorRows] = await pool.execute(
+            `SELECT u.UserType, u.Permissions, s.SponsorCompanyID
              FROM USERS u
-             JOIN DRIVERS d ON u.UserID = d.UserID
-             WHERE u.UserType = 'driver' AND u.ActiveStatus = 0
-             ORDER BY u.DateApplied DESC`
+             JOIN SPONSORS s ON s.UserID = u.UserID
+             WHERE u.UserID = ?
+             LIMIT 1`,
+            [sponsorUserId]
         );
-        res.json(rows);
+        if (sponsorRows.length === 0) {
+            return res.status(404).json({ error: 'Sponsor not found' });
+        }
+
+        const sponsor = sponsorRows[0];
+        if (String(sponsor.UserType).toLowerCase() !== 'sponsor') {
+          return res.status(403).json({ error: 'Only sponsors can view driver applications.' });
+        }
+
+        if (!hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canViewDriverApplications')) {
+          return res.status(403).json({ error: 'Missing canViewDriverApplications permission.' });
+        }
+
+        const companyId = sponsor.SponsorCompanyID;
+        const permissions = {
+          canViewDriverApplications: hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canViewDriverApplications'),
+          canAcceptDriverApplications: hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canAcceptDriverApplications'),
+          canRejectDriverApplications: hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canRejectDriverApplications'),
+        };
+
+        const [rows] = await pool.execute(
+            `SELECT
+                da.ApplicationID,
+                da.DriverID,
+                da.ApplicationStatus,
+            da.DecisionExplanation AS DriverExplanation,
+                da.TimeSubmitted,
+            COALESCE(u.UserID, d.UserID) AS UserID,
+                u.FirstName,
+                u.LastName,
+            d.LicenseNumber
+             FROM DRIVER_APPLICATIONS da
+           LEFT JOIN DRIVERS d ON (
+             da.DriverID COLLATE utf8mb4_unicode_ci = d.LicenseNumber COLLATE utf8mb4_unicode_ci
+             OR CAST(d.UserID AS CHAR) COLLATE utf8mb4_unicode_ci = da.DriverID COLLATE utf8mb4_unicode_ci
+           )
+           LEFT JOIN USERS u ON d.UserID = u.UserID
+             WHERE da.SponsorCompanyID = ?
+             ORDER BY da.TimeSubmitted DESC`,
+            [companyId]
+        );
+          res.json({ applications: rows, permissions });
     } catch (error) {
-        console.error("View Apps Error:", error);
+        console.error("Driver Applications Error:", error);
         res.status(500).json({ error: "Could not fetch applications" });
     }
 });
 
-// Sponsors accept or deny application
-router.post('/process-application', async (req, res) => {
-    const { applicationId, status, explanation } = req.body;
+// POST /api/sponsors/:userId/process-application
+// Accepts or rejects an application, scoped to the sponsor's company.
+router.post('/:userId/process-application', async (req, res) => {
+  const sponsorUserId = Number(req.params.userId);
+  const rawApplicationId = Number(req.body?.applicationId);
+  const rawStatus = String(req.body?.status ?? '').trim().toLowerCase();
+  const rawExplanation = String(req.body?.explanation ?? '').trim();
+  let connection;
 
-    // Validation: Ensure only valid ENUM values are sent
-    const validStatuses = ['accepted', 'rejected', 'pending'];
-    if (!validStatuses.includes(status)) {
-        return res.status(400).json({ error: "Invalid status" });
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
     }
 
+    if (!Number.isInteger(rawApplicationId) || rawApplicationId <= 0) {
+      return res.status(400).json({ error: 'applicationId must be a valid integer.' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    const validStatuses = ['accepted', 'rejected'];
+    if (!validStatuses.includes(rawStatus)) {
+        return res.status(400).json({ error: "status must be accepted or rejected." });
+    }
+
+    if (!rawExplanation) {
+      return res.status(400).json({ error: 'explanation is required.' });
+    }
+
+    if (rawExplanation.length > 1000) {
+      return res.status(400).json({ error: 'explanation must be 1000 characters or fewer.' });
+    }
+
+    const explanation = rawExplanation;
+    const status = rawStatus;
+    const applicationId = rawApplicationId;
     try {
-        await pool.execute(
-            `UPDATE DRIVER_APPLICATIONS 
-             SET ApplicationStatus = ?, DecisionExplanation = ? 
-             WHERE ApplicationID = ?`,
-            [status, explanation || "", applicationId]
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const [sponsorRows] = await connection.execute(
+        `SELECT u.UserID, u.UserType, u.ActiveStatus, u.Permissions, s.SponsorID, s.SponsorCompanyID
+         FROM USERS u
+         JOIN SPONSORS s ON s.UserID = u.UserID
+         WHERE u.UserID = ?
+         LIMIT 1`,
+            [sponsorUserId]
+        );
+        if (sponsorRows.length === 0) {
+        await connection.rollback();
+            return res.status(404).json({ error: 'Sponsor not found' });
+        }
+
+      const sponsor = sponsorRows[0];
+      if (String(sponsor.UserType).toLowerCase() !== 'sponsor') {
+        await connection.rollback();
+        return res.status(403).json({ error: 'Only sponsors can process driver applications.' });
+      }
+
+      if (!Boolean(sponsor.ActiveStatus)) {
+        await connection.rollback();
+        return res.status(403).json({ error: 'Inactive sponsor accounts cannot process applications.' });
+      }
+
+      const requiredPermission = status === 'accepted'
+        ? 'canAcceptDriverApplications'
+        : 'canRejectDriverApplications';
+
+      if (!hasBooleanPermission(sponsor.UserType, sponsor.Permissions, requiredPermission)) {
+        await connection.rollback();
+        return res.status(403).json({ error: `Missing ${requiredPermission} permission.` });
+      }
+
+      const sponsorId = sponsor.SponsorID;
+      const companyId = sponsor.SponsorCompanyID;
+
+        // Verify this application belongs to the sponsor's company
+      const [appRows] = await connection.execute(
+        `SELECT ApplicationStatus, SponsorCompanyID, DriverID
+         FROM DRIVER_APPLICATIONS
+         WHERE ApplicationID = ?`,
+            [applicationId]
+        );
+        if (appRows.length === 0) {
+        await connection.rollback();
+            return res.status(404).json({ error: 'Application not found' });
+        }
+        if (Number(appRows[0].SponsorCompanyID) !== Number(companyId)) {
+        await connection.rollback();
+            return res.status(403).json({ error: 'Not authorized to modify this application' });
+        }
+
+      if (String(appRows[0].ApplicationStatus).toLowerCase() !== 'pending') {
+        await connection.rollback();
+        return res.status(409).json({ error: 'Application has already been processed.' });
+      }
+
+      // Keep DecisionExplanation as the original driver-submitted application reason.
+      await connection.execute(
+        `UPDATE DRIVER_APPLICATIONS
+         SET ApplicationStatus = ?,
+         DecisionExplanation = ?
+         WHERE ApplicationID = ?`,
+        [status, explanation.slice(0, 45), applicationId]
         );
 
-        res.json({ message: `Application ${status} successfully.` });
+      if (status === 'accepted') {
+        await connection.execute(
+          `UPDATE DRIVERS
+           SET SponsorCompanyID = ?
+           WHERE LicenseNumber = ?`,
+          [companyId, appRows[0].DriverID]
+        );
+
+        // Link accepted drivers to the specific sponsor who processed the application
+        // when the optional SPONSOR_DRIVERS table is available.
+        const [junctionTableRows] = await connection.execute(
+          `SELECT COUNT(*) AS tableCount
+           FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'SPONSOR_DRIVERS'`
+        );
+
+        if (Number(junctionTableRows[0]?.tableCount) > 0) {
+          await connection.execute(
+            `INSERT INTO SPONSOR_DRIVERS (SponsorID, DriverID)
+             SELECT ?, ?
+             WHERE NOT EXISTS (
+               SELECT 1
+               FROM SPONSOR_DRIVERS
+               WHERE SponsorID = ? AND DriverID = ?
+             )`,
+            [sponsorId, appRows[0].DriverID, sponsorId, appRows[0].DriverID]
+          );
+        }
+      }
+
+      await connection.execute(
+        `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+         VALUES (?, NOW(), 'ApplicationStatusUpdate', JSON_OBJECT('status', ?, 'reviewNotes', ?, 'applicationId', ?, 'driverId', ?))`,
+        [sponsorUserId, status, explanation, applicationId, appRows[0].DriverID]
+      );
+
+      const [updatedRows] = await connection.execute(
+        `SELECT
+            ApplicationID,
+            ApplicationStatus,
+            DecisionExplanation
+         FROM DRIVER_APPLICATIONS
+         WHERE ApplicationID = ?`,
+        [applicationId]
+      );
+
+      const updatedApplication = updatedRows[0] ?? null;
+      if (!updatedApplication) {
+        throw new Error('Unable to verify updated application record.');
+      }
+
+      if (String(updatedApplication.ApplicationStatus ?? '') !== String(status)) {
+        throw new Error('Application status did not persist after update.');
+      }
+
+      const persistedExplanation =
+        typeof updatedApplication.DecisionExplanation === 'string'
+          ? updatedApplication.DecisionExplanation.trim()
+          : '';
+
+      if (persistedExplanation !== explanation.slice(0, 45)) {
+        throw new Error('DecisionExplanation did not persist after update.');
+      }
+
+      await connection.commit();
+
+        res.json({
+          message: `Application ${status} successfully.`,
+          application: updatedApplication,
+          noteTruncated: explanation.length > 45,
+          updateVerified: true,
+        });
     } catch (error) {
-        console.error("Update Error:", error);
+      if (connection) {
+        await connection.rollback();
+      }
+        console.error("Process Application Error:", error);
         res.status(500).json({ error: "Failed to update application status." });
+    } finally {
+      if (connection) {
+        connection.release();
+      }
     }
 });
 

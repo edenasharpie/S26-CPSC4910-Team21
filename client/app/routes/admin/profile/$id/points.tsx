@@ -8,6 +8,18 @@ import { getApiBaseUrl } from "~/utils/api-url";
 
 const API_URL = getApiBaseUrl();
 
+function parseDisplayDate(value: unknown): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value as string | number | Date);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function isDisplayableDate(value: unknown): boolean {
+  const parsed = parseDisplayDate(value);
+  return Boolean(parsed && parsed.getFullYear() >= 2000);
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
   const sessionUser = await requireAuth(request, ["admin"]);
   const userId = params.id;
@@ -87,11 +99,16 @@ export default function PointsPage() {
   const tooltipText = isDarkMode ? "#e2e8f0" : "#1e293b";
   const tooltipBorder = isDarkMode ? "#334155" : "#cbd5e1";
 
+  const validHistory = useMemo(
+    () => history.filter((item: any) => isDisplayableDate(item.TimeChanged)),
+    [history]
+  );
+
   // Compute chart data and linear regression trendline
   const chartData = useMemo(() => {
 
     let currentBalance = 0;
-    const sortedHistory = [...history].sort((a: any, b: any) =>
+    const sortedHistory = [...validHistory].sort((a: any, b: any) =>
       new Date(a.TimeChanged).getTime() - new Date(b.TimeChanged).getTime()
     );
 
@@ -125,10 +142,11 @@ export default function PointsPage() {
       ...p,
       trend: parseFloat((slope * p.x + intercept).toFixed(2)),
     }));
-  }, [history]);
+  }, [validHistory]);
 
   return (
-    <div className="p-8 max-w-400 mx-auto space-y-10 text-left text-gray-900 dark:text-gray-100">
+    <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-8">
+      <div className="max-w-400 mx-auto space-y-10 text-left text-gray-900 dark:text-gray-100">
       <Link
         to="/"
         className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
@@ -149,7 +167,7 @@ export default function PointsPage() {
             {driver.FirstName} {driver.LastName}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm font-mono mt-2 bg-gray-50 dark:bg-gray-900 px-3 py-1 rounded-md inline-block border border-gray-200 dark:border-gray-700 text-left">
-            License: {driver.LicenseNumber}
+            License Number: {driver.LicenseNumber}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-900 px-10 py-4 rounded-3xl border-2 border-indigo-600 text-center shadow-lg shadow-indigo-100/40 dark:shadow-none">
@@ -213,13 +231,16 @@ export default function PointsPage() {
                   <th className="p-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest text-left">
                     Reason
                   </th>
+                  <th className="p-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest text-left">
+                    Changed By
+                  </th>
                   <th className="p-4 text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest text-right">
                     Edit
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {history.map((row: any) => (
+                {validHistory.map((row: any) => (
                   <tr
                     key={row.TransactionID}
                     className="hover:bg-indigo-50/50 dark:hover:bg-gray-800/70 transition-colors group"
@@ -260,6 +281,20 @@ export default function PointsPage() {
                       ) : (
                         <span className="text-sm text-gray-700 dark:text-gray-300">{row.ReasonForChange}</span>
                       )}
+                    </td>
+                    <td className="p-4 text-left text-sm text-gray-600 dark:text-gray-300">
+                      <div className="leading-tight">
+                        <div>
+                          {(() => {
+                            const fullName = `${row.ChangedByFirstName ?? ""} ${row.ChangedByLastName ?? ""}`.trim();
+                            if (!row.ChangedByUsername) return "Unknown";
+                            return fullName || "Unknown User";
+                          })()}
+                        </div>
+                        {row.ChangedByUsername ? (
+                          <div className="text-xs text-gray-400">@{row.ChangedByUsername}</div>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="p-4 text-right">
                       <Form
@@ -389,6 +424,7 @@ export default function PointsPage() {
             </p>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
