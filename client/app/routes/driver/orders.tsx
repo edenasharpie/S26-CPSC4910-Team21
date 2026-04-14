@@ -177,18 +177,6 @@ export default function DriverOrders() {
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <Link
-              to="/"
-              className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              &larr; Home
-            </Link>
-            <Link
-              to="/driver/catalogs"
-              className="mt-2 inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              &larr; Browse Catalogs
-            </Link>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-3">Your Orders</h1>
             <p className="text-gray-600 dark:text-gray-400">Track recent purchases and update confirmed orders.</p>
           </div>

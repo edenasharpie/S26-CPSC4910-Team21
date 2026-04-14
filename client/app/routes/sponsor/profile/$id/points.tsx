@@ -1,6 +1,6 @@
 import type { Route } from "./+types/points";
 import { useState, useMemo } from "react";
-import { useLoaderData, Form, useActionData, Link } from "react-router";
+import { useLoaderData, Form, useActionData } from "react-router";
 import { Input, Button } from "~/components";
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from "recharts";
 import { getApiBaseUrl } from "~/utils/api-url";
@@ -136,18 +136,6 @@ export default function PointsPage() {
   return (
     <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-8">
       <div className="max-w-[1600px] mx-auto space-y-10 text-left text-gray-900 dark:text-gray-100">
-      <div className="flex items-center space-x-4">
-        <Link to="/" className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">
-          ← Home
-        </Link>
-        <Link
-          to="/sponsor/dashboard"
-          className="text-sm font-medium text-indigo-600 dark:text-indigo-300 hover:text-indigo-800 dark:hover:text-indigo-200 transition-colors"
-        >
-          ← Back to Sponsor Dashboard
-        </Link>
-      </div>
-
       <div className="flex justify-between items-end border-b pb-8 border-gray-200 dark:border-gray-800">
         <div>
           <h1 className="text-4xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
