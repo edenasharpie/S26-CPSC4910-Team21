@@ -41,6 +41,17 @@ interface StoreProduct {
   image: string;
 }
 
+const DESCRIPTION_PREVIEW_LENGTH = 40;
+const DESCRIPTION_ELLIPSIS = '...';
+
+function getDescriptionPreview(text: string): string {
+  if (!text) return '';
+  if (text.length <= DESCRIPTION_PREVIEW_LENGTH) return text;
+  return `${text
+    .slice(0, DESCRIPTION_PREVIEW_LENGTH - DESCRIPTION_ELLIPSIS.length)
+    .trimEnd()}${DESCRIPTION_ELLIPSIS}`;
+}
+
 export default function SponsorCatalogs() {
   const { user } = useLoaderData<typeof loader>();
   const api = useMemo(() => createApiClient({ id: user.UserID, role: 'sponsor' }), [user.UserID]);
@@ -326,7 +337,16 @@ export default function SponsorCatalogs() {
       )
     },
     { key: 'name', header: 'Name' },
-    { key: 'description', header: 'Description' },
+    {
+      key: 'description',
+      header: 'Description',
+      className: 'max-w-2xl whitespace-normal',
+      render: (item: CatalogItem) => (
+        <div className="break-words" title={item.description}>
+          {getDescriptionPreview(item.description)}
+        </div>
+      )
+    },
     { key: 'pointCost', header: 'Point Cost' },
     { key: 'originalSource', header: 'Source' },
     {

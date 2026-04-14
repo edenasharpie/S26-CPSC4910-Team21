@@ -173,7 +173,7 @@ export default function DriverOrders() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 dark:bg-gray-950">
+    <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-8">
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
           <div>
@@ -188,11 +188,11 @@ export default function DriverOrders() {
                 </Button>
               </Form>
             )}
-            <Form method="post" action="/logout">
-              <Button variant="secondary" size="sm" type="submit">
-                Sign out
+            <Link to="/driver/catalogs">
+              <Button variant="ghost" size="sm">
+                Back to Catalog
               </Button>
-            </Form>
+            </Link>
           </div>
         </div>
 
@@ -226,13 +226,13 @@ export default function DriverOrders() {
 
                 <Table data={order.items} columns={itemColumns} />
 
-                <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-gray-700">
                   <div className="text-sm text-gray-600 dark:text-gray-300">
                     <span className="font-semibold">Total Points:</span> {order.orderPointsSpent} -
                     <span className="font-semibold"> Total $:</span> {order.orderDollarsSpent.toFixed(2)}
                   </div>
                   {order.orderStatus === "confirmed" && (
-                    <div className="flex gap-2">
+                    <div className="mt-1 flex gap-2 rounded-lg border border-gray-200 bg-white/70 p-2 dark:border-gray-700 dark:bg-gray-900/60">
                       <Button variant="secondary" size="sm" onClick={() => handleEditOrder(order)}>
                         Edit
                       </Button>
