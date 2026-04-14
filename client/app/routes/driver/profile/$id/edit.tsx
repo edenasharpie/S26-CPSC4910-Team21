@@ -277,13 +277,6 @@ export default function DriverProfileEditPage() {
   return (
     <div className="min-h-screen w-full bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f]">
       <div className="p-8 max-w-6xl mx-auto">
-      <Link
-        to="/driver/dashboard"
-        className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6"
-      >
-        ← Dashboard
-      </Link>
-
       {session?.OriginalUser && (
         <Form method="post" action="/exit-assumption" className="mb-4">
           <Button type="submit" variant="primary" size="sm">
