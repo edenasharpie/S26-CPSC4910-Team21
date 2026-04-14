@@ -165,6 +165,7 @@ export default function DriverCatalogs() {
     (sum, entry) => sum + entry.item.pointCost * entry.quantity,
     0
   );
+  const totalItems = cartItems.reduce((sum, entry) => sum + entry.quantity, 0);
 
   const handlePlaceOrder = async () => {
     if (cartItems.length === 0) {
@@ -265,7 +266,7 @@ export default function DriverCatalogs() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-6 space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-3xl font-bold">Available Catalogs</h1>
         <div className="flex gap-2">
@@ -275,14 +276,11 @@ export default function DriverCatalogs() {
             </Form>
           )}
           <Button variant="secondary" onClick={() => setIsCartOpen(true)}>
-            Cart ({cartItems.length})
+            View Cart ({totalItems})
           </Button>
           <Link to="/driver/orders">
             <Button variant="ghost">View Orders</Button>
           </Link>
-          <Form method="post" action="/logout">
-            <Button variant="secondary" size="sm" type="submit">Sign out</Button>
-          </Form>
         </div>
       </div>
 
@@ -396,27 +394,32 @@ export default function DriverCatalogs() {
         title="Your Cart"
       >
         <div className="space-y-4">
-          {error && (
-            <div className="fixed top-4 left-1/2 z-60 w-[min(90vw,40rem)] -translate-x-1/2">
-              <Alert message={error} onDismiss={() => setError(null)} />
-            </div>
-          )}
+          {error && <Alert message={error} onDismiss={() => setError(null)} />}
 
           {cartItems.length === 0 ? (
-            <p className="text-sm text-gray-500">Your cart is empty.</p>
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center dark:border-slate-700 dark:bg-slate-900/50">
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Your cart is empty.</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Add items from a catalog to place an order.</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {cartItems.map((entry) => (
-                <div key={entry.item.id} className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="font-medium text-gray-900">{entry.item.name}</p>
-                    <p className="text-xs text-gray-500">{entry.item.pointCost} pts each</p>
+                <div
+                  key={entry.item.id}
+                  className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-900 dark:text-slate-100">{entry.item.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{entry.item.pointCost} pts each</p>
+                    <p className="mt-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                      Subtotal: {entry.item.pointCost * entry.quantity} pts
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
                       min={1}
-                      className="w-20 rounded border border-gray-300 px-2 py-1 text-right"
+                      className="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right text-sm dark:border-slate-600 dark:bg-slate-800"
                       value={entry.quantity}
                       onChange={(event) =>
                         handleUpdateCartQuantity(entry.item.id, Number(event.target.value))
@@ -431,16 +434,26 @@ export default function DriverCatalogs() {
             </div>
           )}
 
-          <div className="flex items-center justify-between border-t pt-4 text-sm">
-            <span className="font-semibold">Total Points</span>
-            <span>{totalPoints}</span>
+          <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 dark:border-blue-900/60 dark:bg-blue-950/40">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">Items</span>
+              <span className="font-bold text-slate-900 dark:text-slate-100">{totalItems}</span>
+            </div>
+            <div className="mt-2 flex items-center justify-between text-sm">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">Total Points</span>
+              <span className="text-lg font-extrabold text-blue-700 dark:text-blue-300">{totalPoints}</span>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setIsCartOpen(false)}>
               Close
             </Button>
-            <Button variant="primary" onClick={handlePlaceOrder} disabled={placingOrder}>
+            <Button
+              variant="primary"
+              onClick={handlePlaceOrder}
+              disabled={placingOrder || cartItems.length === 0}
+            >
               {placingOrder ? "Placing..." : "Place Order"}
             </Button>
           </div>

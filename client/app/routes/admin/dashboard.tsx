@@ -255,11 +255,6 @@ export default function AdminPortal() {
   const adminCount   = users.filter((u: any) => u.UserType?.toLowerCase() === "admin"   && u.ActiveStatus !== 0).length;
   const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
   const totalPoints = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").reduce((sum: number, u: any) => sum + (u.PointBalance ?? 0), 0);
-  const currentAdmin = users.find((u: any) => u.UserID === session?.UserID);
-  const adminFirstName = session?.FirstName ?? currentAdmin?.FirstName ?? "Admin";
-  const adminLastName = session?.LastName ?? currentAdmin?.LastName ?? "User";
-  const adminUsername = session?.Username ?? currentAdmin?.Username ?? "admin";
-  const adminProfilePicture = currentAdmin?.ProfilePicture ?? "";
 
   const auditUsersByType = users
     .filter((u: any) => {
@@ -404,10 +399,6 @@ export default function AdminPortal() {
                   System administration and user oversight.
                 </p>
               </div>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
-                <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
-                <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
-              </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -418,6 +409,10 @@ export default function AdminPortal() {
                 </Button>
               </Form>
             )}
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
+              <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
+              <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
+            </div>
             <button
               onClick={() => navigate(`/admin/settings/${session?.UserID || 1}`)}
               className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
@@ -427,34 +422,6 @@ export default function AdminPortal() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-            </button>
-            <Form method="post" action="/logout">
-              <Button variant="secondary" size="sm" type="submit">
-                Sign out
-              </Button>
-            </Form>
-            <button 
-              onClick={() => {
-                if (session?.UserID) {
-                  window.location.href = `/admin/profile/${session.UserID}/edit`;
-                }
-              }}
-              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm cursor-pointer"
-            >
-            <div className="relative">
-              <AvatarOrInitials
-                profilePicture={adminProfilePicture}
-                firstName={adminFirstName}
-                lastName={adminLastName}
-                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
-                initialsClassName="text-xs"
-              />
-              <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
-            </div>
-            <div className="block text-left">
-              <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{adminFirstName} {adminLastName}</p>
-              <p className="text-[10px] text-gray-400 font-mono mt-0.5">{adminUsername}</p>
-            </div>
             </button>
           </div>
         </div>

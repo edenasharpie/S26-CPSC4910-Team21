@@ -363,7 +363,7 @@ export default function Catalogs() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-6 space-y-6">
       <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Catalog Management</h1>
