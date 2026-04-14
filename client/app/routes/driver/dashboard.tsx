@@ -1,7 +1,7 @@
 import type { Route } from "./+types/dashboard";
 import { useMemo } from "react";
 import { Table, Button } from "~/components";
-import { useNavigate, useLoaderData, Link, Form } from "react-router";
+import { useNavigate, useLoaderData } from "react-router";
 import { requireAuth } from "~/utils/session.server";
 import { getApiBaseUrl } from "~/utils/api-url";
 import { 
@@ -158,21 +158,15 @@ export default function DriverDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* --- HEADER --- */}
-        <div className="mb-8 border-b pb-6 dark:border-gray-800 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-          <div className="text-left">
-            <Link to="/" className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-2 block">
-              ← Home
-            </Link>
-            <div className="flex items-center gap-4">
-              <div>
-                <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white uppercase">
-                  Driver Dashboard
-                </h1>
-                <p className="text-gray-500 text-sm mt-1 font-medium italic">
-                  ID: <span className="font-mono text-indigo-500">{effectiveUserId}</span>
-                </p>
-              </div>
-              
+        <div className="mb-8 border-b pb-6 dark:border-gray-800">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+            <div className="text-left">
+              <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white uppercase">
+                Driver Dashboard
+              </h1>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
                 <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">
                   {(driver?.PointBalance ?? 0).toLocaleString()}
@@ -192,31 +186,9 @@ export default function DriverDashboard() {
               </div>
             </div>
           </div>
-
-          <div className="flex items-center gap-3 self-end pb-1">
-            <Form method="post" action="/logout">
-              <Button variant="secondary" size="sm" type="submit">Sign out</Button>
-            </Form>
-            <button
-              type="button"
-              onClick={() => navigate(`/driver/profile/${effectiveUserId}/edit`)}
-              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow"
-              aria-label="Open account information"
-              title="Open account information"
-            >
-              <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase">
-                {driver?.FirstName?.[0]}{driver?.LastName?.[0]}
-              </div>
-              <div className="block text-left">
-                <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{driver?.FirstName} {driver?.LastName}</p>
-                <p className="text-[10px] text-gray-400 font-mono mt-0.5">@{driver?.Username}</p>
-              </div>
-            </button>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
           <aside className="lg:col-span-4 space-y-6">
             <div className="space-y-4">
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">My Sponsors</h2>
@@ -351,10 +323,10 @@ export default function DriverDashboard() {
                     render: (t: any) => {
                       const pointChange = normalizePointChange(t.PointChange);
                       return (
-                      <span className={`font-bold ${pointChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {pointChange >= 0 ? `+${pointChange}` : pointChange}
-                      </span>
-                    );
+                        <span className={`font-bold ${pointChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {pointChange >= 0 ? `+${pointChange}` : pointChange}
+                        </span>
+                      );
                     },
                   },
                 ]} 

@@ -171,6 +171,9 @@ export default function App() {
             ? {
                 username: session.Username,
                 role: session.UserType,
+                firstName: session.FirstName,
+                lastName: session.LastName,
+                userId: session.UserID,
               }
             : null
         }

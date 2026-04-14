@@ -1,4 +1,4 @@
-import { Form, Link } from "react-router";
+import { Form, Link, useNavigate } from "react-router";
 
 type NavRole = "driver" | "sponsor" | "admin";
 
@@ -7,6 +7,9 @@ interface TopNavProps {
     | {
         username: string;
         role: NavRole;
+        firstName?: string;
+        lastName?: string;
+        userId?: number | string;
       }
     | null;
   dashboardHref?: string;
@@ -24,6 +27,7 @@ const NAV_SHELL_BY_ROLE: Record<"guest" | NavRole, string> = {
 };
 
 export function TopNav({ user, dashboardHref }: TopNavProps) {
+  const navigate = useNavigate();
   const role = user?.role ?? "guest";
 
   return (
@@ -57,18 +61,19 @@ export function TopNav({ user, dashboardHref }: TopNavProps) {
                 >
                   Dashboard
                 </Link>
-                <Link
-                  to={
-                    user.role === "admin"
-                      ? "/admin/dashboard"
-                      : user.role === "sponsor"
-                      ? "/sponsor/dashboard"
-                      : "/driver/dashboard"
-                  }
-                  className="rounded-md px-3 py-1.5 text-current/90 hover:bg-black/5 hover:text-current dark:hover:bg-white/10"
+                <button
+                  type="button"
+                  onClick={() => navigate(`/${user.role}/profile/${user.userId}/edit`)}
+                  className="flex items-center gap-2 rounded-md border border-current/20 px-2 py-1.5 text-current hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                 >
-                  {user.username}
-                </Link>
+                  <div className="flex-shrink-0 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase w-6 h-6">
+                    {user.firstName?.[0]}{user.lastName?.[0]}
+                  </div>
+                  <div className="text-left hidden sm:block">
+                    <div className="text-xs font-semibold leading-none">{user.firstName} {user.lastName}</div>
+                    <div className="text-[10px] text-current/70 leading-none">@{user.username}</div>
+                  </div>
+                </button>
                 <Form method="post" action="/logout">
                   <button
                     type="submit"
