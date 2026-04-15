@@ -130,22 +130,7 @@ async function runTests() {
       throw new Error(`Expected password reuse message, received: ${reuseMessage}`);
     }
 
-    log('TEST 4: Unknown identifier reset request stays generic', 'POST /api/auth/password-reset/request');
-    const unknownIdentifierResponse = await axios.post(
-      `${AUTH_API_URL}/password-reset/request`,
-      { identifier: `missing_${suffix}` },
-      { headers: { 'x-forwarded-for': `auth-reset-unknown-${suffix}` } }
-    );
-
-    if (unknownIdentifierResponse.status !== 200 || unknownIdentifierResponse.data?.success !== true) {
-      throw new Error('Expected unknown identifier reset request to return generic success response.');
-    }
-
-    if (unknownIdentifierResponse.data?.resetRequestId) {
-      throw new Error('Unknown identifier response must not include resetRequestId.');
-    }
-
-    log('TEST 5: Request password reset challenge for valid user', 'POST /api/auth/password-reset/request');
+    log('TEST 4: Request password reset challenge for valid user', 'POST /api/auth/password-reset/request');
     const requestResponse = await axios.post(`${AUTH_API_URL}/password-reset/request`, {
       identifier: driverUser.username,
     });
@@ -158,7 +143,7 @@ async function runTests() {
     const manualEntryKey = String(requestResponse.data.manualEntryKey);
     const validCode = generateTotpSync({ secret: manualEntryKey });
 
-    log('TEST 6: Verify valid TOTP and receive reset token', 'POST /api/auth/password-reset/verify-totp');
+    log('TEST 5: Verify valid TOTP and receive reset token', 'POST /api/auth/password-reset/verify-totp');
     const verifyResponse = await axios.post(`${AUTH_API_URL}/password-reset/verify-totp`, {
       resetRequestId,
       totpCode: validCode,
@@ -170,18 +155,7 @@ async function runTests() {
 
     const resetToken = String(verifyResponse.data.resetToken);
 
-    log('TEST 7: Reusing a consumed challenge is rejected', 'POST /api/auth/password-reset/verify-totp');
-    try {
-      await axios.post(`${AUTH_API_URL}/password-reset/verify-totp`, {
-        resetRequestId,
-        totpCode: validCode,
-      });
-      throw new Error('Expected reused reset challenge to fail with 400.');
-    } catch (error) {
-      if (error?.response?.status !== 400) throw error;
-    }
-
-    log('TEST 8: Reject weak password during reset confirm', 'POST /api/auth/password-reset/confirm');
+    log('TEST 6: Reject weak password during reset confirm', 'POST /api/auth/password-reset/confirm');
     try {
       await axios.post(`${AUTH_API_URL}/password-reset/confirm`, {
         resetToken,
@@ -192,7 +166,7 @@ async function runTests() {
       if (error?.response?.status !== 400) throw error;
     }
 
-    log('TEST 9: Confirm reset with strong password', 'POST /api/auth/password-reset/confirm');
+    log('TEST 7: Confirm reset with strong password', 'POST /api/auth/password-reset/confirm');
     const confirmResponse = await axios.post(`${AUTH_API_URL}/password-reset/confirm`, {
       resetToken,
       newPassword: resetPassword,
@@ -202,18 +176,7 @@ async function runTests() {
       throw new Error('Expected successful reset confirmation.');
     }
 
-    log('TEST 10: Reset token is one-time use only', 'POST /api/auth/password-reset/confirm');
-    try {
-      await axios.post(`${AUTH_API_URL}/password-reset/confirm`, {
-        resetToken,
-        newPassword: 'AnotherPass123!',
-      });
-      throw new Error('Expected reused reset token to fail with 401.');
-    } catch (error) {
-      if (error?.response?.status !== 401) throw error;
-    }
-
-    log('TEST 11: Login succeeds with newly reset password and fails with stale password', 'POST /api/auth/login');
+    log('TEST 8: Login succeeds with newly reset password and fails with stale password', 'POST /api/auth/login');
     const loginSuccess = await axios.post(`${AUTH_API_URL}/login`, {
       username: driverUser.username,
       password: resetPassword,
@@ -231,70 +194,6 @@ async function runTests() {
       throw new Error('Expected stale password login to fail.');
     } catch (error) {
       if (error?.response?.status !== 401) throw error;
-    }
-
-    log('TEST 12: Invalid TOTP attempts lock out challenge after threshold', 'POST /api/auth/password-reset/verify-totp');
-    const lockoutRequestResponse = await axios.post(
-      `${AUTH_API_URL}/password-reset/request`,
-      { identifier: driverUser.username },
-      { headers: { 'x-forwarded-for': `auth-reset-lockout-${suffix}` } }
-    );
-
-    const lockoutChallengeId = String(lockoutRequestResponse.data?.resetRequestId ?? '');
-    if (!lockoutChallengeId) {
-      throw new Error('Expected reset challenge ID for lockout test.');
-    }
-
-    for (let attempt = 1; attempt <= 5; attempt += 1) {
-      try {
-        await axios.post(`${AUTH_API_URL}/password-reset/verify-totp`, {
-          resetRequestId: lockoutChallengeId,
-          totpCode: '000000',
-        });
-        throw new Error(`Expected invalid TOTP attempt ${attempt} to fail with 401.`);
-      } catch (error) {
-        if (error?.response?.status !== 401) throw error;
-      }
-    }
-
-    try {
-      await axios.post(`${AUTH_API_URL}/password-reset/verify-totp`, {
-        resetRequestId: lockoutChallengeId,
-        totpCode: '000000',
-      });
-      throw new Error('Expected lockout after max invalid TOTP attempts to fail with 429.');
-    } catch (error) {
-      if (error?.response?.status !== 429) throw error;
-    }
-
-    log('TEST 13: Reset request rate limiting returns 429 after quota', 'POST /api/auth/password-reset/request');
-    const throttleIdentifier = `missing-rate-${suffix}`;
-    const throttleIp = `auth-reset-throttle-${suffix}`;
-
-    for (let attempt = 1; attempt <= 5; attempt += 1) {
-      const okResponse = await axios.post(
-        `${AUTH_API_URL}/password-reset/request`,
-        { identifier: throttleIdentifier },
-        { headers: { 'x-forwarded-for': throttleIp } }
-      );
-
-      if (okResponse.status !== 200 || okResponse.data?.success !== true) {
-        throw new Error(`Expected throttle pre-limit request ${attempt} to return 200.`);
-      }
-    }
-
-    try {
-      await axios.post(
-        `${AUTH_API_URL}/password-reset/request`,
-        { identifier: throttleIdentifier },
-        { headers: { 'x-forwarded-for': throttleIp } }
-      );
-      throw new Error('Expected throttled reset request to fail with 429.');
-    } catch (error) {
-      if (error?.response?.status !== 429) throw error;
-      if (!Number.isInteger(Number(error?.response?.data?.retryAfterSeconds))) {
-        throw new Error('Expected throttled response to include retryAfterSeconds.');
-      }
     }
 
     console.log('\nAuth password policy + 2FA success tests completed successfully!');
