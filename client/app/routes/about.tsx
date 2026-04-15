@@ -109,12 +109,16 @@ export default function About() {
             </p>
           ) : null}
 
-          <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-5">
+          <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
             <InfoCard label="Team" value={String(aboutInfo.Team)} />
             <InfoCard label="Product" value={aboutInfo.ProductName} />
-            <InfoCard label="Description" value={aboutInfo.ProductDescription} className="lg:col-span-2" />
             <InfoCard label="Version" value={String(aboutInfo.Version)} />
             <InfoCard label="Release Date" value={releaseDate} />
+            <InfoCard
+              label="Description"
+              value={aboutInfo.ProductDescription}
+              className="md:col-span-2 lg:col-span-4"
+            />
           </section>
 
           <section className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6 sm:p-8">
