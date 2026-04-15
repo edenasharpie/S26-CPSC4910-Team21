@@ -39,11 +39,22 @@ jobs:
       - name: Start server in background
         working-directory: ./server
         run: |
-          npm start &
+          npm start > server.log 2>&1 &
           echo $! > server.pid
-          # Wait for server to be ready
-          sleep 5
-          curl --retry 10 --retry-delay 3 --retry-connrefused http://localhost:5000 || true
+
+          # Wait for server readiness (up to ~2 minutes)
+          for i in {1..40}; do
+            if curl -fsS http://localhost:5000/health > /dev/null; then
+              echo "Server is ready"
+              exit 0
+            fi
+            echo "Waiting for server... attempt $i/40"
+            sleep 3
+          done
+
+          echo "Server failed readiness check. Startup logs:"
+          cat server.log || true
+          exit 1
         env:
           NODE_ENV: test
       
