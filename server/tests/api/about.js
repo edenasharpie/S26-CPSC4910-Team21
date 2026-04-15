@@ -30,7 +30,10 @@ async function runTests() {
       console.error('Status:', error.response.status);
       console.error('Data:', error.response.data);
     } else {
-      console.error('Error:', error.message);
+      console.error('Error:', error?.message ?? error);
+      if (error?.stack) {
+        console.error('Stack:', error.stack);
+      }
     }
     process.exitCode = 1;
   } finally {
