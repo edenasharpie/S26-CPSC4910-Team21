@@ -76,45 +76,9 @@ app.use((err, _req, res, _next) => {
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-const DB_STARTUP_MAX_ATTEMPTS = Number(
-  process.env.DB_STARTUP_MAX_ATTEMPTS || (process.env.NODE_ENV === 'test' ? 20 : 8)
-);
-const DB_STARTUP_RETRY_MS = Number(process.env.DB_STARTUP_RETRY_MS || 3000);
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function initializeDatabaseWithRetry() {
-  let lastError;
-
-  for (let attempt = 1; attempt <= DB_STARTUP_MAX_ATTEMPTS; attempt += 1) {
-    try {
-      await verifyDatabaseConnection();
-      await initializeSystemAuditUserCache();
-
-      if (attempt > 1) {
-        console.log(`[startup] Database became available on attempt ${attempt}.`);
-      }
-
-      return;
-    } catch (error) {
-      lastError = error;
-      console.error(
-        `[startup] Database init attempt ${attempt}/${DB_STARTUP_MAX_ATTEMPTS} failed: ${error?.message || error}`
-      );
-
-      if (attempt < DB_STARTUP_MAX_ATTEMPTS) {
-        await sleep(DB_STARTUP_RETRY_MS);
-      }
-    }
-  }
-
-  throw lastError;
-}
-
 const startServer = async () => {
-  await initializeDatabaseWithRetry();
+  await verifyDatabaseConnection();
+  await initializeSystemAuditUserCache();
 
   app.listen(PORT, HOST, () => {
     console.log(`Backend running on ${HOST}:${PORT}`);

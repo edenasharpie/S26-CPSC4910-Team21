@@ -41,19 +41,18 @@ jobs:
         run: |
           npm start > server.log 2>&1 &
           echo $! > server.pid
-
-          # Wait for server readiness (up to ~2 minutes)
-          for i in {1..40}; do
+          for i in {1..30}; do
             if curl -fsS http://localhost:5000/health > /dev/null; then
               echo "Server is ready"
               exit 0
             fi
-            echo "Waiting for server... attempt $i/40"
-            sleep 3
+
+            echo "Waiting for server... attempt $i/30"
+            sleep 4
           done
 
-          echo "Server failed readiness check. Startup logs:"
-          cat server.log || true
+          echo "Server failed to become ready within the timeout"
+          cat server.log
           exit 1
         env:
           NODE_ENV: test
