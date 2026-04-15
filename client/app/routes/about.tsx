@@ -92,7 +92,7 @@ export default function About() {
             >
               ← Back to Home
             </Link>
-            <h1 className="font-display text-4xl font-black sm:text-5xl">About FleetScore</h1>
+            <h1 className="font-display text-4xl font-black text-white sm:text-5xl">About FleetScore</h1>
             <p className="max-w-3xl text-base text-slate-200 sm:text-lg">
               FleetScore is a truck driver incentive and rewards platform designed to give sponsors,
               drivers, and administrators a shared source of truth for points, catalogs, and accountability.

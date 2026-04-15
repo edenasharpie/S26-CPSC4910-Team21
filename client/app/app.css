@@ -60,7 +60,8 @@ html {
 
 /* font sizes */
 h1, h2, h3, h4, h5, h6 {
-  @apply font-semibold text-gray-900 dark:text-gray-100;
+  font-weight: 600;
+  color: inherit;
 }
 
 h1 {
@@ -88,7 +89,7 @@ h6 {
 }
 
 p {
-  @apply text-gray-700 dark:text-gray-300;
+  color: inherit;
 }
 
 a {
