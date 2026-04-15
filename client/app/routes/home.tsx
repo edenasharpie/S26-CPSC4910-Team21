@@ -30,7 +30,7 @@ export default function Home() {
   const { user } = useLoaderData<typeof loader>();
   const dashboardHref = user
     ? ROLE_HOME_PATHS[user.UserType as keyof typeof ROLE_HOME_PATHS] ?? "/"
-    : "/login";
+    : "/register";
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -39,9 +39,6 @@ export default function Home() {
         <div className="container-padding section-spacing relative">
           <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-12 lg:items-center">
             <div className="space-y-6 lg:col-span-7">
-              <p className="landing-fade-up inline-flex rounded-full border border-orange-200/30 bg-orange-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-100">
-                Fleet Incentive Platform
-              </p>
               <h1 className="font-display landing-fade-up landing-delay-1 text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">
                 Reward the driving habits your fleet depends on.
               </h1>
@@ -55,7 +52,7 @@ export default function Home() {
                     {user ? "Go To My Dashboard" : "Get Started"}
                   </Button>
                 </Link>
-                <Link to="/about">
+                <Link to="/features">
                   <Button variant="secondary" size="lg" className="border border-white/20 bg-white/10 text-white hover:bg-white/20">
                     Learn More
                   </Button>
@@ -109,8 +106,8 @@ export default function Home() {
       <div className="container-padding py-14 sm:py-16 lg:py-20">
         <div className="mx-auto max-w-7xl space-y-10">
           <div className="max-w-3xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">Why Teams Choose FleetScore</p>
-            <h2 className="font-display text-3xl font-black text-white sm:text-4xl">One platform for rewards, accountability, and growth.</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">Core Capabilities</p>
+            <h2 className="font-display text-3xl font-black text-white sm:text-4xl">Built for drivers, sponsors, and platform administrators.</h2>
           </div>
 
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -131,7 +128,7 @@ export default function Home() {
             </Card>
 
             <Card className="border-slate-800 bg-slate-900 p-6 dark:bg-slate-900 md:col-span-2 xl:col-span-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-rose-300">Admins</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-rose-300">Administrators</p>
               <h3 className="mt-2 text-2xl font-black text-white">Control at platform scale</h3>
               <p className="mt-2 text-sm text-slate-300">
                 Manage organizations, monitor audits, and enforce policy without losing operational speed.
@@ -157,18 +154,6 @@ export default function Home() {
                 <p className="mt-2 text-sm text-slate-300">Points become tangible value through curated catalogs tied to sponsor programs.</p>
               </div>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-cyan-200/20 bg-cyan-950/40 p-6">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Ready to launch your rewards program?</p>
-              <p className="mt-2 text-sm text-slate-200">Use FleetScore to align driver performance with sponsor priorities.</p>
-            </div>
-            <Link to={dashboardHref}>
-              <Button className="bg-cyan-300 text-slate-950 hover:bg-cyan-200 font-bold" size="lg">
-                {user ? "Open My Dashboard" : "Start With FleetScore"}
-              </Button>
-            </Link>
           </div>
         </div>
       </div>

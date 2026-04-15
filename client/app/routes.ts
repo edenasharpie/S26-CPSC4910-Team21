@@ -10,6 +10,7 @@ export default [
   route("forgot-password", "routes/forgot-password.tsx"),
   route("exit-assumption", "routes/exit-assumption.tsx"),
   route("about", "routes/about.tsx"),
+  route("features", "routes/features.tsx"),
   route("change-password", "routes/change-password.tsx"),
   /* demo purposes only */
   route("components-demo", "routes/components-demo.tsx"),

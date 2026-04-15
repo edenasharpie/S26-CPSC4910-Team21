@@ -1,5 +1,6 @@
 import {
   Form,
+  Link,
   isRouteErrorResponse,
   Links,
   Meta,
@@ -180,6 +181,21 @@ export default function App() {
         dashboardHref={dashboardHref}
       />
       <Outlet />
+      <footer className="border-t border-gray-200 bg-white/90 py-6 dark:border-gray-800 dark:bg-gray-950/90">
+        <div className="container-padding">
+          <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 text-sm">
+            <p className="text-gray-600 dark:text-gray-300">© 2026 FleetScore</p>
+            <div className="flex items-center gap-3">
+              <Link to="/features" className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">
+                Features
+              </Link>
+              <Link to="/about" className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">
+                About
+              </Link>
+            </div>
+          </div>
+        </div>
+      </footer>
     </>
   );
 }

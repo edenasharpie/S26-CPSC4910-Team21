@@ -29,6 +29,8 @@ const NAV_SHELL_BY_ROLE: Record<"guest" | NavRole, string> = {
 export function TopNav({ user, dashboardHref }: TopNavProps) {
   const navigate = useNavigate();
   const role = user?.role ?? "guest";
+  const initials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`.trim() ||
+    (user?.username?.[0]?.toUpperCase() ?? "U");
 
   return (
     <header className={`border-b ${NAV_SHELL_BY_ROLE[role]}`}>
@@ -37,16 +39,45 @@ export function TopNav({ user, dashboardHref }: TopNavProps) {
           <div className="flex items-center gap-4">
             <Link
               to="/"
-              className="text-lg font-black tracking-tight text-current hover:opacity-80"
+              className="flex items-center gap-2 text-lg font-black tracking-tight text-current hover:opacity-80"
             >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-6 w-6"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4 8.5L12 4L20 8.5V15.5L12 20L4 15.5V8.5Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M8 12H16"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M9.5 15H14.5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
               FleetScore
             </Link>
-            <span className="rounded-full border border-current/20 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider">
-              {role === "guest" ? "Guest Nav" : `${role} Nav`}
-            </span>
           </div>
 
           <nav className="flex flex-wrap items-center gap-2 text-sm font-medium">
+            <Link
+              to="/features"
+              className="rounded-md px-3 py-1.5 text-current/90 hover:bg-black/5 hover:text-current dark:hover:bg-white/10"
+            >
+              Features
+            </Link>
             <Link
               to="/about"
               className="rounded-md px-3 py-1.5 text-current/90 hover:bg-black/5 hover:text-current dark:hover:bg-white/10"
@@ -67,10 +98,10 @@ export function TopNav({ user, dashboardHref }: TopNavProps) {
                   className="flex items-center gap-2 rounded-md border border-current/20 px-2 py-1.5 text-current hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                 >
                   <div className="flex-shrink-0 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase w-6 h-6">
-                    {user.firstName?.[0]}{user.lastName?.[0]}
+                    {initials}
                   </div>
                   <div className="text-left hidden sm:block">
-                    <div className="text-xs font-semibold leading-none">{user.firstName} {user.lastName}</div>
+                    <div className="text-xs font-semibold leading-none">{user.firstName ?? user.username} {user.lastName ?? ""}</div>
                     <div className="text-[10px] text-current/70 leading-none">@{user.username}</div>
                   </div>
                 </button>
