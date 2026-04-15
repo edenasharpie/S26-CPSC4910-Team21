@@ -5,7 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test:api": "cd tests/api && for test in *.js; do if [ -f \"$test\" ]; then echo \"Running $test...\"; node \"$test\"; fi; done",
+    "test:api:priority": "node tests/api/auth-password-policy-2fa.js && node tests/api/bulk-load.js"
   },
   "keywords": [],
   "author": "",
