@@ -327,6 +327,13 @@ export default function SponsorPortal() {
               </Button>
               <Button 
                 variant="secondary" 
+                onClick={() => navigate("/sponsor/bulk-upload")} 
+                className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all shadow-sm"
+              >
+                Bulk Upload
+              </Button>
+              <Button 
+                variant="secondary" 
                 onClick={() => navigate("/sponsor/applications")} 
                 className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all shadow-sm"
               >

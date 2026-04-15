@@ -56,10 +56,12 @@ export default [
   //ADMIN USER MANAGEMENT (quick-add forms)
   route("admin/add-driver", "routes/admin/add-driver.tsx"),
   route("admin/add-sponsor", "routes/admin/add-sponsor.tsx"),
+  route("admin/bulk-upload", "routes/admin/bulk-upload.tsx"),
 
   //SPONSOR FLEET MANAGEMENT
   route("sponsor/driver-purchases", "routes/sponsor/driver-purchases.tsx"),
   route("sponsor/applications", "routes/sponsor/applications.tsx"),
+  route("sponsor/bulk-upload", "routes/sponsor/bulk-upload.tsx"),
   route("sponsor/manage-users", "routes/sponsor/manage-users.tsx"),
   route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
 

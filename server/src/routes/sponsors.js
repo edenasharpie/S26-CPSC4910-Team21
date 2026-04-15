@@ -4,6 +4,7 @@ import { hasBooleanPermission } from '../utils/auth.js';
 import {
   routeUserMatchesEffectiveSession,
 } from '../middleware/session-context.js';
+import { processBulkLoadFile } from '../services/bulk-load-service.js';
 
 const router = express.Router();
 
@@ -62,6 +63,55 @@ router.get('/user/:userId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching sponsor company for user:', error);
     res.status(500).json({ error: 'Failed to fetch sponsor company' });
+  }
+});
+
+// POST /api/sponsors/:userId/bulk-load - Bulk load drivers/sponsors into sponsor's own company
+router.post('/:userId/bulk-load', async (req, res) => {
+  try {
+    const sponsorUserId = Number(req.params.userId);
+
+    if (!Number.isInteger(sponsorUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    const payload = req.body && typeof req.body === 'object' ? req.body : {};
+    const content =
+      typeof payload.content === 'string'
+        ? payload.content
+        : typeof req.body === 'string'
+        ? req.body
+        : '';
+
+    if (!content.trim()) {
+      return res.status(400).json({ error: 'Upload content is required.' });
+    }
+
+    const [sponsorRows] = await pool.execute(
+      'SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ? LIMIT 1',
+      [sponsorUserId]
+    );
+
+    if (sponsorRows.length === 0) {
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+
+    const sponsorCompanyId = Number(sponsorRows[0].SponsorCompanyID);
+    const report = await processBulkLoadFile({
+      content,
+      mode: 'sponsor',
+      sponsorCompanyId,
+      actorUserId: sponsorUserId,
+    });
+
+    return res.status(200).json(report);
+  } catch (error) {
+    console.error('Sponsor bulk-load error:', error);
+    return res.status(500).json({ error: 'Failed to process sponsor bulk upload.' });
   }
 });
 

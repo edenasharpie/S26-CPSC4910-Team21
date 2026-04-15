@@ -76,6 +76,9 @@ paths:
   /admin/users:
     $ref: './paths/admin/users.yaml#/users'
 
+  /admin/users/bulk-load:
+    $ref: './paths/admin/users.yaml#/usersBulkLoad'
+
   /admin/users/{id}:
     $ref: './paths/admin/users.yaml#/usersById'
 
@@ -131,6 +134,9 @@ paths:
 
   /sponsors/{userId}/process-application:
     $ref: './paths/sponsor/applications.yaml#/processApplication'
+
+  /sponsors/{userId}/bulk-load:
+    $ref: './paths/sponsor/bulk-load.yaml#/bulkLoad'
 
   ### reports - admin ###
 

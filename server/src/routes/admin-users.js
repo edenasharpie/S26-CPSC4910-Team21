@@ -10,6 +10,7 @@ import {
   getAllPointTransactions,
 } from '../db.js';
 import { hashPassword, hasBooleanPermission } from '../utils/auth.js';
+import { processBulkLoadFile } from '../services/bulk-load-service.js';
 
 const router = Router();
 const DEFAULT_PAGE_SIZE = 25;
@@ -420,6 +421,40 @@ router.post('/users', async (request, response) => {
     if (connection) {
       connection.release();
     }
+  }
+});
+
+// POST /api/admin/users/bulk-load — process pipe-delimited user uploads
+router.post('/users/bulk-load', async (request, response) => {
+  try {
+    const payload = request.body && typeof request.body === 'object' ? request.body : {};
+    const content =
+      typeof payload.content === 'string'
+        ? payload.content
+        : typeof request.body === 'string'
+        ? request.body
+        : '';
+
+    if (!content.trim()) {
+      return response.status(400).json({
+        error: 'Upload content is required.',
+      });
+    }
+
+    const requesterUserIdRaw =
+      payload.requesterUserId ?? request.sessionContext?.effectiveUser?.UserID ?? null;
+    const requesterUserId = Number(requesterUserIdRaw);
+
+    const report = await processBulkLoadFile({
+      content,
+      mode: 'admin',
+      actorUserId: Number.isInteger(requesterUserId) ? requesterUserId : null,
+    });
+
+    return response.status(200).json(report);
+  } catch (error) {
+    console.error('Bulk load admin error:', error);
+    return response.status(500).json({ error: 'Failed to process bulk upload.' });
   }
 });
 
