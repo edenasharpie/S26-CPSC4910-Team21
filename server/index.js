@@ -33,7 +33,8 @@ import reviewRoutes from './src/routes/reviews.js';
 
 const app = express();
 
-const NOTIFICATION_ROUTE_PATTERN = /^\/api\/(?:driver|sponsors)\/\d+\/notifications(?:\/.*)?$/;
+//const NOTIFICATION_ROUTE_PATTERN = /^\/api\/(?:driver|sponsors|drivers|sponsors)\/\d+\/notifications(?:\/.*)?$/;
+const NOTIFICATION_ROUTE_PATTERN = /notifications/;
 const DEFAULT_NOTIFICATION_CORS_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -111,7 +112,7 @@ app.use('/api/admin/audit-logs', adminEventsRoutes);
 app.use('/api/images', imagesRoutes);
 app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/driver/:userId/orders', driverOrdersRoutes);
-app.use('/api/driver/:userId/notifications', driverNotificationsRoutes);
+app.use('/api/drivers/:userId/notifications', driverNotificationsRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
 app.use('/api/sponsor/:userId/reviews', reviewRoutes);
@@ -124,7 +125,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // Start the server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const HOST = process.env.HOST || '0.0.0.0';
 
 const startServer = async () => {

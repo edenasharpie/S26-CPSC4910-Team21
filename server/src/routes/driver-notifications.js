@@ -88,21 +88,4 @@ router.patch('/:notificationId/read', async (req, res) => {
   }
 });
 
-router.patch('/read-all', async (req, res) => {
-  const category = typeof req.body?.category === 'string'
-    ? req.body.category
-    : req.query.category;
-
-  const connection = await pool.getConnection();
-  try {
-    const result = await markAllNotificationsRead(connection, req.notificationUserId, { category });
-    return res.json({ success: true, updatedCount: result.updatedCount });
-  } catch (error) {
-    console.error('Error marking all driver notifications read:', error);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  } finally {
-    connection.release();
-  }
-});
-
 export default router;
