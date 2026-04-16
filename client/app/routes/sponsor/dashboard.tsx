@@ -254,11 +254,6 @@ export default function SponsorPortal() {
           </div>
 
           <div className="flex items-center gap-3">
-            {isAssumedMode && (
-              <Form method="post" action="/exit-assumption">
-                <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
-              </Form>
-            )}
             <Link
               to={`/sponsor/settings/${user.UserID}`}
               className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
