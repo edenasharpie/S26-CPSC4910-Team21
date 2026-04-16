@@ -5,9 +5,30 @@ import {
   routeUserMatchesEffectiveSession,
 } from '../middleware/session-context.js';
 import { 
-  getDriverSponsorCompanyId, 
   getCatalogsBySponsorCompany 
 } from '../utils/queries.js';
+
+function getAssumedSponsorOriginalUser(req, expectedDriverUserId) {
+  const sessionContext = req.sessionContext;
+  if (!sessionContext?.isAssumed) {
+    return null;
+  }
+
+  const effectiveUser = sessionContext.effectiveUser;
+  const originalUser = sessionContext.originalUser;
+
+  if (
+    !effectiveUser ||
+    !originalUser ||
+    String(effectiveUser.UserType).toLowerCase() !== 'driver' ||
+    String(originalUser.UserType).toLowerCase() !== 'sponsor' ||
+    Number(effectiveUser.UserID) !== Number(expectedDriverUserId)
+  ) {
+    return null;
+  }
+
+  return originalUser;
+}
 
 const router = express.Router({ mergeParams: true });
 
@@ -49,16 +70,58 @@ async function validateDriverAndGetSponsorId(req, res, next) {
       return res.status(403).json({ error: 'Driver account is inactive.' });
     }
 
-    // Get driver's sponsor company ID
-    const sponsorCompanyId = await getDriverSponsorCompanyId(userId);
-    if (!sponsorCompanyId) {
-      return res.status(403).json({ 
-        error: 'Access forbidden: Driver not associated with a sponsor company' 
-      });
+    const assumedOriginalSponsor = getAssumedSponsorOriginalUser(req, userId);
+
+    let sponsorCompanyId = null;
+    if (assumedOriginalSponsor) {
+      const [sponsorRows] = await pool.execute(
+        'SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ? LIMIT 1',
+        [assumedOriginalSponsor.UserID]
+      );
+
+      if (sponsorRows.length === 0) {
+        return res.status(403).json({ error: 'Assumed sponsor context is invalid.' });
+      }
+
+      sponsorCompanyId = Number(sponsorRows[0].SponsorCompanyID);
+    } else {
+      const rawSponsorCompanyId = req.query?.sponsorCompanyId;
+      const parsed = typeof rawSponsorCompanyId === 'string' ? Number(rawSponsorCompanyId) : Number(rawSponsorCompanyId);
+      sponsorCompanyId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    }
+
+    if (!Number.isInteger(sponsorCompanyId)) {
+      return res.status(400).json({ error: 'sponsorCompanyId is required.' });
+    }
+
+    const [driverRows] = await pool.execute(
+      'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+      [userId]
+    );
+
+    if (driverRows.length === 0) {
+      return res.status(404).json({ error: 'Driver profile not found' });
+    }
+
+    const licenseNumber = String(driverRows[0].LicenseNumber);
+
+    const [enrollmentRows] = await pool.execute(
+      `SELECT EnrollmentID
+       FROM DRIVER_COMPANY_ENROLLMENT
+       WHERE DriverID = ?
+         AND SponsorCompanyID = ?
+         AND EnrollmentStatus = 'active'
+       LIMIT 1`,
+      [licenseNumber, sponsorCompanyId]
+    );
+
+    if (enrollmentRows.length === 0) {
+      return res.status(403).json({ error: 'Access forbidden: Driver not enrolled in the requested sponsor company' });
     }
 
     // Attach to request for use in route handlers
     req.sponsorCompanyId = sponsorCompanyId;
+    req.driverLicenseNumber = licenseNumber;
     next();
   } catch (error) {
     console.error('Error validating driver:', error);

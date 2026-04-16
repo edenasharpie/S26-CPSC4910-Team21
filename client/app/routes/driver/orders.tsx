@@ -52,6 +52,7 @@ export default function DriverOrders() {
   const { user } = useLoaderData<typeof loader>();
   const api = useMemo(() => createApiClient({ id: user.UserID, role: "driver" }), [user.UserID]);
 
+  const [sponsorCompanyId, setSponsorCompanyId] = useState<number | null>(null);
   const [orders, setOrders] = useState<DriverOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,15 +60,74 @@ export default function DriverOrders() {
   const [editItems, setEditItems] = useState<OrderItem[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const readSponsorCompanyIdFromCookie = () => {
+    if (typeof document === "undefined") return null;
+    const match = document.cookie.match(/(?:^|;\s*)driverSponsorCompanyId=([^;]+)/);
+    if (!match) return null;
+    const parsed = Number(decodeURIComponent(match[1]));
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  const persistSponsorCompanyId = (nextSponsorCompanyId: number) => {
+    if (typeof document === "undefined") return;
+    const maxAgeSeconds = 60 * 60 * 24 * 365;
+    const secureSuffix = typeof window !== "undefined" && window.location?.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `driverSponsorCompanyId=${encodeURIComponent(String(nextSponsorCompanyId))}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureSuffix}`;
+  };
+
+  const ensureSponsorCompanyId = async () => {
+    const fromCookie = readSponsorCompanyIdFromCookie();
+    if (fromCookie) {
+      setSponsorCompanyId(fromCookie);
+      return;
+    }
+
+    try {
+      const response = await api.getApi(`/drivers/sponsors/${user.UserID}`);
+      if (!response.ok) {
+        setError("Select a sponsor company before viewing orders.");
+        return;
+      }
+
+      const payload = await response.json();
+      const sponsors = Array.isArray(payload) ? payload : [];
+      const firstSponsorCompanyId = Number(sponsors[0]?.SponsorCompanyID);
+
+      if (Number.isInteger(firstSponsorCompanyId) && firstSponsorCompanyId > 0) {
+        persistSponsorCompanyId(firstSponsorCompanyId);
+        setSponsorCompanyId(firstSponsorCompanyId);
+        return;
+      }
+
+      setError("No active sponsor companies found.");
+    } catch (err) {
+      console.error("Error resolving sponsor company:", err);
+      setError("Select a sponsor company before viewing orders.");
+    }
+  };
+
   useEffect(() => {
-    fetchOrders();
+    void ensureSponsorCompanyId();
   }, []);
+
+  useEffect(() => {
+    if (!sponsorCompanyId) {
+      setOrders([]);
+      return;
+    }
+
+    fetchOrders();
+  }, [sponsorCompanyId]);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get("/orders");
+      if (!sponsorCompanyId) {
+        throw new Error("Select a sponsor company before viewing orders");
+      }
+
+      const response = await api.get(`/orders?sponsorCompanyId=${sponsorCompanyId}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -87,7 +147,11 @@ export default function DriverOrders() {
   const handleCancelOrder = async (orderId: number) => {
     try {
       setError(null);
-      const response = await api.delete(`/orders/${orderId}`);
+      if (!sponsorCompanyId) {
+        throw new Error("Select a sponsor company before cancelling an order");
+      }
+
+      const response = await api.delete(`/orders/${orderId}?sponsorCompanyId=${sponsorCompanyId}`);
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || "Failed to cancel order");
@@ -124,7 +188,11 @@ export default function DriverOrders() {
     try {
       setSaving(true);
       setError(null);
-      const response = await api.patch(`/orders/${editingOrder.orderId}`, { items: payload });
+      if (!sponsorCompanyId) {
+        throw new Error("Select a sponsor company before updating an order");
+      }
+
+      const response = await api.patch(`/orders/${editingOrder.orderId}?sponsorCompanyId=${sponsorCompanyId}`, { items: payload });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || "Failed to update order");

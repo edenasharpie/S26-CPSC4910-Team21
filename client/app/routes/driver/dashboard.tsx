@@ -17,6 +17,14 @@ import {
 
 const API_URL = getApiBaseUrl();
 
+function parseCookieNumber(cookieHeader: string, name: string): number | null {
+  const pattern = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`);
+  const match = cookieHeader.match(pattern);
+  if (!match) return null;
+  const parsed = Number(decodeURIComponent(match[1]));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function normalizePointChange(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -50,19 +58,32 @@ export async function loader({ request }: Route.LoaderArgs) {
   const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
 
   try {
-    // Use the existing driver endpoints and gracefully degrade on partial failures.
-    const [pointsRes, performanceRes, sponsorsRes] = await Promise.all([
-      fetch(`${API_URL}/api/drivers/my-points/${effectiveUserId}`, requestInit),
+    const [performanceRes, sponsorsRes] = await Promise.all([
       fetch(`${API_URL}/api/drivers/performance/${effectiveUserId}`, requestInit),
       fetch(`${API_URL}/api/drivers/sponsors/${effectiveUserId}`, requestInit),
     ]);
 
-    const pointsPayload = pointsRes.ok ? await pointsRes.json() : null;
     const performancePayload = performanceRes.ok ? await performanceRes.json() : null;
     const sponsorsPayload = sponsorsRes.ok ? await sponsorsRes.json() : [];
+    const sponsors = Array.isArray(sponsorsPayload) ? sponsorsPayload : [];
+
+    const preferredSponsorCompanyId = parseCookieNumber(cookieHeader, "driverSponsorCompanyId");
+    const selectedSponsorCompanyId =
+      Number.isInteger(preferredSponsorCompanyId) &&
+      sponsors.some((row: any) => Number(row?.SponsorCompanyID) === preferredSponsorCompanyId)
+        ? preferredSponsorCompanyId
+        : Number(sponsors[0]?.SponsorCompanyID) || null;
+
+    const pointsRes = Number.isInteger(selectedSponsorCompanyId)
+      ? await fetch(
+          `${API_URL}/api/drivers/my-points/${effectiveUserId}?sponsorCompanyId=${selectedSponsorCompanyId}`,
+          requestInit
+        )
+      : null;
+
+    const pointsPayload = pointsRes && pointsRes.ok ? await pointsRes.json() : null;
 
     const history = Array.isArray(pointsPayload?.history) ? pointsPayload.history : [];
-    const sponsors = Array.isArray(sponsorsPayload) ? sponsorsPayload : [];
     const pointBalance = Number(pointsPayload?.balance ?? 0);
 
     const driver = {
@@ -80,6 +101,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       sponsors,
       session,
       effectiveUserId,
+      selectedSponsorCompanyId,
     };
   } catch (error) {
     console.error("driver/dashboard loader error:", error);
@@ -96,6 +118,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       sponsors: [],
       session,
       effectiveUserId,
+      selectedSponsorCompanyId: null,
     };
   }
 }
@@ -112,11 +135,19 @@ export async function action({ request }: Route.ActionArgs) {
   const effectiveUserId = String(session.UserID);
   const cookieHeader = request.headers.get("Cookie") ?? "";
 
+  const sponsorCompanyId = Number(formData.get("sponsorCompanyId"));
+  if (!Number.isInteger(sponsorCompanyId) || sponsorCompanyId <= 0) {
+    return { success: false, error: "sponsorCompanyId is required." };
+  }
+
   try {
-    const response = await fetch(`${API_URL}/api/drivers/${effectiveUserId}/company`, {
-      method: "DELETE",
-      headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
-    });
+    const response = await fetch(
+      `${API_URL}/api/drivers/${effectiveUserId}/company?sponsorCompanyId=${sponsorCompanyId}`,
+      {
+        method: "DELETE",
+        headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
+      }
+    );
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -258,7 +289,15 @@ export default function DriverDashboard() {
                       variant="secondary" 
                       size="sm" 
                       className="w-full text-[10px] uppercase font-bold tracking-widest py-2"
-                      onClick={() => navigate('/driver/catalogs')}
+                      onClick={() => {
+                        const sponsorCompanyId = Number(s.SponsorCompanyID);
+                        if (Number.isInteger(sponsorCompanyId) && sponsorCompanyId > 0 && typeof document !== "undefined") {
+                          const maxAgeSeconds = 60 * 60 * 24 * 365;
+                          const secureSuffix = typeof window !== "undefined" && window.location?.protocol === "https:" ? "; Secure" : "";
+                          document.cookie = `driverSponsorCompanyId=${encodeURIComponent(String(sponsorCompanyId))}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureSuffix}`;
+                        }
+                        navigate('/driver/catalogs');
+                      }}
                     >
                       View Catalog
                     </Button>
@@ -275,6 +314,7 @@ export default function DriverDashboard() {
                       }}
                     >
                       <input type="hidden" name="intent" value="leave-sponsor" />
+                      <input type="hidden" name="sponsorCompanyId" value={String(s.SponsorCompanyID)} />
                       <Button
                         type="submit"
                         variant="danger"

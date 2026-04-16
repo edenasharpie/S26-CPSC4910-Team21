@@ -54,6 +54,7 @@ export default function DriverCatalogs() {
   const { user } = useLoaderData<typeof loader>();
   const api = useMemo(() => createApiClient({ id: user.UserID, role: 'driver' }), [user.UserID]);
 
+  const [sponsorCompanyId, setSponsorCompanyId] = useState<number | null>(null);
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [selectedCatalog, setSelectedCatalog] = useState<number | null>(null);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
@@ -68,15 +69,73 @@ export default function DriverCatalogs() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
 
+  const readSponsorCompanyIdFromCookie = () => {
+    if (typeof document === 'undefined') return null;
+    const match = document.cookie.match(/(?:^|;\s*)driverSponsorCompanyId=([^;]+)/);
+    if (!match) return null;
+    const parsed = Number(decodeURIComponent(match[1]));
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  const persistSponsorCompanyId = (nextSponsorCompanyId: number) => {
+    if (typeof document === 'undefined') return;
+    const maxAgeSeconds = 60 * 60 * 24 * 365;
+    const secureSuffix = typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `driverSponsorCompanyId=${encodeURIComponent(String(nextSponsorCompanyId))}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureSuffix}`;
+  };
+
+  const ensureSponsorCompanyId = async () => {
+    const fromCookie = readSponsorCompanyIdFromCookie();
+    if (fromCookie) {
+      setSponsorCompanyId(fromCookie);
+      return;
+    }
+
+    try {
+      const response = await api.getApi(`/drivers/sponsors/${user.UserID}`);
+      if (!response.ok) {
+        setError('Select a sponsor company before browsing catalogs.');
+        return;
+      }
+
+      const payload = await response.json();
+      const sponsors = Array.isArray(payload) ? payload : [];
+      const firstSponsorCompanyId = Number(sponsors[0]?.SponsorCompanyID);
+
+      if (Number.isInteger(firstSponsorCompanyId) && firstSponsorCompanyId > 0) {
+        persistSponsorCompanyId(firstSponsorCompanyId);
+        setSponsorCompanyId(firstSponsorCompanyId);
+        return;
+      }
+
+      setError('No active sponsor companies found.');
+    } catch (err) {
+      console.error('Error resolving sponsor company:', err);
+      setError('Select a sponsor company before browsing catalogs.');
+    }
+  };
+
   useEffect(() => {
-    fetchCatalogs();
+    void ensureSponsorCompanyId();
   }, []);
 
   useEffect(() => {
-    if (selectedCatalog) {
+    if (!sponsorCompanyId) {
+      setCatalogs([]);
+      setSelectedCatalog(null);
+      setCatalogItems([]);
+      setCartItems([]);
+      return;
+    }
+
+    fetchCatalogs();
+  }, [sponsorCompanyId]);
+
+  useEffect(() => {
+    if (selectedCatalog && sponsorCompanyId) {
       fetchCatalogItems(selectedCatalog);
     }
-  }, [selectedCatalog]);
+  }, [selectedCatalog, sponsorCompanyId]);
 
   const getCatalogFetchErrorMessage = async (response: Response) => {
     if (response.status >= 500) {
@@ -99,7 +158,13 @@ export default function DriverCatalogs() {
     try {
       setError(null);
       setLoading(true);
-      const response = await api.get('/catalogs');
+      if (!sponsorCompanyId) {
+        setCatalogs([]);
+        setError('Select a sponsor company before browsing catalogs.');
+        return;
+      }
+
+      const response = await api.get(`/catalogs?sponsorCompanyId=${sponsorCompanyId}`);
       if (!response.ok) {
         setCatalogs([]);
         setError(await getCatalogFetchErrorMessage(response));
@@ -119,7 +184,13 @@ export default function DriverCatalogs() {
   const fetchCatalogItems = async (catalogId: number) => {
     try {
       setLoading(true);
-      const response = await api.get(`/catalogs/${catalogId}`);
+      if (!sponsorCompanyId) {
+        setCatalogItems([]);
+        setError('Select a sponsor company before viewing items.');
+        return;
+      }
+
+      const response = await api.get(`/catalogs/${catalogId}?sponsorCompanyId=${sponsorCompanyId}`);
       const data = await response.json();
       setCatalogItems(data.items || []);
     } catch (error) {
@@ -193,7 +264,11 @@ export default function DriverCatalogs() {
           quantity: entry.quantity,
         })),
       };
-      const response = await api.post("/orders", payload);
+      if (!sponsorCompanyId) {
+        throw new Error("Select a sponsor company before placing an order");
+      }
+
+      const response = await api.post(`/orders?sponsorCompanyId=${sponsorCompanyId}`, payload);
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || "Failed to place order");

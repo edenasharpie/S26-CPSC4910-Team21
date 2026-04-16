@@ -38,6 +38,14 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
+function parseCookieNumber(cookieHeader: string, name: string): number | null {
+  const pattern = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`);
+  const match = cookieHeader.match(pattern);
+  if (!match) return null;
+  const parsed = Number(decodeURIComponent(match[1]));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 async function loadTopNavNotifications(request: Request, session: ReturnType<typeof getSession>) {
   if (!session) {
     return { items: [], unreadCount: 0 };
@@ -77,16 +85,54 @@ async function loadTopNavNotifications(request: Request, session: ReturnType<typ
   }
 }
 
+async function loadDriverSponsorCompanies(request: Request, session: ReturnType<typeof getSession>) {
+  if (!session || String(session.UserType).toLowerCase() !== "driver") {
+    return [] as Array<{ sponsorCompanyId: number; companyName: string }>;
+  }
+
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+  const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
+
+  try {
+    const res = await fetch(toApiUrl(`/api/drivers/sponsors/${session.UserID}`), requestInit);
+    if (!res.ok) return [];
+
+    const payload = await res.json();
+    if (!Array.isArray(payload)) return [];
+
+    return payload
+      .map((row: any) => ({
+        sponsorCompanyId: Number(row?.SponsorCompanyID),
+        companyName: String(row?.CompanyName ?? ""),
+      }))
+      .filter((row) => Number.isInteger(row.sponsorCompanyId) && row.sponsorCompanyId > 0 && row.companyName);
+  } catch {
+    return [];
+  }
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const session = getSession(request);
   const assumed = isAssumedSession(session);
   const topNavNotifications = await loadTopNavNotifications(request, session);
+
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+  const driverSponsorCompanies = await loadDriverSponsorCompanies(request, session);
+
+  const preferredSponsorCompanyId = parseCookieNumber(cookieHeader, "driverSponsorCompanyId");
+  const selectedSponsorCompanyId =
+    Number.isInteger(preferredSponsorCompanyId) &&
+    driverSponsorCompanies.some((row) => row.sponsorCompanyId === preferredSponsorCompanyId)
+      ? preferredSponsorCompanyId
+      : driverSponsorCompanies[0]?.sponsorCompanyId ?? null;
 
   return {
     session,
     assumed,
     originalRole: session?.OriginalUser?.UserType ?? null,
     topNavNotifications,
+    driverSponsorCompanies,
+    selectedSponsorCompanyId,
   };
 }
 
@@ -158,7 +204,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { session, assumed, originalRole, topNavNotifications } = useLoaderData<typeof loader>();
+  const {
+    session,
+    assumed,
+    originalRole,
+    topNavNotifications,
+    driverSponsorCompanies,
+    selectedSponsorCompanyId,
+  } = useLoaderData<typeof loader>();
   const autoExitTriggeredRef = useRef(false);
   const dashboardHref = session
     ? ROLE_HOME_PATHS[session.UserType as keyof typeof ROLE_HOME_PATHS] ?? "/"
@@ -223,6 +276,9 @@ export default function App() {
         dashboardHref={dashboardHref}
         notifications={topNavNotifications?.items ?? []}
         unreadNotificationCount={Number(topNavNotifications?.unreadCount ?? 0)}
+        driverSponsorCompanies={driverSponsorCompanies}
+        selectedSponsorCompanyId={selectedSponsorCompanyId}
+        isSponsorAssumedDriver={Boolean(assumed && originalRole === "sponsor")}
       />
       <Outlet />
       <footer className="border-t border-gray-200 bg-white/90 py-6 dark:border-gray-800 dark:bg-gray-950/90">

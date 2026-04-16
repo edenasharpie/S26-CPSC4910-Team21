@@ -32,14 +32,22 @@ function getAssumedSponsorOriginalUser(req, expectedDriverUserId) {
 }
 
 // GET /api/drivers/my-points/:userId
+// Requires sponsorCompanyId so point balances/history are sponsor-scoped.
 router.get('/my-points/:userId', async (req, res) => {
-  const { userId } = req.params;
+  const driverUserId = Number(req.params.userId);
+
+  if (!Number.isInteger(driverUserId)) {
+    return res.status(400).json({ error: 'Invalid driver user ID.' });
+  }
+
+  if (!routeUserMatchesEffectiveSession(req, driverUserId)) {
+    return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+  }
 
   try {
-    // 1. Verify account is active and load driver context
     const [accountRows] = await pool.execute(
       'SELECT ActiveStatus FROM USERS WHERE UserID = ? AND UserType = "driver"',
-      [userId]
+      [driverUserId]
     );
 
     if (accountRows.length === 0) {
@@ -50,19 +58,59 @@ router.get('/my-points/:userId', async (req, res) => {
       return res.status(403).json({ error: 'Driver account is inactive.' });
     }
 
-    // 2. Get current balance and LicenseNumber from DRIVERS table
+    const assumedOriginalSponsor = getAssumedSponsorOriginalUser(req, driverUserId);
+
+    let sponsorCompanyId: number | null = null;
+    if (assumedOriginalSponsor) {
+      const [sponsorRows] = await pool.execute(
+        'SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ? LIMIT 1',
+        [assumedOriginalSponsor.UserID]
+      );
+
+      if (sponsorRows.length === 0) {
+        return res.status(403).json({ error: 'Assumed sponsor context is invalid.' });
+      }
+
+      sponsorCompanyId = Number(sponsorRows[0].SponsorCompanyID);
+    } else {
+      const rawSponsorCompanyId = req.query?.sponsorCompanyId;
+      const parsed = typeof rawSponsorCompanyId === 'string' ? Number(rawSponsorCompanyId) : Number(rawSponsorCompanyId);
+      sponsorCompanyId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    }
+
+    if (!Number.isInteger(sponsorCompanyId)) {
+      return res.status(400).json({ error: 'sponsorCompanyId is required.' });
+    }
+
     const [driverInfo] = await pool.execute(
-      "SELECT PointBalance, LicenseNumber FROM DRIVERS WHERE UserID = ?",
-      [userId]
+      'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?',
+      [driverUserId]
     );
 
     if (driverInfo.length === 0) {
-      return res.status(404).json({ error: "Driver profile not found." });
+      return res.status(404).json({ error: 'Driver profile not found.' });
     }
 
-    const { PointBalance, LicenseNumber } = driverInfo[0];
+    const licenseNumber = String(driverInfo[0].LicenseNumber);
 
-    // 3. Get transaction history from POINT_TRANSACTIONS
+    const [enrollmentRows] = await pool.execute(
+      `SELECT PointBalance, JoinedAt
+       FROM DRIVER_COMPANY_ENROLLMENT
+       WHERE DriverID = ?
+         AND SponsorCompanyID = ?
+         AND EnrollmentStatus = 'active'
+       LIMIT 1`,
+      [licenseNumber, sponsorCompanyId]
+    );
+
+    if (enrollmentRows.length === 0) {
+      return res.status(403).json({ error: 'Driver is not enrolled in the requested sponsor company.' });
+    }
+
+    const enrollment = enrollmentRows[0];
+    const pointBalance = Number(enrollment.PointBalance ?? 0);
+    const joinedAt = enrollment.JoinedAt;
+
     const [history] = await pool.execute(
       `SELECT
          PointChange,
@@ -70,10 +118,11 @@ router.get('/my-points/:userId', async (req, res) => {
          DATE_FORMAT(TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged
        FROM POINT_TRANSACTIONS
        WHERE DriverID = ?
+         AND SponsorCompanyID = ?
          AND TimeChanged IS NOT NULL
-         AND TimeChanged >= '2000-01-01 00:00:00'
+         AND TimeChanged >= ?
        ORDER BY TimeChanged DESC`,
-      [LicenseNumber]
+      [licenseNumber, sponsorCompanyId, joinedAt]
     );
 
     const normalizedHistory = history.map((entry) => {
@@ -89,13 +138,14 @@ router.get('/my-points/:userId', async (req, res) => {
       };
     });
 
-    res.json({
-      balance: PointBalance,
-      history: normalizedHistory
+    return res.json({
+      balance: Number.isFinite(pointBalance) ? pointBalance : 0,
+      history: normalizedHistory,
+      sponsorCompanyId,
     });
   } catch (error) {
-    console.error("Driver Points Error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Driver Points Error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -176,19 +226,32 @@ router.get('/sponsors/:userId', async (req, res) => {
       assumedSponsorCompanyId = Number(sponsorRows[0].SponsorCompanyID);
     }
 
+    const [driverRows] = await pool.execute(
+      'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+      [driverUserId]
+    );
+
+    if (driverRows.length === 0) {
+      return res.status(404).json({ error: 'Driver profile not found.' });
+    }
+
+    const licenseNumber = String(driverRows[0].LicenseNumber);
+
     const query =
       `SELECT
          sc.SponsorCompanyID AS SponsorID,
          sc.SponsorCompanyID,
          sc.CompanyName
-       FROM DRIVERS d
-       JOIN SPONSOR_COMPANIES sc ON d.SponsorCompanyID = sc.SponsorCompanyID
-       WHERE d.UserID = ?` +
-      (Number.isInteger(assumedSponsorCompanyId) ? ' AND sc.SponsorCompanyID = ?' : '');
+       FROM DRIVER_COMPANY_ENROLLMENT e
+       JOIN SPONSOR_COMPANIES sc ON e.SponsorCompanyID = sc.SponsorCompanyID
+       WHERE e.DriverID = ?
+         AND e.EnrollmentStatus = 'active'` +
+      (Number.isInteger(assumedSponsorCompanyId) ? ' AND sc.SponsorCompanyID = ?' : '') +
+      ' ORDER BY sc.CompanyName ASC';
 
     const queryParams = Number.isInteger(assumedSponsorCompanyId)
-      ? [driverUserId, assumedSponsorCompanyId]
-      : [driverUserId];
+      ? [licenseNumber, assumedSponsorCompanyId]
+      : [licenseNumber];
 
     const [rows] = await pool.execute(query, queryParams);
 
@@ -206,7 +269,7 @@ router.get('/sponsors/:userId', async (req, res) => {
   }
 });
 
-// DELETE /api/drivers/:userId/company - Driver leaves current sponsor company
+// DELETE /api/drivers/:userId/company - Driver leaves a sponsor company enrollment
 router.delete('/:userId/company', async (req, res) => {
   let connection;
 
@@ -221,12 +284,28 @@ router.delete('/:userId/company', async (req, res) => {
       return res.status(403).json({ error: 'Access forbidden for requested user context.' });
     }
 
+    if (req.sessionContext?.isAssumed) {
+      return res.status(403).json({ error: 'Assumed sessions cannot leave sponsor companies.' });
+    }
+
+    const rawSponsorCompanyId = req.query?.sponsorCompanyId;
+    const parsedSponsorCompanyId = typeof rawSponsorCompanyId === 'string'
+      ? Number(rawSponsorCompanyId)
+      : Number(rawSponsorCompanyId);
+    const sponsorCompanyId = Number.isInteger(parsedSponsorCompanyId) && parsedSponsorCompanyId > 0
+      ? parsedSponsorCompanyId
+      : null;
+
+    if (!Number.isInteger(sponsorCompanyId)) {
+      return res.status(400).json({ error: 'sponsorCompanyId is required.' });
+    }
+
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
     const [driverRows] = await connection.execute(
       `SELECT u.UserID, u.UserType, u.ActiveStatus, u.FirstName, u.LastName,
-              d.LicenseNumber, d.SponsorCompanyID
+              d.LicenseNumber
        FROM USERS u
        JOIN DRIVERS d ON d.UserID = u.UserID
        WHERE u.UserID = ?
@@ -250,21 +329,42 @@ router.delete('/:userId/company', async (req, res) => {
       return res.status(403).json({ error: 'Inactive driver accounts cannot leave sponsor companies.' });
     }
 
-    const sponsorCompanyId = Number(driver.SponsorCompanyID);
-    if (!Number.isInteger(sponsorCompanyId)) {
+    const licenseNumber = String(driver.LicenseNumber);
+
+    const [enrollmentRows] = await connection.execute(
+      `SELECT EnrollmentStatus
+       FROM DRIVER_COMPANY_ENROLLMENT
+       WHERE DriverID = ? AND SponsorCompanyID = ?
+       LIMIT 1`,
+      [licenseNumber, sponsorCompanyId]
+    );
+
+    if (enrollmentRows.length === 0) {
       await connection.rollback();
-      return res.status(409).json({ error: 'Driver is not currently assigned to a sponsor company.' });
+      return res.status(409).json({ error: 'Driver is not enrolled in the requested sponsor company.' });
+    }
+
+    if (String(enrollmentRows[0].EnrollmentStatus).toLowerCase() !== 'active') {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Driver is not currently active in the requested sponsor company.' });
+    }
+
+    const [updateResult] = await connection.execute(
+      `UPDATE DRIVER_COMPANY_ENROLLMENT
+       SET EnrollmentStatus = 'inactive', LeftAt = NOW()
+       WHERE DriverID = ? AND SponsorCompanyID = ? AND EnrollmentStatus = 'active'`,
+      [licenseNumber, sponsorCompanyId]
+    );
+
+    if (!updateResult || Number(updateResult.affectedRows ?? 0) === 0) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Driver is not currently active in the requested sponsor company.' });
     }
 
     await connection.execute(
-      'UPDATE DRIVERS SET SponsorCompanyID = NULL WHERE UserID = ?',
-      [driverUserId]
-    );
-
-    await connection.execute(
       `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
-       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('SponsorCompanyID'), 'isSelfUpdate', true, 'success', true))`,
-      [driverUserId]
+       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('EnrollmentStatus'), 'isSelfUpdate', true, 'success', true, 'sponsorCompanyId', ?))`,
+      [driverUserId, sponsorCompanyId]
     );
 
     await notifySponsorCompany(connection, {
@@ -274,7 +374,7 @@ router.delete('/:userId/company', async (req, res) => {
       category: 'driver_left_company',
       metadata: {
         driverUserId,
-        driverId: driver.LicenseNumber,
+        driverId: licenseNumber,
         sponsorCompanyId,
         trigger: 'driver_left_company',
       },
@@ -290,7 +390,7 @@ router.delete('/:userId/company', async (req, res) => {
       preference: 'none',
       metadata: {
         driverUserId,
-        driverId: driver.LicenseNumber,
+        driverId: licenseNumber,
         sponsorCompanyId,
         trigger: 'driver_left_company',
       },
@@ -300,7 +400,8 @@ router.delete('/:userId/company', async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Driver left sponsor company.',
-      driverId: driver.LicenseNumber,
+      driverId: licenseNumber,
+      sponsorCompanyId,
     });
   } catch (error) {
     if (connection) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Form, Link, useNavigate } from "react-router";
 import { toApiUrl } from "~/utils/api-url";
 import { Badge } from "~/components/Badge";
@@ -14,6 +14,11 @@ type NotificationItem = {
   properties?: Record<string, unknown>;
 };
 
+type SponsorCompanyOption = {
+  sponsorCompanyId: number;
+  companyName: string;
+};
+
 interface TopNavProps {
   user:
     | {
@@ -27,6 +32,9 @@ interface TopNavProps {
   dashboardHref?: string;
   notifications?: NotificationItem[];
   unreadNotificationCount?: number;
+  driverSponsorCompanies?: SponsorCompanyOption[];
+  selectedSponsorCompanyId?: number | null;
+  isSponsorAssumedDriver?: boolean;
 }
 
 const NAV_SHELL_BY_ROLE: Record<"guest" | NavRole, string> = {
@@ -42,7 +50,15 @@ const NAV_SHELL_BY_ROLE: Record<"guest" | NavRole, string> = {
 
 const NOTIFICATION_SCROLL_THRESHOLD = 5;
 
-export function TopNav({ user, dashboardHref, notifications, unreadNotificationCount }: TopNavProps) {
+export function TopNav({
+  user,
+  dashboardHref,
+  notifications,
+  unreadNotificationCount,
+  driverSponsorCompanies,
+  selectedSponsorCompanyId,
+  isSponsorAssumedDriver,
+}: TopNavProps) {
   const navigate = useNavigate();
   const role = user?.role ?? "guest";
   const initials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`.trim() ||
@@ -52,6 +68,16 @@ export function TopNav({ user, dashboardHref, notifications, unreadNotificationC
   const [unreadCount, setUnreadCount] = useState(unreadNotificationCount ?? 0);
   const [isNotificationMutationPending, setIsNotificationMutationPending] = useState(false);
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const sponsorCompanies = driverSponsorCompanies ?? [];
+  const shouldShowSponsorSwitcher =
+    Boolean(user && user.role === "driver") &&
+    sponsorCompanies.length > 0 &&
+    !Boolean(isSponsorAssumedDriver);
+
+  const [activeSponsorCompanyId, setActiveSponsorCompanyId] = useState<number | null>(
+    typeof selectedSponsorCompanyId === "number" ? selectedSponsorCompanyId : null
+  );
 
   const notificationBasePath = useMemo(() => {
     if (!user?.userId) return null;
@@ -74,6 +100,45 @@ export function TopNav({ user, dashboardHref, notifications, unreadNotificationC
   useEffect(() => {
     setUnreadCount(unreadNotificationCount ?? 0);
   }, [unreadNotificationCount]);
+
+  useEffect(() => {
+    setActiveSponsorCompanyId(typeof selectedSponsorCompanyId === "number" ? selectedSponsorCompanyId : null);
+  }, [selectedSponsorCompanyId]);
+
+  function persistSponsorCompanySelection(nextSponsorCompanyId: number) {
+    if (typeof document === "undefined") return;
+
+    const maxAgeSeconds = 60 * 60 * 24 * 365;
+    const secureSuffix =
+      typeof window !== "undefined" && window.location?.protocol === "https:" ? "; Secure" : "";
+
+    document.cookie = `driverSponsorCompanyId=${encodeURIComponent(
+      String(nextSponsorCompanyId)
+    )}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureSuffix}`;
+  }
+
+  useEffect(() => {
+    if (!shouldShowSponsorSwitcher) return;
+    if (activeSponsorCompanyId !== null) return;
+
+    const fallback = sponsorCompanies[0]?.sponsorCompanyId ?? null;
+    if (fallback === null) return;
+
+    setActiveSponsorCompanyId(fallback);
+    persistSponsorCompanySelection(fallback);
+  }, [activeSponsorCompanyId, shouldShowSponsorSwitcher, sponsorCompanies]);
+
+  function handleSponsorCompanyChange(event: ChangeEvent<HTMLSelectElement>) {
+    const nextId = Number(event.target.value);
+    if (!Number.isInteger(nextId) || nextId <= 0) return;
+
+    setActiveSponsorCompanyId(nextId);
+    persistSponsorCompanySelection(nextId);
+
+    if (typeof window !== "undefined") {
+      window.location.reload();
+    }
+  }
 
   useEffect(() => {
     if (!isNotificationMenuOpen) return undefined;
@@ -313,6 +378,23 @@ export function TopNav({ user, dashboardHref, notifications, unreadNotificationC
                 >
                   Dashboard
                 </Link>
+                {shouldShowSponsorSwitcher ? (
+                  <label className="flex items-center gap-2 rounded-md border border-current/20 px-3 py-1.5 text-current">
+                    <span className="text-xs font-semibold text-current/80">Sponsor</span>
+                    <select
+                      value={activeSponsorCompanyId ?? ""}
+                      onChange={handleSponsorCompanyChange}
+                      className="max-w-40 bg-transparent text-sm font-medium text-current outline-none"
+                      aria-label="Select sponsor company"
+                    >
+                      {sponsorCompanies.map((company) => (
+                        <option key={company.sponsorCompanyId} value={company.sponsorCompanyId}>
+                          {company.companyName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 {hasNotificationSurface ? (
                   <div className="relative" ref={notificationMenuRef}>
                     <button

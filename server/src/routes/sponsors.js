@@ -149,10 +149,14 @@ router.get('/:userId/my-drivers', async (req, res) => {
     const [drivers] = await pool.execute(
       `SELECT
          u.UserID, u.FirstName, u.LastName, u.Username, u.ProfilePicture,
-         d.PerformanceStatus, d.PointBalance, u.ActiveStatus
-       FROM USERS u
-       JOIN DRIVERS d ON u.UserID = d.UserID
-       WHERE d.SponsorCompanyID = ?
+         d.PerformanceStatus,
+         e.PointBalance,
+         u.ActiveStatus
+       FROM DRIVER_COMPANY_ENROLLMENT e
+       JOIN DRIVERS d ON e.DriverID = d.LicenseNumber
+       JOIN USERS u ON d.UserID = u.UserID
+       WHERE e.SponsorCompanyID = ?
+         AND e.EnrollmentStatus = 'active'
        ORDER BY d.PerformanceStatus ASC`,
       [companyId]
     );
@@ -203,10 +207,16 @@ router.get('/:userId/drivers/:driverId/points', async (req, res) => {
       `SELECT
          u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
          d.LicenseNumber,
-         d.PerformanceStatus, d.PointBalance, u.ActiveStatus
+         d.PerformanceStatus,
+         e.PointBalance,
+         u.ActiveStatus
        FROM USERS u
        JOIN DRIVERS d ON u.UserID = d.UserID
-       WHERE u.UserID = ? AND d.SponsorCompanyID = ?`,
+       JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber
+       WHERE u.UserID = ?
+         AND e.SponsorCompanyID = ?
+         AND e.EnrollmentStatus = 'active'
+       LIMIT 1`,
       [driverId, companyId]
     );
     
@@ -242,7 +252,7 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
     
     if (sponsorRows.length === 0) {
@@ -254,7 +264,7 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
      // Get point history for this driver from this sponsor company.
     const [history] = await pool.execute(
       `SELECT
-         pt.TransactionID, pt.DriverID, pt.UserChanged, pt.PointChange, 
+         pt.TransactionID, pt.DriverID, pt.UserChanged, pt.PointChange,
          pt.ReasonForChange,
          DATE_FORMAT(pt.TimeChanged, '%Y-%m-%d %H:%i:%s') AS TimeChanged,
          u.Username as ChangedByUsername,
@@ -262,13 +272,15 @@ router.get('/:userId/drivers/:driverId/point-history', async (req, res) => {
          u.LastName as ChangedByLastName
        FROM POINT_TRANSACTIONS pt
        JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
+       JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber AND e.SponsorCompanyID = ?
        LEFT JOIN USERS u ON pt.UserChanged = u.UserID
-       WHERE d.UserID = ? AND d.SponsorCompanyID = ?
+       WHERE d.UserID = ?
+         AND pt.SponsorCompanyID = ?
          AND pt.TimeChanged IS NOT NULL
          AND pt.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY pt.TimeChanged DESC
        LIMIT 100`,
-      [driverId, companyId]
+      [companyId, driverId, companyId]
     );
     
     res.json(history);
@@ -297,7 +309,7 @@ router.get('/:userId/point-transactions', async (req, res) => {
        FROM SPONSORS s
        JOIN SPONSOR_COMPANIES sc ON s.SponsorCompanyID = sc.SponsorCompanyID
        WHERE s.UserID = ?`,
-      [userId]
+      [sponsorUserId]
     );
 
     if (sponsorRows.length === 0) {
@@ -323,7 +335,7 @@ router.get('/:userId/point-transactions', async (req, res) => {
        JOIN DRIVERS d ON pt.DriverID = d.LicenseNumber
        JOIN USERS u ON d.UserID = u.UserID
        LEFT JOIN USERS actor ON pt.UserChanged = actor.UserID
-       WHERE d.SponsorCompanyID = ?
+       WHERE pt.SponsorCompanyID = ?
          AND pt.TimeChanged IS NOT NULL
          AND pt.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY pt.TimeChanged DESC`,
@@ -380,12 +392,16 @@ router.post('/:userId/drivers/:driverId/point-transactions', async (req, res) =>
 
     const companyId = sponsorRows[0].SponsorCompanyID;
 
-    // Verify driver belongs to sponsor
+    // Verify driver belongs to sponsor company (active enrollment)
     const [drivers] = await connection.execute(
-      `SELECT u.UserID, d.LicenseNumber, d.PointBalance
+      `SELECT u.UserID, d.LicenseNumber, e.PointBalance
        FROM USERS u
        JOIN DRIVERS d ON u.UserID = d.UserID
-       WHERE u.UserID = ? AND d.SponsorCompanyID = ?`,
+       JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber
+       WHERE u.UserID = ?
+         AND e.SponsorCompanyID = ?
+         AND e.EnrollmentStatus = 'active'
+       LIMIT 1`,
       [driverUserId, companyId]
     );
 
@@ -394,18 +410,20 @@ router.post('/:userId/drivers/:driverId/point-transactions', async (req, res) =>
       return res.status(404).json({ error: 'Driver not found for this sponsor' });
     }
 
-    // Create transaction
+    // Create transaction (sponsor-scoped)
     const [insertResult] = await connection.execute(
-      `INSERT INTO POINT_TRANSACTIONS (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
-       VALUES (?, ?, ?, ?, NOW())`,
-      [drivers[0].LicenseNumber, sponsorUserId, pointDelta, reasonText]
+      `INSERT INTO POINT_TRANSACTIONS (DriverID, SponsorCompanyID, UserChanged, PointChange, ReasonForChange, TimeChanged)
+       VALUES (?, ?, ?, ?, ?, NOW())`,
+      [drivers[0].LicenseNumber, companyId, sponsorUserId, pointDelta, reasonText]
     );
 
-    // Update driver's point balance
+    // Update driver's point balance for this sponsor enrollment
     const newBalance = Number(drivers[0].PointBalance) + pointDelta;
     await connection.execute(
-      `UPDATE DRIVERS SET PointBalance = ? WHERE LicenseNumber = ?`,
-      [newBalance, drivers[0].LicenseNumber]
+      `UPDATE DRIVER_COMPANY_ENROLLMENT
+       SET PointBalance = PointBalance + ?
+       WHERE DriverID = ? AND SponsorCompanyID = ? AND EnrollmentStatus = 'active'`,
+      [pointDelta, drivers[0].LicenseNumber, companyId]
     );
 
     await insertPointTransactionEvent(connection, {
@@ -505,12 +523,12 @@ router.put('/:userId/point-transactions/:tId', async (req, res) => {
 
     const companyId = sponsorRows[0].SponsorCompanyID;
 
-    // Get the transaction
+    // Get the transaction (must belong to this sponsor company)
     const [transactions] = await connection.execute(
       `SELECT pt.TransactionID, pt.DriverID, pt.PointChange, d.UserID AS DriverUserID
        FROM POINT_TRANSACTIONS pt
        JOIN DRIVERS d ON d.LicenseNumber = pt.DriverID
-       WHERE pt.TransactionID = ? AND d.SponsorCompanyID = ?`,
+       WHERE pt.TransactionID = ? AND pt.SponsorCompanyID = ?`,
       [transactionId, companyId]
     );
 
@@ -524,14 +542,18 @@ router.put('/:userId/point-transactions/:tId', async (req, res) => {
 
     // Update transaction
     await connection.execute(
-      `UPDATE POINT_TRANSACTIONS SET PointChange = ?, ReasonForChange = ? WHERE TransactionID = ?`,
-      [pointValue, reasonText, transactionId]
+      `UPDATE POINT_TRANSACTIONS
+       SET PointChange = ?, ReasonForChange = ?
+       WHERE TransactionID = ? AND SponsorCompanyID = ?`,
+      [pointValue, reasonText, transactionId, companyId]
     );
 
-    // Update driver's point balance by the difference
+    // Update driver's point balance for this sponsor enrollment by the difference
     await connection.execute(
-      `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = ?`,
-      [pointDifference, transactions[0].DriverID]
+      `UPDATE DRIVER_COMPANY_ENROLLMENT
+       SET PointBalance = PointBalance + ?
+       WHERE DriverID = ? AND SponsorCompanyID = ?`,
+      [pointDifference, transactions[0].DriverID, companyId]
     );
 
     await insertPointTransactionEvent(connection, {
@@ -672,7 +694,10 @@ router.patch('/:userId/drivers/:driverId', async (req, res) => {
       `SELECT u.UserID
        FROM USERS u
        JOIN DRIVERS d ON d.UserID = u.UserID
-       WHERE u.UserID = ? AND d.SponsorCompanyID = ?
+       JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber
+       WHERE u.UserID = ?
+         AND e.SponsorCompanyID = ?
+         AND e.EnrollmentStatus = 'active'
        LIMIT 1`,
       [driverUserId, sponsorCompanyId]
     );
@@ -692,10 +717,15 @@ router.patch('/:userId/drivers/:driverId', async (req, res) => {
     const [updatedRows] = await connection.execute(
       `SELECT
          u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
-         d.PerformanceStatus, d.PointBalance, u.ActiveStatus
+         d.PerformanceStatus,
+         e.PointBalance,
+         u.ActiveStatus
        FROM USERS u
        JOIN DRIVERS d ON u.UserID = d.UserID
-       WHERE u.UserID = ? AND d.SponsorCompanyID = ?
+       JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber
+       WHERE u.UserID = ?
+         AND e.SponsorCompanyID = ?
+         AND e.EnrollmentStatus = 'active'
        LIMIT 1`,
       [driverUserId, sponsorCompanyId]
     );
@@ -767,7 +797,7 @@ router.delete('/:userId/drivers/:driverId/company', async (req, res) => {
     const sponsorCompanyId = Number(sponsor.SponsorCompanyID);
 
     const [driverRows] = await connection.execute(
-      `SELECT u.UserID, u.FirstName, u.LastName, d.LicenseNumber, d.SponsorCompanyID
+      `SELECT u.UserID, u.FirstName, u.LastName, d.LicenseNumber
        FROM USERS u
        JOIN DRIVERS d ON d.UserID = u.UserID
        WHERE u.UserID = ?
@@ -781,20 +811,42 @@ router.delete('/:userId/drivers/:driverId/company', async (req, res) => {
     }
 
     const driver = driverRows[0];
-    if (Number(driver.SponsorCompanyID) !== sponsorCompanyId) {
+    const licenseNumber = String(driver.LicenseNumber);
+
+    const [enrollmentRows] = await connection.execute(
+      `SELECT EnrollmentStatus
+       FROM DRIVER_COMPANY_ENROLLMENT
+       WHERE DriverID = ? AND SponsorCompanyID = ?
+       LIMIT 1`,
+      [licenseNumber, sponsorCompanyId]
+    );
+
+    if (enrollmentRows.length === 0) {
       await connection.rollback();
       return res.status(403).json({ error: 'Driver does not belong to this sponsor company.' });
     }
 
-    await connection.execute(
-      'UPDATE DRIVERS SET SponsorCompanyID = NULL WHERE UserID = ?',
-      [driverUserId]
+    if (String(enrollmentRows[0].EnrollmentStatus).toLowerCase() !== 'active') {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Driver is not currently active in this sponsor company.' });
+    }
+
+    const [updateResult] = await connection.execute(
+      `UPDATE DRIVER_COMPANY_ENROLLMENT
+       SET EnrollmentStatus = 'inactive', LeftAt = NOW()
+       WHERE DriverID = ? AND SponsorCompanyID = ? AND EnrollmentStatus = 'active'`,
+      [licenseNumber, sponsorCompanyId]
     );
+
+    if (!updateResult || Number(updateResult.affectedRows ?? 0) === 0) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Driver is not currently active in this sponsor company.' });
+    }
 
     await connection.execute(
       `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
-       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('SponsorCompanyID'), 'isSelfUpdate', false, 'success', true))`,
-      [sponsorUserId]
+       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('EnrollmentStatus'), 'isSelfUpdate', false, 'success', true, 'sponsorCompanyId', ?))`,
+      [sponsorUserId, sponsorCompanyId]
     );
 
     await notifySponsorCompany(connection, {
@@ -886,10 +938,15 @@ router.get('/:userId/drivers/:driverId', async (req, res) => {
     const [drivers] = await pool.execute(
       `SELECT
          u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
-         d.PerformanceStatus, d.PointBalance, u.ActiveStatus
+         d.PerformanceStatus,
+         e.PointBalance,
+         u.ActiveStatus
        FROM USERS u
        JOIN DRIVERS d ON u.UserID = d.UserID
-       WHERE u.UserID = ? AND d.SponsorCompanyID = ?`,
+       JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber
+       WHERE u.UserID = ?
+         AND e.SponsorCompanyID = ?
+         AND e.EnrollmentStatus = 'active'`,
       [driverId, companyId]
     );
     
@@ -953,7 +1010,10 @@ router.post('/:userId/assume-driver/:driverId', async (req, res) => {
       `SELECT u.UserID, u.UserType, u.Username, u.FirstName, u.LastName, u.ActiveStatus
        FROM USERS u
        JOIN DRIVERS d ON d.UserID = u.UserID
-       WHERE u.UserID = ? AND d.SponsorCompanyID = ?
+       JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber
+       WHERE u.UserID = ?
+         AND e.SponsorCompanyID = ?
+         AND e.EnrollmentStatus = 'active'
        LIMIT 1`,
       [driverUserId, sponsor.SponsorCompanyID]
     );
@@ -1150,7 +1210,7 @@ router.get('/driver-purchases/:companyId', async (req, res) => {
        FROM POINT_TRANSACTIONS t
        JOIN DRIVERS d ON t.DriverID = d.LicenseNumber
        JOIN USERS u ON d.UserID = u.UserID
-       WHERE d.SponsorCompanyID = ?
+       WHERE t.SponsorCompanyID = ?
          AND t.TimeChanged IS NOT NULL
          AND t.TimeChanged >= '2000-01-01 00:00:00'
        ORDER BY t.TimeChanged DESC`,
@@ -1408,12 +1468,43 @@ router.post('/:userId/process-application', async (req, res) => {
         );
 
       if (status === 'accepted') {
-        await connection.execute(
-          `UPDATE DRIVERS
-           SET SponsorCompanyID = ?
-           WHERE LicenseNumber = ?`,
-          [companyId, appRows[0].DriverID]
+        const driverLicenseNumber = String(appRows[0].DriverID);
+
+        const [driverExistsRows] = await connection.execute(
+          `SELECT LicenseNumber
+           FROM DRIVERS
+           WHERE LicenseNumber = ?
+           LIMIT 1`,
+          [driverLicenseNumber]
         );
+
+        if (driverExistsRows.length === 0) {
+          await connection.rollback();
+          return res.status(404).json({ error: 'Driver profile not found for this application.' });
+        }
+
+        const [enrollmentRows] = await connection.execute(
+          `SELECT EnrollmentID
+           FROM DRIVER_COMPANY_ENROLLMENT
+           WHERE DriverID = ? AND SponsorCompanyID = ?
+           LIMIT 1`,
+          [driverLicenseNumber, companyId]
+        );
+
+        if (enrollmentRows.length > 0) {
+          await connection.execute(
+            `UPDATE DRIVER_COMPANY_ENROLLMENT
+             SET EnrollmentStatus = 'active', LeftAt = NULL
+             WHERE EnrollmentID = ?`,
+            [enrollmentRows[0].EnrollmentID]
+          );
+        } else {
+          await connection.execute(
+            `INSERT INTO DRIVER_COMPANY_ENROLLMENT (DriverID, SponsorCompanyID, PointBalance, EnrollmentStatus, JoinedAt, LeftAt)
+             VALUES (?, ?, 0, 'active', NOW(), NULL)`,
+            [driverLicenseNumber, companyId]
+          );
+        }
 
         // Link accepted drivers to the specific sponsor who processed the application
         // when the optional SPONSOR_DRIVERS table is available.
@@ -1432,7 +1523,7 @@ router.post('/:userId/process-application', async (req, res) => {
                FROM SPONSOR_DRIVERS
                WHERE SponsorID = ? AND DriverID = ?
              )`,
-            [sponsorId, appRows[0].DriverID, sponsorId, appRows[0].DriverID]
+            [sponsorId, driverLicenseNumber, sponsorId, driverLicenseNumber]
           );
         }
       }
