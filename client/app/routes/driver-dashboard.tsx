@@ -1,4 +1,4 @@
-import { Link, useLoaderData, Form } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { Badge, Card, Table, Button } from "~/components";
 import { requireAuth } from "~/utils/session.server";
@@ -62,7 +62,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function DriverDashboard() {
   const data = useLoaderData<typeof loader>();
   
-  const { session, balance = 0, history = [], performanceStatus } = data || {};
+  const { balance = 0, history = [], performanceStatus } = data || {};
   const displayHistory = history.filter((row: PointTransaction) => isDisplayableDate(row.TimeChanged));
   const normalizedPerformanceStatus = (performanceStatus ?? "").toLowerCase();
   const performanceBadgeVariant =
@@ -104,13 +104,6 @@ export default function DriverDashboard() {
           >
             &larr; Home
           </Link>
-          {session?.OriginalUser && (
-            <Form method="post" action="/exit-assumption" className="mt-3">
-              <Button type="submit" variant="primary" size="sm">
-                Exit Assumed View
-              </Button>
-            </Form>
-          )}
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Driver Rewards</h1>
         </header>
 

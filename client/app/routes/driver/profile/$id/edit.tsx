@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Form, Link, useLoaderData } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { Table, Input, Button, Badge, Alert, Modal } from "~/components";
 import { requireAuth } from "~/utils/session.server";
 import { getApiBaseUrl } from "~/utils/api-url";
@@ -90,7 +90,7 @@ export async function loader({ request, params }: { request: Request; params: { 
 }
 
 export default function DriverProfileEditPage() {
-  const { user, performanceStatus, session } = useLoaderData<typeof loader>();
+  const { user, performanceStatus } = useLoaderData<typeof loader>();
   const normalizedPerformanceStatus = (performanceStatus ?? "").toLowerCase();
   const performanceBadgeVariant =
     normalizedPerformanceStatus === "excellent"
@@ -277,14 +277,6 @@ export default function DriverProfileEditPage() {
   return (
     <div className="min-h-screen w-full bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f]">
       <div className="p-8 max-w-6xl mx-auto">
-      {session?.OriginalUser && (
-        <Form method="post" action="/exit-assumption" className="mb-4">
-          <Button type="submit" variant="primary" size="sm">
-            Exit Assumed View
-          </Button>
-        </Form>
-      )}
-
       <h1 className="text-3xl font-bold mb-8 text-gray-800 dark:text-white">
         My Profile & Settings
       </h1>

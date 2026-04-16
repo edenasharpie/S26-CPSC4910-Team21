@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLoaderData, Form } from 'react-router';
+import { Link, useLoaderData } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
@@ -282,11 +282,6 @@ export default function DriverCatalogs() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-3xl font-bold">Available Catalogs</h1>
         <div className="flex gap-2">
-          {user.OriginalUser && (
-            <Form method="post" action="/exit-assumption">
-              <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
-            </Form>
-          )}
           <Button variant="secondary" onClick={() => setIsCartOpen(true)}>
             View Cart ({totalItems})
           </Button>

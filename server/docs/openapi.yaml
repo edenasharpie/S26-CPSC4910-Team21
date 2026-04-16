@@ -126,6 +126,12 @@ paths:
   /driver/{userId}/notifications/read-all:
     $ref: './paths/driver/notifications.yaml#/notificationsReadAll'
 
+  /driver/{userId}/notifications/{notificationId}:
+    $ref: './paths/driver/notifications.yaml#/notificationByIdClear'
+
+  /driver/{userId}/notifications/clear-all:
+    $ref: './paths/driver/notifications.yaml#/notificationsClearAll'
+
   /drivers/{userId}/company:
     $ref: './paths/driver/company.yaml#/driverCompanyMembership'
 
@@ -161,6 +167,12 @@ paths:
 
   /sponsors/{userId}/notifications/read-all:
     $ref: './paths/sponsor/notifications.yaml#/notificationsReadAll'
+
+  /sponsors/{userId}/notifications/{notificationId}:
+    $ref: './paths/sponsor/notifications.yaml#/notificationByIdClear'
+
+  /sponsors/{userId}/notifications/clear-all:
+    $ref: './paths/sponsor/notifications.yaml#/notificationsClearAll'
 
   /sponsors/{userId}/bulk-load:
     $ref: './paths/sponsor/bulk-load.yaml#/bulkLoad'

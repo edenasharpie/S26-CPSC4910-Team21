@@ -57,7 +57,7 @@ async function loadTopNavNotifications(request: Request, session: ReturnType<typ
   const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
 
   try {
-    const res = await fetch(toApiUrl(`${basePath}?limit=8&offset=0`), requestInit);
+    const res = await fetch(toApiUrl(`${basePath}?limit=20&offset=0`), requestInit);
     if (!res.ok) {
       return { items: [], unreadCount: 0 };
     }

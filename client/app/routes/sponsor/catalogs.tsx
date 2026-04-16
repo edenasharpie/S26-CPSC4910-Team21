@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLoaderData, Form } from 'react-router';
+import { Link, useLoaderData } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
@@ -370,11 +370,6 @@ export default function SponsorCatalogs() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">My Catalogs</h1>
         <div className="flex items-center gap-2">
-          {user.OriginalUser && (
-            <Form method="post" action="/exit-assumption">
-              <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
-            </Form>
-          )}
           <Button variant="primary" onClick={() => setIsCreateCatalogOpen(true)}>
             Create Catalog
           </Button>

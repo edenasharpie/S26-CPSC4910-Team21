@@ -13,6 +13,15 @@ import { getApiBaseUrl } from "~/utils/api-url";
 
 const API_URL = getApiBaseUrl();
 const ADMIN_USERS_PAGE_SIZE = 25;
+const DEFAULT_AUDIT_EVENT_FILTERS: string[] = [
+  "LoginAttempt",
+  "PasswordChange",
+  "AccountUpdate",
+  "AccountStatusChange",
+  "ApplicationStatusUpdate",
+  "PointTransaction",
+  "ReviewModerationEvent",
+];
 
 function normalizeFilterValue(value: string | null, allowed: string[], fallback: string): string {
   const normalized = (value ?? fallback).trim().toLowerCase();
@@ -213,7 +222,7 @@ export default function AdminPortal() {
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [auditUserType, setAuditUserType] = useState("all");
   const [auditTargetUserId, setAuditTargetUserId] = useState("");
-  const [auditEventFilters, setAuditEventFilters] = useState<string[]>([]);
+  const [auditEventFilters, setAuditEventFilters] = useState<string[]>([...DEFAULT_AUDIT_EVENT_FILTERS]);
   const [auditLoginOutcome, setAuditLoginOutcome] = useState<"" | "success" | "failure">("");
   const [auditPointUserScope, setAuditPointUserScope] = useState<"any" | "changedBy" | "affected">("any");
   const [showAddUserPassword, setShowAddUserPassword] = useState(false);
@@ -440,7 +449,7 @@ export default function AdminPortal() {
     },
     {
       key: "assume",
-      header: "Assume",
+      header: "",
       render: (user: any) => {
         const role = String(user.UserType ?? "").toLowerCase();
         const canAssume = user.ActiveStatus !== 0 && ["driver", "sponsor"].includes(role);
@@ -497,13 +506,6 @@ export default function AdminPortal() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {isAssumedMode && (
-              <Form method="post" action="/exit-assumption">
-                <Button variant="primary" size="sm" type="submit">
-                  Exit Assumed View
-                </Button>
-              </Form>
-            )}
             <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
               <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
               <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
@@ -556,7 +558,10 @@ export default function AdminPortal() {
               </h2>
               <Button
                 variant="secondary"
-                onClick={() => setIsAuditOpen(true)}
+                onClick={() => {
+                  setAuditEventFilters([...DEFAULT_AUDIT_EVENT_FILTERS]);
+                  setIsAuditOpen(true);
+                }}
                 className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all shadow-sm"
               >
                 Audit Reports

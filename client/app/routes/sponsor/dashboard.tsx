@@ -205,7 +205,7 @@ export default function SponsorPortal() {
     },
     {
       key: "Assume",
-      header: "Assume",
+      header: "",
       render: (driver: any) => {
         const isActive = driver.ActiveStatus === 1;
         if (!isActive || isAssumedMode) {

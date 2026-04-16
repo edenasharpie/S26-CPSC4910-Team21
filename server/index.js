@@ -68,7 +68,7 @@ const notificationCors = cors({
 
     callback(null, notificationCorsOriginSet.has(origin));
   },
-  methods: ['GET', 'PATCH', 'OPTIONS'],
+  methods: ['GET', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 204,
