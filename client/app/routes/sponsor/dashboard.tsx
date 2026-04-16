@@ -238,27 +238,26 @@ export default function SponsorPortal() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* Header Section */}
-        <div className="mb-8 border-b pb-6 dark:border-gray-800 flex justify-between items-end">
+        <div className="mb-8 border-b pb-6 dark:border-gray-800 flex items-end justify-between gap-6">
           <div className="text-left">
-            <Link to="/" className="text-sm font-medium text-blue-600 hover:underline mb-2 block">← Home</Link>
             <div className="flex items-center gap-4">
               <div>
                 <h1 className="text-3xl font-extrabold tracking-tight">Sponsor Dashboard</h1>
                 <p className="text-gray-500 text-sm mt-1 font-medium italic">{companyName}</p>
               </div>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
-                <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
-                <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
-              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
             {isAssumedMode && (
               <Form method="post" action="/exit-assumption">
                 <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
               </Form>
             )}
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
+              <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
+              <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
+            </div>
             <Link
               to={`/sponsor/settings/${user.UserID}`}
               className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
@@ -269,28 +268,6 @@ export default function SponsorPortal() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-            </Link>
-            <Form method="post" action="/logout">
-              <Button variant="secondary" size="sm" type="submit">Sign out</Button>
-            </Form>
-            <Link
-              to={`/sponsor/profile/${user.UserID}/edit`}
-              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm"
-            >
-            <div className="relative">
-              <AvatarOrInitials
-                profilePicture={userProfilePicture}
-                firstName={user.FirstName ?? user.Username}
-                lastName={user.LastName ?? user.Username}
-                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
-                initialsClassName="text-xs"
-              />
-              <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
-            </div>
-            <div className="hidden sm:block text-left">
-              <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{user.Username}</p>
-              <p className="text-[10px] text-gray-400 font-mono mt-0.5">{companyName}</p>
-            </div>
             </Link>
           </div>
         </div>
@@ -338,6 +315,13 @@ export default function SponsorPortal() {
                 className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all shadow-sm"
               >
                 Applications
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => navigate("/sponsor/catalogs")} 
+                className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all shadow-sm"
+              >
+                Catalogs
               </Button>
             </div>
           </aside>
