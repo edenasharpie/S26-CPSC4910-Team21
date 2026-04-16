@@ -79,8 +79,12 @@ function normalizeCategory(category) {
   return normalized ? normalized : null;
 }
 
+function hiddenAtIsNullSql(propertyExpression = 'Properties') {
+  return `JSON_EXTRACT(COALESCE(${propertyExpression}, JSON_OBJECT()), '$.hiddenAt') IS NULL`;
+}
+
 function buildNotificationListWhereClause(userId, category, unreadOnly) {
-  const whereClauses = ['e.UserID = ?', `e.EventType = 'Notification'`];
+  const whereClauses = ['e.UserID = ?', `e.EventType = 'Notification'`, hiddenAtIsNullSql('e.Properties')];
   const params = [userId];
 
   if (category) {
@@ -182,7 +186,10 @@ export async function markNotificationRead(connection, userId, notificationId) {
   const [existingRows] = await connection.execute(
     `SELECT EventID
      FROM EVENTS
-     WHERE EventID = ? AND UserID = ? AND EventType = 'Notification'
+     WHERE EventID = ?
+       AND UserID = ?
+       AND EventType = 'Notification'
+       AND ${hiddenAtIsNullSql()}
      LIMIT 1`,
     [parsedNotificationId, parsedUserId]
   );
@@ -201,6 +208,7 @@ export async function markNotificationRead(connection, userId, notificationId) {
      WHERE EventID = ?
        AND UserID = ?
        AND EventType = 'Notification'
+       AND ${hiddenAtIsNullSql()}
        AND JSON_EXTRACT(COALESCE(Properties, JSON_OBJECT()), '$.readAt') IS NULL`,
     [parsedNotificationId, parsedUserId]
   );
@@ -227,6 +235,7 @@ export async function markAllNotificationsRead(connection, userId, options = {})
   }
 
   whereClauses.push(`JSON_EXTRACT(COALESCE(Properties, JSON_OBJECT()), '$.readAt') IS NULL`);
+  whereClauses.push(hiddenAtIsNullSql());
 
   const [updateResult] = await connection.execute(
     `UPDATE EVENTS
@@ -234,6 +243,80 @@ export async function markAllNotificationsRead(connection, userId, options = {})
        COALESCE(Properties, JSON_OBJECT()),
        '$.readAt', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'),
        '$.readByAction', 'all'
+     )
+     WHERE ${whereClauses.join(' AND ')}`,
+    params
+  );
+
+  return {
+    updatedCount: Number(updateResult.affectedRows ?? 0),
+  };
+}
+
+export async function clearNotification(connection, userId, notificationId) {
+  const parsedUserId = Number(userId);
+  const parsedNotificationId = Number(notificationId);
+
+  if (!Number.isInteger(parsedUserId) || !Number.isInteger(parsedNotificationId)) {
+    throw new Error('clearNotification requires integer userId and notificationId');
+  }
+
+  const [existingRows] = await connection.execute(
+    `SELECT EventID
+     FROM EVENTS
+     WHERE EventID = ?
+       AND UserID = ?
+       AND EventType = 'Notification'
+       AND ${hiddenAtIsNullSql()}
+     LIMIT 1`,
+    [parsedNotificationId, parsedUserId]
+  );
+
+  if (existingRows.length === 0) {
+    return { found: false, updated: false };
+  }
+
+  const [updateResult] = await connection.execute(
+    `UPDATE EVENTS
+     SET Properties = JSON_SET(
+       COALESCE(Properties, JSON_OBJECT()),
+       '$.hiddenAt', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'),
+       '$.hiddenByAction', 'single'
+     )
+     WHERE EventID = ?
+       AND UserID = ?
+       AND EventType = 'Notification'
+       AND ${hiddenAtIsNullSql()}`,
+    [parsedNotificationId, parsedUserId]
+  );
+
+  return {
+    found: true,
+    updated: Number(updateResult.affectedRows) > 0,
+  };
+}
+
+export async function clearAllNotifications(connection, userId, options = {}) {
+  const parsedUserId = Number(userId);
+  if (!Number.isInteger(parsedUserId)) {
+    throw new Error('clearAllNotifications requires an integer userId');
+  }
+
+  const category = normalizeCategory(options.category);
+  const whereClauses = ['UserID = ?', `EventType = 'Notification'`, hiddenAtIsNullSql()];
+  const params = [parsedUserId];
+
+  if (category) {
+    whereClauses.push(`JSON_UNQUOTE(JSON_EXTRACT(Properties, '$.category')) = ?`);
+    params.push(category);
+  }
+
+  const [updateResult] = await connection.execute(
+    `UPDATE EVENTS
+     SET Properties = JSON_SET(
+       COALESCE(Properties, JSON_OBJECT()),
+       '$.hiddenAt', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'),
+       '$.hiddenByAction', 'all'
      )
      WHERE ${whereClauses.join(' AND ')}`,
     params
