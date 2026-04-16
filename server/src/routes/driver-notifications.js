@@ -2,6 +2,8 @@ import express from 'express';
 import { pool } from '../db.js';
 import { routeUserMatchesEffectiveSession } from '../middleware/session-context.js';
 import {
+  clearAllNotifications,
+  clearNotification,
   listNotificationsForUser,
   markAllNotificationsRead,
   markNotificationRead,
@@ -82,6 +84,62 @@ router.patch('/:notificationId/read', async (req, res) => {
     return res.json({ success: true, updated: result.updated });
   } catch (error) {
     console.error('Error marking driver notification read:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    connection.release();
+  }
+});
+
+router.patch('/read-all', async (req, res) => {
+  const category = typeof req.body?.category === 'string'
+    ? req.body.category
+    : req.query.category;
+
+  const connection = await pool.getConnection();
+  try {
+    const result = await markAllNotificationsRead(connection, req.notificationUserId, { category });
+    return res.json({ success: true, updatedCount: result.updatedCount });
+  } catch (error) {
+    console.error('Error marking all driver notifications read:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    connection.release();
+  }
+});
+
+router.delete('/clear-all', async (req, res) => {
+  const category = typeof req.body?.category === 'string'
+    ? req.body.category
+    : req.query.category;
+
+  const connection = await pool.getConnection();
+  try {
+    const result = await clearAllNotifications(connection, req.notificationUserId, { category });
+    return res.json({ success: true, clearedCount: result.updatedCount });
+  } catch (error) {
+    console.error('Error clearing all driver notifications:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    connection.release();
+  }
+});
+
+router.delete('/:notificationId', async (req, res) => {
+  const notificationId = Number(req.params.notificationId);
+  if (!Number.isInteger(notificationId)) {
+    return res.status(400).json({ error: 'Invalid notification ID' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    const result = await clearNotification(connection, req.notificationUserId, notificationId);
+    if (!result.found) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    return res.json({ success: true, cleared: result.updated });
+  } catch (error) {
+    console.error('Error clearing driver notification:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   } finally {
     connection.release();

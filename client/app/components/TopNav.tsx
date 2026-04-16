@@ -40,6 +40,8 @@ const NAV_SHELL_BY_ROLE: Record<"guest" | NavRole, string> = {
     "bg-gradient-to-r from-rose-50 via-red-50 to-rose-100 border-rose-200 text-rose-900 dark:from-rose-900/40 dark:via-red-900/30 dark:to-rose-900/40 dark:border-rose-700 dark:text-rose-100",
 };
 
+const NOTIFICATION_SCROLL_THRESHOLD = 5;
+
 export function TopNav({ user, dashboardHref, notifications, unreadNotificationCount }: TopNavProps) {
   const navigate = useNavigate();
   const role = user?.role ?? "guest";
@@ -58,6 +60,9 @@ export function TopNav({ user, dashboardHref, notifications, unreadNotificationC
     }
     if (user.role === "sponsor") {
       return `/api/sponsors/${user.userId}/notifications`;
+    }
+    if (user.role === "admin") {
+      return `/api/admin/${user.userId}/notifications`;
     }
     return null;
   }, [user?.role, user?.userId]);
@@ -187,7 +192,66 @@ export function TopNav({ user, dashboardHref, notifications, unreadNotificationC
     }
   }
 
+  async function clearNotification(notificationId: number) {
+    if (!notificationBasePath) return;
+
+    setIsNotificationMutationPending(true);
+    try {
+      const response = await fetch(toApiUrl(`${notificationBasePath}/${notificationId}`), {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        console.error("Failed to clear notification", {
+          notificationId,
+          status: response.status,
+        });
+        return;
+      }
+
+      setNotificationItems((previous) => {
+        const target = previous.find((item) => Number(item.notificationId) === notificationId);
+        if (target && !target.readAt) {
+          setUnreadCount((current) => (current > 0 ? current - 1 : 0));
+        }
+        return previous.filter((item) => Number(item.notificationId) !== notificationId);
+      });
+    } catch (error) {
+      console.error("Error clearing notification", error);
+    } finally {
+      setIsNotificationMutationPending(false);
+    }
+  }
+
+  async function clearAllNotifications() {
+    if (!notificationBasePath) return;
+
+    setIsNotificationMutationPending(true);
+    try {
+      const response = await fetch(toApiUrl(`${notificationBasePath}/clear-all`), {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        console.error("Failed to clear all notifications", {
+          status: response.status,
+        });
+        return;
+      }
+
+      setNotificationItems([]);
+      setUnreadCount(0);
+    } catch (error) {
+      console.error("Error clearing all notifications", error);
+    } finally {
+      setIsNotificationMutationPending(false);
+    }
+  }
+
   const hasNotificationSurface = Boolean(notificationBasePath);
+  const shouldUseNotificationScroll = notificationItems.length > NOTIFICATION_SCROLL_THRESHOLD;
 
   return (
     <header className={`border-b ${NAV_SHELL_BY_ROLE[role]}`}>
@@ -291,17 +355,27 @@ export function TopNav({ user, dashboardHref, notifications, unreadNotificationC
                       <div className="absolute right-0 z-50 mt-2 w-90 max-w-[90vw] rounded-xl border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-800 dark:bg-gray-900">
                         <div className="mb-3 flex items-center justify-between">
                           <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Notifications</h3>
-                          <button
-                            type="button"
-                            onClick={() => void markAllNotificationsRead()}
-                            disabled={isNotificationMutationPending || unreadCount === 0}
-                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:text-gray-400"
-                          >
-                            Mark all read
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void markAllNotificationsRead()}
+                              disabled={isNotificationMutationPending || unreadCount === 0}
+                              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                            >
+                              Mark all read
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void clearAllNotifications()}
+                              disabled={isNotificationMutationPending || notificationItems.length === 0}
+                              className="text-xs font-semibold text-rose-600 hover:text-rose-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                            >
+                              Clear all
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                        <div className={`space-y-2 ${shouldUseNotificationScroll ? "max-h-96 overflow-y-auto pr-1" : ""}`}>
                           {notificationItems.length === 0 ? (
                             <p className="rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
                               No notifications yet.
@@ -322,16 +396,26 @@ export function TopNav({ user, dashboardHref, notifications, unreadNotificationC
                                     <Badge variant={categoryVariant(notification.category)} size="sm">
                                       {categoryLabel(notification.category)}
                                     </Badge>
-                                    {!read ? (
+                                    <div className="flex items-center gap-2">
+                                      {!read ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => void markNotificationRead(Number(notification.notificationId))}
+                                          disabled={isNotificationMutationPending}
+                                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                                        >
+                                          Mark read
+                                        </button>
+                                      ) : null}
                                       <button
                                         type="button"
-                                        onClick={() => void markNotificationRead(Number(notification.notificationId))}
+                                        onClick={() => void clearNotification(Number(notification.notificationId))}
                                         disabled={isNotificationMutationPending}
-                                        className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                                        className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 disabled:cursor-not-allowed disabled:text-gray-400"
                                       >
-                                        Mark read
+                                        Clear
                                       </button>
-                                    ) : null}
+                                    </div>
                                   </div>
                                   <p className={`text-xs ${read ? "text-gray-600 dark:text-gray-300" : "font-semibold text-gray-900 dark:text-gray-100"}`}>
                                     {notification.content || "Notification"}

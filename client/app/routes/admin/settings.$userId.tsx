@@ -133,6 +133,14 @@ export default function AdminSettings() {
           <p className="text-gray-500 text-sm mt-1 font-medium">
             Configure system-wide data retention and archival policies
           </p>
+          <div className="mt-4">
+            <Link
+              to={`/admin/profile/${user.UserID}/edit#notification-preferences`}
+              className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200"
+            >
+              Alerts
+            </Link>
+          </div>
         </div>
 
         {/* Success/Error Messages */}

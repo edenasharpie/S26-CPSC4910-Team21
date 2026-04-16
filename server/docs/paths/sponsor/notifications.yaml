@@ -159,3 +159,84 @@ notificationsReadAll:
         $ref: '../../schemas/common.yaml#/Responses/404Error'
       '500':
         $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+notificationByIdClear:
+  parameters:
+    - name: userId
+      in: path
+      description: Sponsor user ID.
+      required: true
+      schema:
+        type: integer
+    - name: notificationId
+      in: path
+      description: Notification event ID.
+      required: true
+      schema:
+        type: integer
+  delete:
+    tags:
+      - notifications
+    summary: Clear one sponsor notification
+    responses:
+      '200':
+        description: Notification cleared from active menu display.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                cleared:
+                  type: boolean
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+notificationsClearAll:
+  parameters:
+    - name: userId
+      in: path
+      description: Sponsor user ID.
+      required: true
+      schema:
+        type: integer
+  delete:
+    tags:
+      - notifications
+    summary: Clear all sponsor notifications
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              category:
+                type: string
+    responses:
+      '200':
+        description: Clear-all result.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                clearedCount:
+                  type: integer
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'

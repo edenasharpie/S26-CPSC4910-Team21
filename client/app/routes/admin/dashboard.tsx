@@ -13,6 +13,15 @@ import { getApiBaseUrl } from "~/utils/api-url";
 
 const API_URL = getApiBaseUrl();
 const ADMIN_USERS_PAGE_SIZE = 25;
+const DEFAULT_AUDIT_EVENT_FILTERS: string[] = [
+  "LoginAttempt",
+  "PasswordChange",
+  "AccountUpdate",
+  "AccountStatusChange",
+  "ApplicationStatusUpdate",
+  "PointTransaction",
+  "ReviewModerationEvent",
+];
 
 function normalizeFilterValue(value: string | null, allowed: string[], fallback: string): string {
   const normalized = (value ?? fallback).trim().toLowerCase();
@@ -213,10 +222,20 @@ export default function AdminPortal() {
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [auditUserType, setAuditUserType] = useState("all");
   const [auditTargetUserId, setAuditTargetUserId] = useState("");
-  const [auditEventFilters, setAuditEventFilters] = useState<string[]>([]);
+  const [auditEventFilters, setAuditEventFilters] = useState<string[]>([...DEFAULT_AUDIT_EVENT_FILTERS]);
   const [auditLoginOutcome, setAuditLoginOutcome] = useState<"" | "success" | "failure">("");
   const [auditPointUserScope, setAuditPointUserScope] = useState<"any" | "changedBy" | "affected">("any");
   const [showAddUserPassword, setShowAddUserPassword] = useState(false);
+  const [tableUsers, setTableUsers] = useState<any[]>(users);
+  const [isSponsorRatioModalOpen, setIsSponsorRatioModalOpen] = useState(false);
+  const [selectedSponsorForRatio, setSelectedSponsorForRatio] = useState<any | null>(null);
+  const [sponsorRatioInput, setSponsorRatioInput] = useState("");
+  const [isSavingSponsorRatio, setIsSavingSponsorRatio] = useState(false);
+  const [sponsorRatioError, setSponsorRatioError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTableUsers(users);
+  }, [users]);
 
   const isLoginAttemptsSelected = auditEventFilters.includes("LoginAttempt");
   const isPointTransactionsSelected = auditEventFilters.includes("PointTransaction");
@@ -225,7 +244,7 @@ export default function AdminPortal() {
   const hasPrevPage = page > 1;
   const hasNextPage = page < totalPages;
   const pageStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
-  const pageEnd = totalCount === 0 ? 0 : pageStart + users.length - 1;
+  const pageEnd = totalCount === 0 ? 0 : pageStart + tableUsers.length - 1;
 
   const navigateToPage = (nextPage: number) => {
     if (nextPage < 1 || nextPage > totalPages) return;
@@ -250,13 +269,13 @@ export default function AdminPortal() {
 
   // Count stats
   const totalUsers   = totalCount;
-  const driverCount  = users.filter((u: any) => u.UserType?.toLowerCase() === "driver"  && u.ActiveStatus !== 0).length;
-  const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor" && u.ActiveStatus !== 0).length;
-  const adminCount   = users.filter((u: any) => u.UserType?.toLowerCase() === "admin"   && u.ActiveStatus !== 0).length;
-  const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
-  const totalPoints = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").reduce((sum: number, u: any) => sum + (u.PointBalance ?? 0), 0);
+  const driverCount  = tableUsers.filter((u: any) => u.UserType?.toLowerCase() === "driver"  && u.ActiveStatus !== 0).length;
+  const sponsorCount = tableUsers.filter((u: any) => u.UserType?.toLowerCase() === "sponsor" && u.ActiveStatus !== 0).length;
+  const adminCount   = tableUsers.filter((u: any) => u.UserType?.toLowerCase() === "admin"   && u.ActiveStatus !== 0).length;
+  const inactiveCount = tableUsers.filter((u: any) => u.ActiveStatus === 0).length;
+  const totalPoints = tableUsers.filter((u: any) => u.UserType?.toLowerCase() === "driver").reduce((sum: number, u: any) => sum + (u.PointBalance ?? 0), 0);
 
-  const auditUsersByType = users
+  const auditUsersByType = tableUsers
     .filter((u: any) => {
       const type = String(u.UserType ?? "").toLowerCase();
       return auditUserType === "all" || type === auditUserType;
@@ -269,6 +288,72 @@ export default function AdminPortal() {
 
   // Close add-user modal on successful action
   const addUserSuccess = (actionData as any)?.success === true;
+
+  const openSponsorRatioModal = (user: any) => {
+    setSponsorRatioError(null);
+    setIsSponsorRatioModalOpen(true);
+
+    const sponsorCompanyId = Number(user.SponsorCompanyID ?? user.sponsorCompanyId ?? 0);
+    const currentRatio = Number(user.SponsorPointDollarValue ?? user.PointDollarValue ?? 0.01);
+
+    setSelectedSponsorForRatio({
+      ...user,
+      SponsorCompanyID: Number.isInteger(sponsorCompanyId) ? sponsorCompanyId : null,
+      SponsorPointDollarValue: Number.isFinite(currentRatio) ? currentRatio : 0.01,
+    });
+    setSponsorRatioInput(Number.isFinite(currentRatio) ? currentRatio.toFixed(2) : "0.01");
+  };
+
+  const handleSaveSponsorRatio = async () => {
+    if (!selectedSponsorForRatio) {
+      return;
+    }
+
+    const parsedRatio = Number.parseFloat(sponsorRatioInput);
+    if (!Number.isFinite(parsedRatio) || parsedRatio <= 0) {
+      setSponsorRatioError("Point-to-dollar ratio must be a positive number.");
+      return;
+    }
+
+    const sponsorCompanyId = Number(selectedSponsorForRatio.SponsorCompanyID ?? selectedSponsorForRatio.sponsorCompanyId);
+    if (!Number.isInteger(sponsorCompanyId)) {
+      setSponsorRatioError("This sponsor is not linked to a valid company.");
+      return;
+    }
+
+    try {
+      setIsSavingSponsorRatio(true);
+      setSponsorRatioError(null);
+
+      const response = await fetch(`${API_URL}/api/sponsors/${sponsorCompanyId}/point-dollar-value`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pointDollarValue: parsedRatio }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSponsorRatioError((payload as { error?: string }).error || "Failed to update point-to-dollar ratio.");
+        return;
+      }
+
+      const updatedRatio = Number((payload as { pointDollarValue?: number }).pointDollarValue ?? parsedRatio);
+      setTableUsers((previous) =>
+        previous.map((u) =>
+          Number(u.UserID) === Number(selectedSponsorForRatio.UserID)
+            ? { ...u, SponsorPointDollarValue: updatedRatio }
+            : u
+        )
+      );
+
+      setIsSponsorRatioModalOpen(false);
+      setSelectedSponsorForRatio(null);
+    } catch {
+      setSponsorRatioError("Failed to update point-to-dollar ratio.");
+    } finally {
+      setIsSavingSponsorRatio(false);
+    }
+  };
 
   const columns = [
     {
@@ -326,8 +411,27 @@ export default function AdminPortal() {
       key: "Points",
       header: "Points",
       render: (user: any) => {
-        if (user.UserType?.toLowerCase() !== "driver")
+        const userType = String(user.UserType ?? "").toLowerCase();
+
+        if (userType === "sponsor") {
+          return (
+            <button
+              type="button"
+              onClick={() => openSponsorRatioModal(user)}
+              className="group flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 hover:border-blue-400 transition-all"
+            >
+              <span className="text-sm font-bold text-blue-700 dark:text-blue-300">Edit</span>
+              <span className="text-[10px] uppercase tracking-tighter text-blue-400 font-bold">
+                Ratio
+              </span>
+            </button>
+          );
+        }
+
+        if (userType !== "driver") {
           return <span className="text-gray-300 pl-4">—</span>;
+        }
+
         return (
           <button
             onClick={() => navigate(`/admin/profile/${user.UserID}/points`)}
@@ -345,7 +449,7 @@ export default function AdminPortal() {
     },
     {
       key: "assume",
-      header: "Assume",
+      header: "",
       render: (user: any) => {
         const role = String(user.UserType ?? "").toLowerCase();
         const canAssume = user.ActiveStatus !== 0 && ["driver", "sponsor"].includes(role);
@@ -402,13 +506,6 @@ export default function AdminPortal() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {isAssumedMode && (
-              <Form method="post" action="/exit-assumption">
-                <Button variant="primary" size="sm" type="submit">
-                  Exit Assumed View
-                </Button>
-              </Form>
-            )}
             <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
               <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
               <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
@@ -461,7 +558,10 @@ export default function AdminPortal() {
               </h2>
               <Button
                 variant="secondary"
-                onClick={() => setIsAuditOpen(true)}
+                onClick={() => {
+                  setAuditEventFilters([...DEFAULT_AUDIT_EVENT_FILTERS]);
+                  setIsAuditOpen(true);
+                }}
                 className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all shadow-sm"
               >
                 Audit Reports
@@ -472,13 +572,6 @@ export default function AdminPortal() {
                 className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all shadow-sm"
               >
                 Invoices
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => navigate("/admin/bulk-upload")}
-                className="w-full py-6 text-lg font-bold hover:bg-gray-100 transition-all shadow-sm"
-              >
-                Bulk Upload
               </Button>
               <Button
                 variant="secondary"
@@ -548,8 +641,8 @@ export default function AdminPortal() {
 
             {/* Users table */}
             <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl border dark:border-gray-800 overflow-hidden text-left">
-              <Table data={users} columns={columns} />
-              {users.length === 0 && (
+              <Table data={tableUsers} columns={columns} />
+              {tableUsers.length === 0 && (
                 <div className="p-8 text-center text-gray-500 italic">
                   No users found matching your criteria.
                 </div>
@@ -839,6 +932,65 @@ export default function AdminPortal() {
             </Button>
           </div>
         </Form>
+      </Modal>
+
+      <Modal
+        isOpen={isSponsorRatioModalOpen}
+        onClose={() => {
+          if (isSavingSponsorRatio) {
+            return;
+          }
+          setIsSponsorRatioModalOpen(false);
+          setSelectedSponsorForRatio(null);
+          setSponsorRatioError(null);
+        }}
+        title="Edit Sponsor Point-to-Dollar Ratio"
+      >
+        <div className="space-y-4 text-left">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            {selectedSponsorForRatio
+              ? `Update ratio for ${selectedSponsorForRatio.FirstName} ${selectedSponsorForRatio.LastName} (${selectedSponsorForRatio.Username}).`
+              : "Update sponsor point-to-dollar ratio."}
+          </p>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Point to Dollar Ratio</label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={sponsorRatioInput}
+              onChange={(e) => setSponsorRatioInput(e.target.value)}
+              className="w-full rounded-md border border-gray-200 dark:border-gray-700 p-2 text-sm bg-white dark:bg-gray-800"
+              disabled={isSavingSponsorRatio}
+            />
+          </div>
+
+          {sponsorRatioError && <p className="text-sm text-red-600">{sponsorRatioError}</p>}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setIsSponsorRatioModalOpen(false);
+                setSelectedSponsorForRatio(null);
+                setSponsorRatioError(null);
+              }}
+              disabled={isSavingSponsorRatio}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleSaveSponsorRatio}
+              isLoading={isSavingSponsorRatio}
+            >
+              Save Ratio
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Add User Modal */}

@@ -39,6 +39,16 @@ function runAssertions() {
   assert.equal(serializedCategory.actorUserId, null);
   assert.equal(serializedCategory.oldStatus, 'confirmed');
   assert.equal(serializedCategory.newStatus, 'shipped');
+
+  const serializedHiddenMetadata = JSON.parse(serializeProperties('Dismissed notification', 'general', null, {
+    hiddenAt: '2026-04-16 11:45:00',
+    hiddenByAction: 'single',
+    readAt: undefined,
+  }));
+
+  assert.equal(serializedHiddenMetadata.hiddenAt, '2026-04-16 11:45:00');
+  assert.equal(serializedHiddenMetadata.hiddenByAction, 'single');
+  assert.equal(Object.prototype.hasOwnProperty.call(serializedHiddenMetadata, 'readAt'), false);
 }
 
 async function runTests() {

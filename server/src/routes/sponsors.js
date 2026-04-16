@@ -1453,6 +1453,7 @@ router.post('/:userId/process-application', async (req, res) => {
         actorUserId: sponsorUserId,
         content: `Application #${applicationId} was ${status}.`,
         category: 'driver_application_decision',
+        preference: 'application_status',
         metadata: {
           applicationId,
           driverId: appRows[0].DriverID,
@@ -1465,7 +1466,7 @@ router.post('/:userId/process-application', async (req, res) => {
         actorUserId: sponsorUserId,
         content: `Your application was ${status}.`,
         category: 'driver_application_decision',
-        preference: 'none',
+        preference: 'application_status',
         metadata: {
           applicationId,
           driverId: appRows[0].DriverID,
@@ -1592,6 +1593,45 @@ router.post('/:companyId/settings', async (req, res) => {
   } catch (error) {
     console.error('Error updating settings:', error);
     res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+// PATCH /api/sponsors/:companyId/point-dollar-value - Update sponsor point-to-dollar ratio
+router.patch('/:companyId/point-dollar-value', async (req, res) => {
+  try {
+    const companyId = Number(req.params.companyId);
+    const pointDollarValueRaw = req.body?.pointDollarValue;
+    const pointDollarValue = Number(pointDollarValueRaw);
+
+    if (!Number.isInteger(companyId)) {
+      return res.status(400).json({ error: 'Invalid companyId' });
+    }
+
+    if (!Number.isFinite(pointDollarValue) || pointDollarValue <= 0) {
+      return res.status(400).json({ error: 'pointDollarValue must be a positive number' });
+    }
+
+    const normalizedPointDollarValue = Number(pointDollarValue.toFixed(2));
+
+    const [result] = await pool.execute(
+      `UPDATE SPONSOR_COMPANIES
+       SET PointDollarValue = ?
+       WHERE SponsorCompanyID = ?`,
+      [normalizedPointDollarValue, companyId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    return res.json({
+      success: true,
+      sponsorCompanyId: companyId,
+      pointDollarValue: normalizedPointDollarValue,
+    });
+  } catch (error) {
+    console.error('Error updating sponsor point-dollar value:', error);
+    return res.status(500).json({ error: 'Failed to update point-dollar value' });
   }
 });
 

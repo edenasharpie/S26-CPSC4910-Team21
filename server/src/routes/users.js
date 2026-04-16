@@ -6,8 +6,19 @@ import {
   routeUserMatchesEffectiveSession,
 } from '../middleware/session-context.js';
 import { notifySponsorCompany } from '../services/notification-service.js';
+import {
+  normalizeNotificationPreferences,
+} from '../services/notification-service.js';
 
 const router = express.Router();
+
+function normalizeBooleanPreferenceInput(value) {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return null;
+}
 
 
 /**
@@ -20,19 +31,34 @@ router.get('/profile/:id', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
     let licenseNumber = null;
+    let alertPoints = null;
+    let alertOrders = null;
     if (String(user.UserType).toLowerCase() === 'driver') {
       const [driverRows] = await pool.execute(
-        'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+        'SELECT LicenseNumber, AlertPoints, AlertOrders FROM DRIVERS WHERE UserID = ? LIMIT 1',
         [userId]
       );
       licenseNumber = driverRows[0]?.LicenseNumber ?? null;
+      alertPoints = driverRows[0]?.AlertPoints ?? null;
+      alertOrders = driverRows[0]?.AlertOrders ?? null;
     }
+
+    const notificationPreferences = normalizeNotificationPreferences(user.Permissions, {
+      ...(alertPoints !== null ? { alertPoints: Boolean(alertPoints) } : {}),
+      ...(alertOrders !== null ? { alertOrders: Boolean(alertOrders) } : {}),
+    });
 
     // Omit sensitive fields before returning
     const { PassHash, ...safeUser } = user;
     res.status(200).json({
       ...safeUser,
       LicenseNumber: licenseNumber,
+      AlertPoints: notificationPreferences.alertPoints,
+      AlertOrders: notificationPreferences.alertOrders,
+      AlertApplicationStatusChange: notificationPreferences.alertApplicationStatusChange,
+      AlertApplicationEntry: notificationPreferences.alertApplicationEntry,
+      AlertProfileChangesByAdmin: notificationPreferences.alertProfileChangesByAdmin,
+      NotificationPreferences: notificationPreferences,
     });
   } catch (error) {
     console.error('Profile Route Error:', error);
@@ -71,10 +97,33 @@ router.patch('/profile/:id', async (req, res) => {
     const bio = bioRaw === '' ? null : bioRaw;
     const licenseNumberRaw = typeof req.body?.licenseNumber === 'string' ? req.body.licenseNumber.trim() : undefined;
     const licenseNumber = licenseNumberRaw === '' ? null : licenseNumberRaw;
+    const alertPoints = normalizeBooleanPreferenceInput(req.body?.alertPoints);
+    const alertOrders = normalizeBooleanPreferenceInput(req.body?.alertOrders);
+    const alertApplicationStatusChange = normalizeBooleanPreferenceInput(req.body?.alertApplicationStatusChange);
+    const alertApplicationEntry = normalizeBooleanPreferenceInput(req.body?.alertApplicationEntry);
+    const alertProfileChangesByAdmin = normalizeBooleanPreferenceInput(req.body?.alertProfileChangesByAdmin);
 
     const updates = [];
     const values = [];
     const hasLicenseNumberUpdate = licenseNumber !== undefined;
+    const hasNotificationPreferenceUpdate =
+      alertPoints !== undefined ||
+      alertOrders !== undefined ||
+      alertApplicationStatusChange !== undefined ||
+      alertApplicationEntry !== undefined ||
+      alertProfileChangesByAdmin !== undefined;
+
+    if (
+      alertPoints === null ||
+      alertOrders === null ||
+      alertApplicationStatusChange === null ||
+      alertApplicationEntry === null ||
+      alertProfileChangesByAdmin === null
+    ) {
+      return res.status(400).json({
+        error: 'Notification preferences must be boolean values.',
+      });
+    }
 
     if (firstName !== undefined) {
       if (!firstName) {
@@ -133,7 +182,7 @@ router.patch('/profile/:id', async (req, res) => {
       values.push(bio);
     }
 
-    if (updates.length === 0 && !hasLicenseNumberUpdate) {
+    if (updates.length === 0 && !hasLicenseNumberUpdate && !hasNotificationPreferenceUpdate) {
       return res.status(400).json({ error: 'No valid profile fields provided for update.' });
     }
 
@@ -143,6 +192,21 @@ router.patch('/profile/:id', async (req, res) => {
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
+
+    const [userRows] = await connection.execute(
+      `SELECT UserID, UserType, Permissions
+       FROM USERS
+       WHERE UserID = ?
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (userRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const userType = String(userRows[0].UserType ?? '').toLowerCase();
 
     if (updates.length > 0) {
       const [updateResult] = await connection.execute(
@@ -168,9 +232,51 @@ router.patch('/profile/:id', async (req, res) => {
       }
     }
 
+    if (hasNotificationPreferenceUpdate) {
+      const nextPreferences = normalizeNotificationPreferences(userRows[0].Permissions, {
+        ...(alertPoints !== undefined ? { alertPoints } : {}),
+        ...(alertOrders !== undefined ? { alertOrders } : {}),
+        ...(alertApplicationStatusChange !== undefined ? { alertApplicationStatusChange } : {}),
+        ...(alertApplicationEntry !== undefined ? { alertApplicationEntry } : {}),
+        ...(alertProfileChangesByAdmin !== undefined ? { alertProfileChangesByAdmin } : {}),
+      });
+
+      await connection.execute(
+        'UPDATE USERS SET Permissions = ? WHERE UserID = ?',
+        [JSON.stringify(nextPreferences), userId]
+      );
+
+      if (userType === 'driver') {
+        const driverUpdates = [];
+        const driverValues = [];
+
+        if (alertPoints !== undefined) {
+          driverUpdates.push('AlertPoints = ?');
+          driverValues.push(alertPoints ? 1 : 0);
+        }
+
+        if (alertOrders !== undefined) {
+          driverUpdates.push('AlertOrders = ?');
+          driverValues.push(alertOrders ? 1 : 0);
+        }
+
+        if (driverUpdates.length > 0) {
+          const [driverUpdateResult] = await connection.execute(
+            `UPDATE DRIVERS SET ${driverUpdates.join(', ')} WHERE UserID = ?`,
+            [...driverValues, userId]
+          );
+
+          if (driverUpdateResult.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Driver profile not found for this user.' });
+          }
+        }
+      }
+    }
+
     const [rows] = await connection.execute(
       `SELECT u.UserID, u.Username, u.Email, u.Phone, u.UserType, u.FirstName, u.MiddleName, u.LastName, u.Pronouns,
-              u.ActiveStatus, u.ProfilePicture, u.Bio, d.LicenseNumber
+              u.ActiveStatus, u.ProfilePicture, u.Bio, u.Permissions, d.LicenseNumber, d.AlertPoints, d.AlertOrders
        FROM USERS u
        LEFT JOIN DRIVERS d ON d.UserID = u.UserID
        WHERE u.UserID = ?
@@ -178,9 +284,27 @@ router.patch('/profile/:id', async (req, res) => {
       [userId]
     );
 
+    const responseRow = rows[0];
+    const responseNotificationPreferences = normalizeNotificationPreferences(responseRow.Permissions, {
+      ...(responseRow.AlertPoints !== null && responseRow.AlertPoints !== undefined
+        ? { alertPoints: Boolean(responseRow.AlertPoints) }
+        : {}),
+      ...(responseRow.AlertOrders !== null && responseRow.AlertOrders !== undefined
+        ? { alertOrders: Boolean(responseRow.AlertOrders) }
+        : {}),
+    });
+
     await connection.commit();
 
-    return res.status(200).json(rows[0]);
+    return res.status(200).json({
+      ...responseRow,
+      AlertPoints: responseNotificationPreferences.alertPoints,
+      AlertOrders: responseNotificationPreferences.alertOrders,
+      AlertApplicationStatusChange: responseNotificationPreferences.alertApplicationStatusChange,
+      AlertApplicationEntry: responseNotificationPreferences.alertApplicationEntry,
+      AlertProfileChangesByAdmin: responseNotificationPreferences.alertProfileChangesByAdmin,
+      NotificationPreferences: responseNotificationPreferences,
+    });
   } catch (error) {
     if (connection) {
       await connection.rollback();
@@ -602,6 +726,7 @@ router.post('/submit-application', async (req, res) => {
       actorUserId: resolvedDriverUserId,
       content: `New driver application submitted (#${applicationId}).`,
       category: 'driver_application_submitted',
+      preference: 'application_entry',
       metadata: {
         applicationId,
         sponsorCompanyId: rawSponsorCompanyId,

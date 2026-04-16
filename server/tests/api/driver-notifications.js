@@ -164,7 +164,64 @@ async function runTests() {
       throw new Error(`Expected unreadCount 0 after mark all, got ${postAllRes.data.unreadCount}`);
     }
 
-    log('TEST 6: mismatched session should be rejected', `GET /api/driver/${driverUser.userId}/notifications`);
+    const clearCategory = 'driver_clear_validation';
+    const clearUnreadId = await seedNotification(
+      driverUser.userId,
+      'Clear target unread notification',
+      clearCategory
+    );
+
+    await seedNotification(
+      driverUser.userId,
+      'Clear target already read notification',
+      clearCategory,
+      { readAt: '2026-04-16 09:00:00', readByAction: 'single' }
+    );
+
+    log('TEST 6: clear single notification', `DELETE /api/driver/${driverUser.userId}/notifications/${clearUnreadId}`);
+    const clearOneRes = await axios.delete(`${API_BASE_URL}/driver/${driverUser.userId}/notifications/${clearUnreadId}`);
+
+    if (clearOneRes.status !== 200 || clearOneRes.data.success !== true || clearOneRes.data.cleared !== true) {
+      throw new Error('Expected clear single notification to succeed');
+    }
+
+    const postClearSingleRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
+      params: { category: clearCategory },
+    });
+    if (postClearSingleRes.data.notifications.length !== 1) {
+      throw new Error('Expected one notification to remain in clear validation category after single clear');
+    }
+    if (Number(postClearSingleRes.data.unreadCount) !== 0) {
+      throw new Error(`Expected unreadCount 0 after single clear in category, got ${postClearSingleRes.data.unreadCount}`);
+    }
+
+    log('TEST 7: clear all notifications by category', `DELETE /api/driver/${driverUser.userId}/notifications/clear-all?category=${clearCategory}`);
+    const clearAllRes = await axios.delete(`${API_BASE_URL}/driver/${driverUser.userId}/notifications/clear-all`, {
+      params: { category: clearCategory },
+    });
+
+    if (clearAllRes.status !== 200 || clearAllRes.data.success !== true || Number(clearAllRes.data.clearedCount) !== 1) {
+      throw new Error('Expected clear-all by category to clear one remaining notification');
+    }
+
+    const postClearAllRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
+      params: { category: clearCategory },
+    });
+    if (postClearAllRes.data.notifications.length !== 0) {
+      throw new Error('Expected no notifications in clear validation category after clear-all');
+    }
+
+    log('TEST 8: clear missing notification should 404', `DELETE /api/driver/${driverUser.userId}/notifications/999999999`);
+    try {
+      await axios.delete(`${API_BASE_URL}/driver/${driverUser.userId}/notifications/999999999`);
+      throw new Error('Expected clear missing notification request to fail with 404');
+    } catch (error) {
+      if (error?.response?.status !== 404) {
+        throw error;
+      }
+    }
+
+    log('TEST 9: mismatched session should be rejected', `GET /api/driver/${driverUser.userId}/notifications`);
     try {
       await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
         headers: { Cookie: mismatchCookie },

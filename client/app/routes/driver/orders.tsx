@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLoaderData, Form } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { Button, Card, Table, Modal, Alert } from "~/components";
 import { createApiClient } from "~/utils/api";
@@ -181,13 +181,6 @@ export default function DriverOrders() {
             <p className="text-gray-600 dark:text-gray-400">Track recent purchases and update confirmed orders.</p>
           </div>
           <div className="flex items-center gap-2">
-            {user.OriginalUser && (
-              <Form method="post" action="/exit-assumption">
-                <Button variant="primary" size="sm" type="submit">
-                  Exit Assumed View
-                </Button>
-              </Form>
-            )}
             <Link to="/driver/catalogs">
               <Button variant="ghost" size="sm">
                 Back to Catalog
