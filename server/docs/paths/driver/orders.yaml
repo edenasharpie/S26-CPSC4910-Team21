@@ -235,3 +235,65 @@ ordersById:
         $ref: '../../schemas/common.yaml#/Responses/409Error'
       '500':
         $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+ordersByIdStatus:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver.
+      required: true
+      schema:
+        type: integer
+    - name: orderId
+      in: path
+      description: The order ID.
+      required: true
+      schema:
+        type: integer
+  patch:
+    tags:
+      - orders
+    summary: Update order status in assumed sponsor view
+    description: Sponsors acting through assumed-driver view can update a driver's order status.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - orderStatus
+            properties:
+              orderStatus:
+                type: string
+                enum: [confirmed, shipped, delivered, cancelled]
+    responses:
+      '200':
+        description: Order status updated successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: integer
+                orderStatus:
+                  type: string
+                  enum: [confirmed, shipped, delivered, cancelled]
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Only sponsors in assumed-driver view can update status.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        $ref: '../../schemas/common.yaml#/Responses/409Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'

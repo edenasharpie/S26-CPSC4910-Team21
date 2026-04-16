@@ -17,6 +17,7 @@ import { Badge } from "~/components/Badge";
 import { Button } from "~/components/Button";
 import { TopNav } from "~/components";
 import { getSession, isAssumedSession } from "~/utils/session.server";
+import { toApiUrl } from "~/utils/api-url";
 
 const ROLE_HOME_PATHS = {
   driver: "/driver/dashboard",
@@ -37,14 +38,53 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-export function loader({ request }: Route.LoaderArgs) {
+async function loadTopNavNotifications(request: Request, session: ReturnType<typeof getSession>) {
+  if (!session) {
+    return { items: [], unreadCount: 0 };
+  }
+
+  const role = String(session.UserType).toLowerCase();
+  if (role !== "driver" && role !== "sponsor") {
+    return { items: [], unreadCount: 0 };
+  }
+
+  const basePath =
+    role === "driver"
+      ? `/api/driver/${session.UserID}/notifications`
+      : `/api/sponsors/${session.UserID}/notifications`;
+
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+  const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
+
+  try {
+    const res = await fetch(toApiUrl(`${basePath}?limit=8&offset=0`), requestInit);
+    if (!res.ok) {
+      return { items: [], unreadCount: 0 };
+    }
+
+    const payload = await res.json();
+    const items = Array.isArray(payload?.notifications) ? payload.notifications : [];
+    const unreadCount = Number(payload?.unreadCount ?? 0);
+
+    return {
+      items,
+      unreadCount: Number.isFinite(unreadCount) ? unreadCount : 0,
+    };
+  } catch {
+    return { items: [], unreadCount: 0 };
+  }
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
   const session = getSession(request);
   const assumed = isAssumedSession(session);
+  const topNavNotifications = await loadTopNavNotifications(request, session);
 
   return {
     session,
     assumed,
     originalRole: session?.OriginalUser?.UserType ?? null,
+    topNavNotifications,
   };
 }
 
@@ -116,7 +156,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { session, assumed, originalRole } = useLoaderData<typeof loader>();
+  const { session, assumed, originalRole, topNavNotifications } = useLoaderData<typeof loader>();
   const autoExitTriggeredRef = useRef(false);
   const dashboardHref = session
     ? ROLE_HOME_PATHS[session.UserType as keyof typeof ROLE_HOME_PATHS] ?? "/"
@@ -179,6 +219,8 @@ export default function App() {
             : null
         }
         dashboardHref={dashboardHref}
+        notifications={topNavNotifications?.items ?? []}
+        unreadNotificationCount={Number(topNavNotifications?.unreadCount ?? 0)}
       />
       <Outlet />
       <footer className="border-t border-gray-200 bg-white/90 py-6 dark:border-gray-800 dark:bg-gray-950/90">

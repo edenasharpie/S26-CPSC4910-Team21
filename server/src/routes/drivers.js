@@ -3,6 +3,11 @@ const router = express.Router();
 import { pool } from '../db.js';
 import { verifyPassword } from '../utils/auth.js';
 import { routeUserMatchesEffectiveSession } from '../middleware/session-context.js';
+import {
+  getDriverNotificationContextByUserId,
+  notifyDriver,
+  notifySponsorCompany,
+} from '../services/notification-service.js';
 
 function getAssumedSponsorOriginalUser(req, expectedDriverUserId) {
   const sessionContext = req.sessionContext;
@@ -198,6 +203,115 @@ router.get('/sponsors/:userId', async (req, res) => {
   } catch (error) {
     console.error('Driver Sponsors Error:', error);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/drivers/:userId/company - Driver leaves current sponsor company
+router.delete('/:userId/company', async (req, res) => {
+  let connection;
+
+  try {
+    const driverUserId = Number(req.params.userId);
+
+    if (!Number.isInteger(driverUserId)) {
+      return res.status(400).json({ error: 'Invalid driver user ID.' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, driverUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [driverRows] = await connection.execute(
+      `SELECT u.UserID, u.UserType, u.ActiveStatus, u.FirstName, u.LastName,
+              d.LicenseNumber, d.SponsorCompanyID
+       FROM USERS u
+       JOIN DRIVERS d ON d.UserID = u.UserID
+       WHERE u.UserID = ?
+       LIMIT 1`,
+      [driverUserId]
+    );
+
+    if (driverRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Driver account not found.' });
+    }
+
+    const driver = driverRows[0];
+    if (String(driver.UserType).toLowerCase() !== 'driver') {
+      await connection.rollback();
+      return res.status(403).json({ error: 'Only driver accounts can leave sponsor companies.' });
+    }
+
+    if (!Boolean(driver.ActiveStatus)) {
+      await connection.rollback();
+      return res.status(403).json({ error: 'Inactive driver accounts cannot leave sponsor companies.' });
+    }
+
+    const sponsorCompanyId = Number(driver.SponsorCompanyID);
+    if (!Number.isInteger(sponsorCompanyId)) {
+      await connection.rollback();
+      return res.status(409).json({ error: 'Driver is not currently assigned to a sponsor company.' });
+    }
+
+    await connection.execute(
+      'UPDATE DRIVERS SET SponsorCompanyID = NULL WHERE UserID = ?',
+      [driverUserId]
+    );
+
+    await connection.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('SponsorCompanyID'), 'isSelfUpdate', true, 'success', true))`,
+      [driverUserId]
+    );
+
+    await notifySponsorCompany(connection, {
+      sponsorCompanyId,
+      actorUserId: driverUserId,
+      content: `Driver ${driver.FirstName} ${driver.LastName} left your company.`,
+      category: 'driver_left_company',
+      metadata: {
+        driverUserId,
+        driverId: driver.LicenseNumber,
+        sponsorCompanyId,
+        trigger: 'driver_left_company',
+      },
+    });
+
+    const driverNotificationContext = await getDriverNotificationContextByUserId(connection, driverUserId);
+    await notifyDriver(connection, {
+      driverContext: driverNotificationContext,
+      actorUserId: driverUserId,
+      content: 'You left your sponsor company.',
+      category: 'driver_removed_from_company',
+      force: true,
+      preference: 'none',
+      metadata: {
+        driverUserId,
+        driverId: driver.LicenseNumber,
+        sponsorCompanyId,
+        trigger: 'driver_left_company',
+      },
+    });
+
+    await connection.commit();
+    return res.status(200).json({
+      success: true,
+      message: 'Driver left sponsor company.',
+      driverId: driver.LicenseNumber,
+    });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error('[DRIVER_LEAVE_COMPANY] Error:', error);
+    return res.status(500).json({ error: 'Failed to leave sponsor company.' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 

@@ -5,8 +5,10 @@ import {
   closePool,
   createTestDriverProfile,
   createTestSponsor,
+  createTestSponsorProfile,
   createTestUser,
   cleanupSponsorCompanies,
+  getEventsByUserId,
   log,
 } from '../setup.js';
 import { pool } from '../../src/db.js';
@@ -27,6 +29,16 @@ function buildSessionCookie(user) {
 
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: 60 * 60 * 24 });
   return `sessionId=${token}`;
+}
+
+function parseEventProperties(rawProperties) {
+  if (!rawProperties) return {};
+  if (typeof rawProperties === 'object') return rawProperties;
+  try {
+    return JSON.parse(rawProperties);
+  } catch {
+    return {};
+  }
 }
 
 async function cleanupApplications(applicationIds, trackedLicenseNumbers = []) {
@@ -81,7 +93,13 @@ async function runTests() {
 
     const driverUser = await createTestUser({ userType: 'driver' });
     const otherDriverUser = await createTestUser({ userType: 'driver' });
-    createdUserIds.push(driverUser.userId, otherDriverUser.userId);
+    const sponsorUser = await createTestUser({ userType: 'sponsor' });
+    createdUserIds.push(driverUser.userId, otherDriverUser.userId, sponsorUser.userId);
+
+    await createTestSponsorProfile({
+      userId: sponsorUser.userId,
+      sponsorCompanyId,
+    });
 
     const driverProfile = await createTestDriverProfile({
       userId: driverUser.userId,
@@ -114,6 +132,19 @@ async function runTests() {
 
     if (String(submitRes.data.driverId) !== String(driverLicenseNumber)) {
       throw new Error('Expected submit endpoint to resolve driverId to license number.');
+    }
+
+    const sponsorNotifications = await getEventsByUserId(sponsorUser.userId, 'Notification', 20);
+    const submitNotification = sponsorNotifications.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return (
+        properties.category === 'driver_application_submitted' &&
+        Number(properties.applicationId) === Number(submitRes.data.applicationId)
+      );
+    });
+
+    if (!submitNotification) {
+      throw new Error('Expected sponsor notification after application submission');
     }
 
     log('TEST 2: Duplicate pending application returns 409', 'POST /api/user/submit-application');

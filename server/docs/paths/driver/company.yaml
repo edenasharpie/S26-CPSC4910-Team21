@@ -1,0 +1,51 @@
+driverCompanyMembership:
+  parameters:
+    - name: userId
+      in: path
+      description: Driver user ID for company membership operations.
+      required: true
+      schema:
+        type: integer
+  delete:
+    tags:
+      - accounts
+    summary: Driver leaves sponsor company
+    description: Removes the authenticated driver from their current sponsor company and emits company and driver notifications.
+    responses:
+      '200':
+        description: Driver left sponsor company.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+                driverId:
+                  type: string
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Forbidden for inactive or out-of-scope driver context.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '409':
+        description: Driver is not currently assigned to a sponsor company.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'

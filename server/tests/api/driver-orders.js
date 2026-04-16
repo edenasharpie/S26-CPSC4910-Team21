@@ -1,8 +1,17 @@
 import axios from 'axios';
-import { BASE_URL, log, createTestSponsor, cleanupSponsorCompanies, closePool } from '../setup.js';
+import jwt from 'jsonwebtoken';
+import {
+  BASE_URL,
+  log,
+  createTestSponsor,
+  cleanupSponsorCompanies,
+  closePool,
+  getEventsByUserId,
+} from '../setup.js';
 import { pool } from '../../src/db.js';
 
 const API_BASE_URL = `${BASE_URL}/api`;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production-fleetscore';
 
 const createdSponsorIds = [];
 const createdUserIds = [];
@@ -26,6 +35,18 @@ async function createTestUser(userType = 'driver') {
     );
 
     return result.insertId;
+  } finally {
+    connection.release();
+  }
+}
+
+async function createTestSponsorProfile(userId, sponsorCompanyId) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.query(
+      'INSERT INTO SPONSORS (UserID, SponsorCompanyID) VALUES (?, ?)',
+      [userId, sponsorCompanyId]
+    );
   } finally {
     connection.release();
   }
@@ -111,6 +132,61 @@ async function getDriverPointBalance(userId) {
   }
 }
 
+async function setDriverAlertOrders(userId, enabled) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.query('UPDATE DRIVERS SET AlertOrders = ? WHERE UserID = ?', [enabled ? 1 : 0, userId]);
+  } finally {
+    connection.release();
+  }
+}
+
+async function getLatestOrderPointTransaction(orderId, expectedReason) {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.query(
+      `SELECT TransactionID, UserChanged, PointChange, ReasonForChange
+       FROM POINT_TRANSACTIONS
+       WHERE ReasonForChange = ?
+       ORDER BY TransactionID DESC
+       LIMIT 1`,
+      [expectedReason ?? `Order #${orderId} updated`]
+    );
+    return rows[0] ?? null;
+  } finally {
+    connection.release();
+  }
+}
+
+function buildSessionCookie(user, originalUser = null) {
+  const payload = {
+    UserID: user.userId,
+    UserType: user.userType,
+    Username: user.username,
+  };
+
+  if (originalUser) {
+    payload.OriginalUser = {
+      UserID: originalUser.userId,
+      UserType: originalUser.userType,
+      Username: originalUser.username,
+    };
+  }
+
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: 60 * 60 * 24 });
+  return `sessionId=${token}`;
+}
+
+function parseEventProperties(rawProperties) {
+  if (!rawProperties) return {};
+  if (typeof rawProperties === 'object') return rawProperties;
+  try {
+    return JSON.parse(rawProperties);
+  } catch {
+    return {};
+  }
+}
+
 async function cleanupTestData() {
   const connection = await pool.getConnection();
   try {
@@ -132,8 +208,10 @@ async function cleanupTestData() {
     }
 
     for (const userId of createdUserIds) {
+      await connection.query('DELETE FROM EVENTS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM POINT_TRANSACTIONS WHERE UserChanged = ?', [userId]);
       await connection.query('DELETE FROM DRIVERS WHERE UserID = ?', [userId]);
+      await connection.query('DELETE FROM SPONSORS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM USERS WHERE UserID = ?', [userId]);
       console.log(`Deleted user ${userId}`);
     }
@@ -166,8 +244,17 @@ async function runTests() {
 
     const driverUserId = await createTestUser('driver');
     createdUserIds.push(driverUserId);
+
+    const sponsorUserId = await createTestUser('sponsor');
+    createdUserIds.push(sponsorUserId);
+    await createTestSponsorProfile(sponsorUserId, sponsorCompanyId);
+
     const license = await createTestDriver(driverUserId, sponsorCompanyId, 1000);
     createdDriverLicenses.push(license);
+
+    const driverIdentity = { userId: driverUserId, userType: 'driver', username: `drv_${driverUserId}` };
+    const sponsorIdentity = { userId: sponsorUserId, userType: 'sponsor', username: `sps_${sponsorUserId}` };
+    const assumedSponsorCookie = buildSessionCookie(driverIdentity, sponsorIdentity);
 
     const catalogId = await createTestCatalog(sponsorCompanyId);
     createdCatalogIds.push(catalogId);
@@ -304,8 +391,110 @@ async function runTests() {
       log('Expected cancelled order update rejection:', error.response.data);
     }
 
-    // Test 9: invalid user id
-    log('TEST 9: Invalid user id should fail...', 'GET /api/driver/abc/orders');
+    // Test 9: sponsor-assumed update attributes UserChanged and notifies driver
+    log('TEST 9: Sponsor assumed-view update records actor and notifies driver', `PATCH /api/driver/${driverUserId}/orders/:orderId`);
+    const sponsorManagedOrderResponse = await axios.post(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
+      items: [{ itemId: itemA, quantity: 1 }],
+    });
+
+    const sponsorManagedOrderId = sponsorManagedOrderResponse.data.orderId;
+    createdOrderIds.push(sponsorManagedOrderId);
+
+    const sponsorUpdateResponse = await axios.patch(
+      `${API_BASE_URL}/driver/${driverUserId}/orders/${sponsorManagedOrderId}`,
+      {
+        items: [
+          { itemId: itemA, quantity: 1 },
+          { itemId: itemB, quantity: 1 },
+        ],
+      },
+      {
+        headers: { Cookie: assumedSponsorCookie },
+      }
+    );
+
+    if (sponsorUpdateResponse.status !== 200) {
+      throw new Error('Expected sponsor-assumed order update to succeed');
+    }
+
+    const updatedOrderTransaction = await getLatestOrderPointTransaction(
+      sponsorManagedOrderId,
+      `Order #${sponsorManagedOrderId} updated`
+    );
+    if (!updatedOrderTransaction) {
+      throw new Error('Expected point transaction for sponsor-assumed order update');
+    }
+
+    if (Number(updatedOrderTransaction.UserChanged) !== Number(sponsorUserId)) {
+      throw new Error('Expected UserChanged to be sponsor user for assumed sponsor order update');
+    }
+
+    const driverNotificationsAfterSponsorUpdate = await getEventsByUserId(driverUserId, 'Notification', 50);
+    const sponsorUpdateNotification = driverNotificationsAfterSponsorUpdate.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return (
+        properties.category === 'driver_order_changed_by_sponsor' &&
+        Number(properties.orderId) === Number(sponsorManagedOrderId) &&
+        properties.changeType === 'updated_by_sponsor'
+      );
+    });
+
+    if (!sponsorUpdateNotification) {
+      throw new Error('Expected driver notification for sponsor-assumed order update');
+    }
+
+    // Test 10: sponsor-assumed order status update notifies driver
+    log('TEST 10: Sponsor assumed-view status update notifies driver', `PATCH /api/driver/${driverUserId}/orders/:orderId/status`);
+    const beforeStatusNotifications = await getEventsByUserId(driverUserId, 'Notification', 80);
+    const beforeStatusCount = beforeStatusNotifications.length;
+
+    const statusResponse = await axios.patch(
+      `${API_BASE_URL}/driver/${driverUserId}/orders/${sponsorManagedOrderId}/status`,
+      { orderStatus: 'shipped' },
+      {
+        headers: { Cookie: assumedSponsorCookie },
+      }
+    );
+
+    if (statusResponse.status !== 200 || statusResponse.data.orderStatus !== 'shipped') {
+      throw new Error('Expected sponsor-assumed order status update to shipped');
+    }
+
+    const afterStatusNotifications = await getEventsByUserId(driverUserId, 'Notification', 90);
+    const statusNotification = afterStatusNotifications.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return (
+        properties.category === 'driver_order_status_changed' &&
+        Number(properties.orderId) === Number(sponsorManagedOrderId) &&
+        properties.newStatus === 'shipped'
+      );
+    });
+
+    if (!statusNotification) {
+      throw new Error('Expected driver notification for sponsor-assumed order status change');
+    }
+
+    // Test 11: alertOrders disables status notifications
+    log('TEST 11: Driver AlertOrders disables status notifications', `PATCH /api/driver/${driverUserId}/orders/:orderId/status`);
+    await setDriverAlertOrders(driverUserId, false);
+
+    await axios.patch(
+      `${API_BASE_URL}/driver/${driverUserId}/orders/${sponsorManagedOrderId}/status`,
+      { orderStatus: 'delivered' },
+      {
+        headers: { Cookie: assumedSponsorCookie },
+      }
+    );
+
+    const afterSuppressedStatusNotifications = await getEventsByUserId(driverUserId, 'Notification', 100);
+    if (afterSuppressedStatusNotifications.length !== beforeStatusCount + 1) {
+      throw new Error('Expected no additional status notification when AlertOrders is disabled');
+    }
+
+    await setDriverAlertOrders(driverUserId, true);
+
+    // Test 12: invalid user id
+    log('TEST 12: Invalid user id should fail...', 'GET /api/driver/abc/orders');
     try {
       await axios.get(`${API_BASE_URL}/driver/abc/orders`);
       throw new Error('Expected invalid user id to fail');

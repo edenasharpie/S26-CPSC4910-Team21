@@ -1,6 +1,18 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Form, Link, useNavigate } from "react-router";
+import { toApiUrl } from "~/utils/api-url";
+import { Badge } from "~/components/Badge";
 
 type NavRole = "driver" | "sponsor" | "admin";
+
+type NotificationItem = {
+  notificationId: number;
+  timestamp?: string | null;
+  content?: string;
+  category?: string;
+  readAt?: string | null;
+  properties?: Record<string, unknown>;
+};
 
 interface TopNavProps {
   user:
@@ -13,6 +25,8 @@ interface TopNavProps {
       }
     | null;
   dashboardHref?: string;
+  notifications?: NotificationItem[];
+  unreadNotificationCount?: number;
 }
 
 const NAV_SHELL_BY_ROLE: Record<"guest" | NavRole, string> = {
@@ -26,11 +40,154 @@ const NAV_SHELL_BY_ROLE: Record<"guest" | NavRole, string> = {
     "bg-gradient-to-r from-rose-50 via-red-50 to-rose-100 border-rose-200 text-rose-900 dark:from-rose-900/40 dark:via-red-900/30 dark:to-rose-900/40 dark:border-rose-700 dark:text-rose-100",
 };
 
-export function TopNav({ user, dashboardHref }: TopNavProps) {
+export function TopNav({ user, dashboardHref, notifications, unreadNotificationCount }: TopNavProps) {
   const navigate = useNavigate();
   const role = user?.role ?? "guest";
   const initials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`.trim() ||
     (user?.username?.[0]?.toUpperCase() ?? "U");
+  const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
+  const [notificationItems, setNotificationItems] = useState<NotificationItem[]>(notifications ?? []);
+  const [unreadCount, setUnreadCount] = useState(unreadNotificationCount ?? 0);
+  const [isNotificationMutationPending, setIsNotificationMutationPending] = useState(false);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const notificationBasePath = useMemo(() => {
+    if (!user?.userId) return null;
+    if (user.role === "driver") {
+      return `/api/driver/${user.userId}/notifications`;
+    }
+    if (user.role === "sponsor") {
+      return `/api/sponsors/${user.userId}/notifications`;
+    }
+    return null;
+  }, [user?.role, user?.userId]);
+
+  useEffect(() => {
+    setNotificationItems(notifications ?? []);
+  }, [notifications]);
+
+  useEffect(() => {
+    setUnreadCount(unreadNotificationCount ?? 0);
+  }, [unreadNotificationCount]);
+
+  useEffect(() => {
+    if (!isNotificationMenuOpen) return undefined;
+
+    function handleOutsideClick(event: MouseEvent) {
+      if (!notificationMenuRef.current) return;
+      if (!notificationMenuRef.current.contains(event.target as Node)) {
+        setIsNotificationMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [isNotificationMenuOpen]);
+
+  function categoryVariant(category: string | undefined) {
+    const normalized = String(category ?? "").toLowerCase();
+    if (
+      normalized.includes("point")
+    ) {
+      return "success" as const;
+    }
+    if (
+      normalized.includes("order")
+    ) {
+      return "info" as const;
+    }
+    if (
+      normalized.includes("application")
+    ) {
+      return "warning" as const;
+    }
+    if (
+      normalized.includes("left_company") ||
+      normalized.includes("removed")
+    ) {
+      return "danger" as const;
+    }
+    return "default" as const;
+  }
+
+  function categoryLabel(category: string | undefined) {
+    const normalized = String(category ?? "").trim();
+    if (!normalized) return "General";
+    return normalized
+      .split("_")
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(" ");
+  }
+
+  function formatNotificationTimestamp(timestamp: string | null | undefined) {
+    if (!timestamp) return "Unknown";
+    const parsed = new Date(timestamp);
+    if (Number.isNaN(parsed.getTime())) return "Unknown";
+    return parsed.toLocaleString();
+  }
+
+  async function markNotificationRead(notificationId: number) {
+    if (!notificationBasePath) return;
+
+    setIsNotificationMutationPending(true);
+    try {
+      const response = await fetch(toApiUrl(`${notificationBasePath}/${notificationId}/read`), {
+        method: "PATCH",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        console.error("Failed to mark notification read", {
+          notificationId,
+          status: response.status,
+        });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      setNotificationItems((previous) =>
+        previous.map((item) =>
+          item.notificationId === notificationId ? { ...item, readAt: item.readAt ?? now } : item
+        )
+      );
+      setUnreadCount((previous) => (previous > 0 ? previous - 1 : 0));
+    } catch (error) {
+      console.error("Error marking notification read", error);
+    } finally {
+      setIsNotificationMutationPending(false);
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    if (!notificationBasePath) return;
+
+    setIsNotificationMutationPending(true);
+    try {
+      const response = await fetch(toApiUrl(`${notificationBasePath}/read-all`), {
+        method: "PATCH",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        console.error("Failed to mark all notifications read", {
+          status: response.status,
+        });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      setNotificationItems((previous) => previous.map((item) => ({ ...item, readAt: item.readAt ?? now })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error("Error marking all notifications read", error);
+    } finally {
+      setIsNotificationMutationPending(false);
+    }
+  }
+
+  const hasNotificationSurface = Boolean(notificationBasePath);
 
   return (
     <header className={`border-b ${NAV_SHELL_BY_ROLE[role]}`}>
@@ -92,12 +249,111 @@ export function TopNav({ user, dashboardHref }: TopNavProps) {
                 >
                   Dashboard
                 </Link>
+                {hasNotificationSurface ? (
+                  <div className="relative" ref={notificationMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsNotificationMenuOpen((previous) => !previous)}
+                      className="relative rounded-md border border-current/20 px-3 py-1.5 text-current hover:bg-black/5 dark:hover:bg-white/10"
+                      aria-label="Open notifications"
+                    >
+                      <span className="flex items-center gap-2">
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M12 3C8.68629 3 6 5.68629 6 9V12.5L4.5 15.5H19.5L18 12.5V9C18 5.68629 15.3137 3 12 3Z"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M10 18C10.4 19.2 11.2 20 12 20C12.8 20 13.6 19.2 14 18"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        Alerts
+                      </span>
+                      {unreadCount > 0 ? (
+                        <span className="absolute -right-2 -top-2 inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      ) : null}
+                    </button>
+
+                    {isNotificationMenuOpen ? (
+                      <div className="absolute right-0 z-50 mt-2 w-90 max-w-[90vw] rounded-xl border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-800 dark:bg-gray-900">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Notifications</h3>
+                          <button
+                            type="button"
+                            onClick={() => void markAllNotificationsRead()}
+                            disabled={isNotificationMutationPending || unreadCount === 0}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                          >
+                            Mark all read
+                          </button>
+                        </div>
+
+                        <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                          {notificationItems.length === 0 ? (
+                            <p className="rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                              No notifications yet.
+                            </p>
+                          ) : (
+                            notificationItems.map((notification) => {
+                              const read = Boolean(notification.readAt);
+                              return (
+                                <div
+                                  key={notification.notificationId}
+                                  className={`rounded-lg border px-3 py-2 ${
+                                    read
+                                      ? "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800"
+                                      : "border-indigo-200 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-900/20"
+                                  }`}
+                                >
+                                  <div className="mb-1 flex items-center justify-between gap-2">
+                                    <Badge variant={categoryVariant(notification.category)} size="sm">
+                                      {categoryLabel(notification.category)}
+                                    </Badge>
+                                    {!read ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void markNotificationRead(Number(notification.notificationId))}
+                                        disabled={isNotificationMutationPending}
+                                        className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                                      >
+                                        Mark read
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                  <p className={`text-xs ${read ? "text-gray-600 dark:text-gray-300" : "font-semibold text-gray-900 dark:text-gray-100"}`}>
+                                    {notification.content || "Notification"}
+                                  </p>
+                                  <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                                    {formatNotificationTimestamp(notification.timestamp ?? null)}
+                                  </p>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => navigate(`/${user.role}/profile/${user.userId}/edit`)}
                   className="flex items-center gap-2 rounded-md border border-current/20 px-2 py-1.5 text-current hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                 >
-                  <div className="flex-shrink-0 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase w-6 h-6">
+                  <div className="shrink-0 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase w-6 h-6">
                     {initials}
                   </div>
                   <div className="text-left hidden sm:block">

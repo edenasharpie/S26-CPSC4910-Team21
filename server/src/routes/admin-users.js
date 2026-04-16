@@ -11,6 +11,11 @@ import {
 } from '../db.js';
 import { hashPassword, hasBooleanPermission } from '../utils/auth.js';
 import { processBulkLoadFile } from '../services/bulk-load-service.js';
+import {
+  getDriverNotificationContextByUserId,
+  notifyDriver,
+  notifySponsorCompany,
+} from '../services/notification-service.js';
 
 const router = Router();
 const DEFAULT_PAGE_SIZE = 25;
@@ -465,6 +470,9 @@ router.patch('/users/:id', async (request, response) => {
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
+    const actorUserIdRaw = request.sessionContext?.effectiveUser?.UserID;
+    const actorUserId = Number.isInteger(Number(actorUserIdRaw)) ? Number(actorUserIdRaw) : null;
+
     const { id } = request.params;
     const {
       username,
@@ -559,7 +567,31 @@ router.patch('/users/:id', async (request, response) => {
     const userType = userTypeResult[0][0].UserType;
 
     // Update role-specific tables
+    let previousSponsorCompanyId = null;
+    let nextSponsorCompanyId = null;
+    let driverLicenseNumber = null;
+    let driverFullName = null;
+
     if (userType.toLowerCase() === 'driver' && hasDriverUpdates) {
+      if (sponsorCompanyId !== undefined) {
+        const [driverBeforeRows] = await connection.query(
+          `SELECT d.SponsorCompanyID, d.LicenseNumber, u.FirstName, u.LastName
+           FROM DRIVERS d
+           JOIN USERS u ON u.UserID = d.UserID
+           WHERE d.UserID = ?
+           LIMIT 1`,
+          [id]
+        );
+
+        if (driverBeforeRows.length > 0) {
+          const previousCompanyRaw = driverBeforeRows[0].SponsorCompanyID;
+          previousSponsorCompanyId =
+            previousCompanyRaw === null ? null : Number(previousCompanyRaw);
+          driverLicenseNumber = driverBeforeRows[0].LicenseNumber;
+          driverFullName = `${driverBeforeRows[0].FirstName ?? ''} ${driverBeforeRows[0].LastName ?? ''}`.trim();
+        }
+      }
+
       const driverUpdates = [];
       const driverValues = [];
 
@@ -588,6 +620,62 @@ router.patch('/users/:id', async (request, response) => {
         driverValues.push(id);
         const driverUpdateQuery = `UPDATE DRIVERS SET ${driverUpdates.join(', ')} WHERE UserID = ?`;
         await connection.query(driverUpdateQuery, driverValues);
+      }
+
+      if (sponsorCompanyId !== undefined) {
+        const [driverAfterRows] = await connection.query(
+          'SELECT SponsorCompanyID FROM DRIVERS WHERE UserID = ? LIMIT 1',
+          [id]
+        );
+
+        if (driverAfterRows.length > 0) {
+          const nextCompanyRaw = driverAfterRows[0].SponsorCompanyID;
+          nextSponsorCompanyId = nextCompanyRaw === null ? null : Number(nextCompanyRaw);
+        }
+
+        const companyChanged = previousSponsorCompanyId !== nextSponsorCompanyId;
+        if (companyChanged && Number.isInteger(previousSponsorCompanyId)) {
+          await connection.query(
+            `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+             VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('SponsorCompanyID'), 'isSelfUpdate', false, 'success', true))`,
+            [actorUserId ?? Number(id)]
+          );
+
+          await notifySponsorCompany(connection, {
+            sponsorCompanyId: previousSponsorCompanyId,
+            actorUserId,
+            content: `Driver ${driverFullName || id} left the company.`,
+            category: 'driver_left_company',
+            metadata: {
+              driverUserId: Number(id),
+              driverId: driverLicenseNumber,
+              previousSponsorCompanyId,
+              nextSponsorCompanyId,
+              trigger: 'admin_driver_company_change',
+            },
+          });
+
+          const driverNotificationContext = await getDriverNotificationContextByUserId(
+            connection,
+            Number(id)
+          );
+
+          await notifyDriver(connection, {
+            driverContext: driverNotificationContext,
+            actorUserId,
+            content: 'You were removed from your sponsor company.',
+            category: 'driver_removed_from_company',
+            force: true,
+            preference: 'none',
+            metadata: {
+              driverUserId: Number(id),
+              driverId: driverLicenseNumber,
+              previousSponsorCompanyId,
+              nextSponsorCompanyId,
+              trigger: 'admin_driver_company_change',
+            },
+          });
+        }
       }
     } else if (userType.toLowerCase() === 'sponsor' && sponsorCompanyId !== undefined) {
       // Update SPONSORS table

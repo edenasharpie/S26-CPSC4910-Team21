@@ -1,0 +1,161 @@
+notifications:
+  parameters:
+    - name: userId
+      in: path
+      description: Driver user ID.
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - notifications
+    summary: List driver notifications
+    description: Returns notifications for the authenticated driver account.
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+      - name: category
+        in: query
+        schema:
+          type: string
+      - name: unreadOnly
+        in: query
+        schema:
+          type: boolean
+    responses:
+      '200':
+        description: Notification list payload.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notifications:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      notificationId:
+                        type: integer
+                      timestamp:
+                        type: string
+                        format: date-time
+                      content:
+                        type: string
+                      category:
+                        type: string
+                      actorUserId:
+                        type: integer
+                        nullable: true
+                      readAt:
+                        type: string
+                        nullable: true
+                        format: date-time
+                      properties:
+                        type: object
+                totalCount:
+                  type: integer
+                unreadCount:
+                  type: integer
+                limit:
+                  type: integer
+                offset:
+                  type: integer
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+notificationByIdRead:
+  parameters:
+    - name: userId
+      in: path
+      description: Driver user ID.
+      required: true
+      schema:
+        type: integer
+    - name: notificationId
+      in: path
+      description: Notification event ID.
+      required: true
+      schema:
+        type: integer
+  patch:
+    tags:
+      - notifications
+    summary: Mark one driver notification as read
+    responses:
+      '200':
+        description: Notification marked as read (or already read).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                updated:
+                  type: boolean
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+notificationsReadAll:
+  parameters:
+    - name: userId
+      in: path
+      description: Driver user ID.
+      required: true
+      schema:
+        type: integer
+  patch:
+    tags:
+      - notifications
+    summary: Mark all driver notifications as read
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              category:
+                type: string
+    responses:
+      '200':
+        description: Mark-all result.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                updatedCount:
+                  type: integer
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
