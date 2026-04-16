@@ -129,7 +129,6 @@ export default function SponsorPortal() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const navigate = useNavigate();
 
   // --- STAT CALCULATIONS ---
@@ -290,10 +289,10 @@ export default function SponsorPortal() {
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">Analytics</h2>
               <Button 
                 variant="secondary" 
-                onClick={() => setIsAuditModalOpen(true)} 
+                onClick={() => navigate("/sponsor/reports")} 
                 className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all shadow-sm"
               >
-                Audit Reports
+                Reports
               </Button>
               <Button 
                 variant="secondary" 

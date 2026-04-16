@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link, useLoaderData } from 'react-router';
+import { useLoaderData } from 'react-router';
 import { Card, Button, Table, Badge, Alert } from '~/components';
 import { requireAuth } from '~/utils/session.server';
 import type { Route } from './+types/reports';
@@ -194,6 +194,26 @@ export default function SponsorReports() {
     }
   };
 
+  const handleExportCSV = () => {
+    if (!reportData || !selectedReportType) return;
+
+    try {
+      const csvContent = buildReportCsv(reportData, selectedReportType);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedReportType}-report-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error: any) {
+      console.error('Error exporting CSV:', error);
+      setError(error.message || 'Failed to export CSV. Please try again.');
+    }
+  };
+
   const handleDownloadDailyReport = async (report: GeneratedReportRow) => {
     try {
       setDailyDownloadingId(report.ReportID);
@@ -239,12 +259,6 @@ export default function SponsorReports() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <Link
-        to="/"
-        className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6"
-      >
-        ← Home
-      </Link>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Reports</h1>
         <p className="text-gray-600">Generate and export reports for your company</p>
@@ -362,13 +376,21 @@ export default function SponsorReports() {
               Generate Report
             </Button>
             {reportData && (
-              <Button
-                variant="secondary"
-                onClick={handleExportPDF}
-                isLoading={exporting}
-              >
-                Export to PDF
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={handleExportPDF}
+                  isLoading={exporting}
+                >
+                  Export to PDF
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleExportCSV}
+                >
+                  Export to CSV
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -617,4 +639,77 @@ function getTableColumns(reportType: string) {
     default:
       return [];
   }
+}
+
+function buildReportCsv(reportData: ReportData, reportType: string) {
+  const rows: string[][] = [];
+
+  rows.push(['Report Type', reportType]);
+
+  const summaryEntries: Array<[string, string | number | undefined]> = [
+    ['Date Range Start', reportData.dateRangeStart],
+    ['Date Range End', reportData.dateRangeEnd],
+    ['Total Applications', reportData.totalApplications],
+    ['Pending Count', reportData.pendingCount],
+    ['Accepted Count', reportData.acceptedCount],
+    ['Rejected Count', reportData.rejectedCount],
+    ['Total Transactions', reportData.totalTransactions],
+    ['Points Added', reportData.totalPointsAdded],
+    ['Points Deducted', reportData.totalPointsDeducted],
+    ['Net Point Change', reportData.netPointChange],
+    ['Total Orders', reportData.totalOrders],
+    ['Total Points Spent', reportData.totalPointsSpent],
+    ['Total Dollars Spent', reportData.totalDollarsSpent],
+    ['Confirmed Count', reportData.confirmedCount],
+    ['Shipped Count', reportData.shippedCount],
+    ['Delivered Count', reportData.deliveredCount],
+    ['Cancelled Count', reportData.cancelledCount],
+  ];
+
+  rows.push([]);
+  rows.push(['Summary Key', 'Summary Value']);
+  for (const [label, value] of summaryEntries) {
+    if (value !== undefined && value !== null) {
+      rows.push([label, String(value)]);
+    }
+  }
+
+  if (Array.isArray(reportData.detailedRecords) && reportData.detailedRecords.length > 0) {
+    rows.push([]);
+    rows.push(['Detailed Records']);
+
+    const headers = collectCsvHeaders(reportData.detailedRecords);
+    rows.push(headers);
+
+    for (const record of reportData.detailedRecords) {
+      rows.push(headers.map((header) => stringifyCsvValue((record as Record<string, unknown>)[header])));
+    }
+  }
+
+  return rows.map((row) => row.map(stringifyCsvValue).join(',')).join('\n');
+}
+
+function collectCsvHeaders(records: any[]) {
+  const headers = new Set<string>();
+
+  for (const record of records) {
+    if (!record || typeof record !== 'object') continue;
+    for (const key of Object.keys(record)) {
+      headers.add(key);
+    }
+  }
+
+  return Array.from(headers);
+}
+
+function stringifyCsvValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return '""';
+  }
+
+  const normalized = Array.isArray(value) || typeof value === 'object'
+    ? JSON.stringify(value)
+    : String(value);
+
+  return `"${normalized.replace(/"/g, '""')}"`;
 }

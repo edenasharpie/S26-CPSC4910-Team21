@@ -82,18 +82,18 @@ export default function About() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <div className="relative overflow-hidden border-b border-cyan-300/20 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.25),transparent_42%),radial-gradient(circle_at_82%_18%,rgba(244,114,182,0.2),transparent_48%),linear-gradient(140deg,#020617_0%,#111827_52%,#172554_100%)]">
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-gray-950 dark:text-white">
+      <div className="relative overflow-hidden border-b border-slate-200 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.14),transparent_42%),radial-gradient(circle_at_82%_18%,rgba(244,114,182,0.12),transparent_48%),linear-gradient(140deg,#f8fafc_0%,#eff6ff_52%,#e2e8f0_100%)] dark:border-cyan-300/20 dark:bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.25),transparent_42%),radial-gradient(circle_at_82%_18%,rgba(244,114,182,0.2),transparent_48%),linear-gradient(140deg,#020617_0%,#111827_52%,#172554_100%)]">
         <div className="container-padding py-12 sm:py-14">
           <div className="mx-auto max-w-6xl space-y-5">
             <Link
               to="/"
-              className="inline-flex text-sm font-semibold text-cyan-200 hover:text-cyan-100"
+              className="inline-flex text-sm font-semibold text-cyan-700 hover:text-cyan-900 dark:text-cyan-200 dark:hover:text-cyan-100"
             >
               ← Back to Home
             </Link>
-            <h1 className="font-display text-4xl font-black text-white sm:text-5xl">About FleetScore</h1>
-            <p className="max-w-3xl text-base text-slate-200 sm:text-lg">
+            <h1 className="font-display text-4xl font-black text-slate-900 dark:text-white sm:text-5xl">About FleetScore</h1>
+            <p className="max-w-3xl text-base text-slate-700 dark:text-slate-200 sm:text-lg">
               FleetScore is a truck driver incentive and rewards platform designed to give sponsors,
               drivers, and administrators a shared source of truth for points, catalogs, and accountability.
             </p>
@@ -121,14 +121,14 @@ export default function About() {
             />
           </section>
 
-          <section className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6 sm:p-8">
-            <h2 className="font-display text-2xl font-black text-white">Project Team</h2>
-            <p className="mt-2 text-sm text-slate-300">
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-slate-700 dark:bg-slate-900/60">
+            <h2 className="font-display text-2xl font-black text-slate-900 dark:text-white">Project Team</h2>
+            <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
               FleetScore was developed for Clemson University Spring 2026 Senior Computing Practicum.
             </p>
-            <ul className="mt-4 grid gap-3 sm:grid-cols-2 text-sm text-slate-200">
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 text-sm text-slate-700 dark:text-slate-200">
               {teamMembers.map((member) => (
-                <li key={member} className="rounded-lg border border-slate-700 bg-slate-950/60 px-4 py-3">
+                <li key={member} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/60">
                   {member}
                 </li>
               ))}
@@ -136,10 +136,10 @@ export default function About() {
           </section>
 
           <section className="flex flex-wrap gap-3">
-            <Link to="/features" className="rounded-md border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-300/20">
+            <Link to="/features" className="rounded-md border border-cyan-300/30 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-100 dark:bg-cyan-300/10 dark:text-cyan-200 dark:hover:bg-cyan-300/20">
               View Features
             </Link>
-            <Link to="/register" className="rounded-md border border-orange-300/30 bg-orange-300/10 px-4 py-2 text-sm font-semibold text-orange-200 hover:bg-orange-300/20">
+            <Link to="/register" className="rounded-md border border-orange-300/30 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100 dark:bg-orange-300/10 dark:text-orange-200 dark:hover:bg-orange-300/20">
               Create Account
             </Link>
           </section>
@@ -159,9 +159,9 @@ function InfoCard({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-slate-800 bg-slate-900 p-4 ${className}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="mt-2 text-sm text-slate-200">{value}</p>
+    <div className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">{value}</p>
     </div>
   );
 }
