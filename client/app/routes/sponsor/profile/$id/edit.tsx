@@ -28,6 +28,11 @@ type NormalizedProfile = {
   profilePicture: string;
   bio: string;
   lastLogin: string | null;
+  alertPoints: boolean;
+  alertOrders: boolean;
+  alertApplicationStatusChange: boolean;
+  alertApplicationEntry: boolean;
+  alertProfileChangesByAdmin: boolean;
 };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -90,6 +95,17 @@ export default function SponsorProfileEdit() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [alertPoints, setAlertPoints] = useState(Boolean(profile?.alertPoints));
+  const [alertOrders, setAlertOrders] = useState(Boolean(profile?.alertOrders));
+  const [alertApplicationStatusChange, setAlertApplicationStatusChange] = useState(
+    Boolean(profile?.alertApplicationStatusChange)
+  );
+  const [alertApplicationEntry, setAlertApplicationEntry] = useState(
+    Boolean(profile?.alertApplicationEntry)
+  );
+  const [alertProfileChangesByAdmin, setAlertProfileChangesByAdmin] = useState(
+    Boolean(profile?.alertProfileChangesByAdmin)
+  );
 
   useEffect(() => {
     setProfile(normalizeProfile(data.profile));
@@ -98,6 +114,14 @@ export default function SponsorProfileEdit() {
     setErrorMessage(null);
     setNewPassword("");
     setShowNewPassword(false);
+    const normalized = normalizeProfile(data.profile);
+    if (normalized) {
+      setAlertPoints(Boolean(normalized.alertPoints));
+      setAlertOrders(Boolean(normalized.alertOrders));
+      setAlertApplicationStatusChange(Boolean(normalized.alertApplicationStatusChange));
+      setAlertApplicationEntry(Boolean(normalized.alertApplicationEntry));
+      setAlertProfileChangesByAdmin(Boolean(normalized.alertProfileChangesByAdmin));
+    }
   }, [data]);
 
   useEffect(() => {
@@ -137,6 +161,11 @@ export default function SponsorProfileEdit() {
       lastName: String(formData.get("LastName") ?? "").trim(),
       email: String(formData.get("Email") ?? "").trim(),
       phone: String(formData.get("Phone") ?? "").trim(),
+        alertPoints,
+        alertOrders,
+        alertApplicationStatusChange,
+        alertApplicationEntry,
+        alertProfileChangesByAdmin,
     };
 
     try {
@@ -418,6 +447,42 @@ export default function SponsorProfileEdit() {
             </div>
           )}
         </div>
+
+        {data.mode === "self" && (
+          <div className="pt-6 border-t border-gray-100 dark:border-gray-800 text-left space-y-4">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Notification Preferences</h2>
+            <ToggleRow
+              label="Points"
+              checked={alertPoints}
+              disabled={!isEditing}
+              onChange={setAlertPoints}
+            />
+            <ToggleRow
+              label="Orders"
+              checked={alertOrders}
+              disabled={!isEditing}
+              onChange={setAlertOrders}
+            />
+            <ToggleRow
+              label="Change In Application Status"
+              checked={alertApplicationStatusChange}
+              disabled={!isEditing}
+              onChange={setAlertApplicationStatusChange}
+            />
+            <ToggleRow
+              label="Application Entry"
+              checked={alertApplicationEntry}
+              disabled={!isEditing}
+              onChange={setAlertApplicationEntry}
+            />
+            <ToggleRow
+              label="Changes To Profile By Admin"
+              checked={alertProfileChangesByAdmin}
+              disabled={!isEditing}
+              onChange={setAlertProfileChangesByAdmin}
+            />
+          </div>
+        )}
       </form>
     </ProfileEditLayout>
   );
@@ -440,11 +505,54 @@ function normalizeProfile(raw: unknown): NormalizedProfile | null {
     pointBalance: Number(value.pointBalance ?? value.PointBalance ?? 0),
     profilePicture: String(value.profilePicture ?? value.ProfilePicture ?? ""),
     bio: String(value.bio ?? value.Bio ?? ""),
+    alertPoints: Boolean(value.alertPoints ?? value.AlertPoints ?? true),
+    alertOrders: Boolean(value.alertOrders ?? value.AlertOrders ?? true),
+    alertApplicationStatusChange: Boolean(
+      value.alertApplicationStatusChange ?? value.AlertApplicationStatusChange ?? true
+    ),
+    alertApplicationEntry: Boolean(value.alertApplicationEntry ?? value.AlertApplicationEntry ?? true),
+    alertProfileChangesByAdmin: Boolean(
+      value.alertProfileChangesByAdmin ?? value.AlertProfileChangesByAdmin ?? true
+    ),
     lastLogin:
       value.lastLogin === null || value.LastLogin === null
         ? null
         : String(value.lastLogin ?? value.LastLogin ?? ""),
   };
+}
+
+function ToggleRow({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2">
+      <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+          checked ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-700'
+        } disabled:opacity-50`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+            checked ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
 }
 
 function buildInitials(firstName: string, lastName: string) {

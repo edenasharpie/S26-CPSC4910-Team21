@@ -44,14 +44,16 @@ async function loadTopNavNotifications(request: Request, session: ReturnType<typ
   }
 
   const role = String(session.UserType).toLowerCase();
-  if (role !== "driver" && role !== "sponsor") {
+  if (role !== "driver" && role !== "sponsor" && role !== "admin") {
     return { items: [], unreadCount: 0 };
   }
 
   const basePath =
     role === "driver"
       ? `/api/driver/${session.UserID}/notifications`
-      : `/api/sponsors/${session.UserID}/notifications`;
+      : role === "sponsor"
+      ? `/api/sponsors/${session.UserID}/notifications`
+      : `/api/admin/${session.UserID}/notifications`;
 
   const cookieHeader = request.headers.get("Cookie") ?? "";
   const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;

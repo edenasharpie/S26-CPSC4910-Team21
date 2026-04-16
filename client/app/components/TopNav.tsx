@@ -61,6 +61,9 @@ export function TopNav({ user, dashboardHref, notifications, unreadNotificationC
     if (user.role === "sponsor") {
       return `/api/sponsors/${user.userId}/notifications`;
     }
+    if (user.role === "admin") {
+      return `/api/admin/${user.userId}/notifications`;
+    }
     return null;
   }, [user?.role, user?.userId]);
 

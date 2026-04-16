@@ -29,6 +29,11 @@ type ProfileUser = {
   active_status: boolean;
   created_at: string;
   last_password_change: string;
+  alert_points: boolean;
+  alert_orders: boolean;
+  alert_application_status_change: boolean;
+  alert_application_entry: boolean;
+  alert_profile_changes_by_admin: boolean;
 };
 
 export async function loader({ request, params }: { request: Request; params: { id?: string } }) {
@@ -84,6 +89,11 @@ export async function loader({ request, params }: { request: Request; params: { 
     created_at: user.LastLogin || new Date().toISOString(),
     last_password_change:
       user.LastPasswordChange || user.LastLogin || new Date().toISOString(),
+    alert_points: Boolean(user.AlertPoints ?? true),
+    alert_orders: Boolean(user.AlertOrders ?? true),
+    alert_application_status_change: Boolean(user.AlertApplicationStatusChange ?? true),
+    alert_application_entry: Boolean(user.AlertApplicationEntry ?? true),
+    alert_profile_changes_by_admin: Boolean(user.AlertProfileChangesByAdmin ?? true),
   };
 
   return { user: profile, performanceStatus, session };
@@ -128,6 +138,17 @@ export default function DriverProfileEditPage() {
   const [deactivationPassword, setDeactivationPassword] = useState("");
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
+  const [alertPoints, setAlertPoints] = useState(Boolean(user.alert_points));
+  const [alertOrders, setAlertOrders] = useState(Boolean(user.alert_orders));
+  const [alertApplicationStatusChange, setAlertApplicationStatusChange] = useState(
+    Boolean(user.alert_application_status_change)
+  );
+  const [alertApplicationEntry, setAlertApplicationEntry] = useState(
+    Boolean(user.alert_application_entry)
+  );
+  const [alertProfileChangesByAdmin, setAlertProfileChangesByAdmin] = useState(
+    Boolean(user.alert_profile_changes_by_admin)
+  );
 
   useEffect(() => {
     setUsername(user.username || "");
@@ -140,6 +161,11 @@ export default function DriverProfileEditPage() {
     setProfilePictureUrl(user.profile_picture_url || "");
     setBio(user.bio || "");
     setLicenseNumber(user.license_number || "");
+    setAlertPoints(Boolean(user.alert_points));
+    setAlertOrders(Boolean(user.alert_orders));
+    setAlertApplicationStatusChange(Boolean(user.alert_application_status_change));
+    setAlertApplicationEntry(Boolean(user.alert_application_entry));
+    setAlertProfileChangesByAdmin(Boolean(user.alert_profile_changes_by_admin));
   }, [user.id, user.license_number]);
 
   const handleSaveProfile = async () => {
@@ -171,6 +197,11 @@ export default function DriverProfileEditPage() {
           profilePicture: profilePictureUrl.trim(),
           bio: bio.trim(),
           licenseNumber: licenseNumber.trim(),
+          alertPoints,
+          alertOrders,
+          alertApplicationStatusChange,
+          alertApplicationEntry,
+          alertProfileChangesByAdmin,
         }),
       });
 
@@ -531,6 +562,32 @@ export default function DriverProfileEditPage() {
           </div>
 
           <div className="card p-6">
+            <h3 className="text-xl font-bold mb-4">Notification Preferences</h3>
+            <div className="space-y-3">
+              <ToggleRow label="Points" checked={alertPoints} disabled={!isEditingProfile} onChange={setAlertPoints} />
+              <ToggleRow label="Orders" checked={alertOrders} disabled={!isEditingProfile} onChange={setAlertOrders} />
+              <ToggleRow
+                label="Change In Application Status"
+                checked={alertApplicationStatusChange}
+                disabled={!isEditingProfile}
+                onChange={setAlertApplicationStatusChange}
+              />
+              <ToggleRow
+                label="Application Entry"
+                checked={alertApplicationEntry}
+                disabled={!isEditingProfile}
+                onChange={setAlertApplicationEntry}
+              />
+              <ToggleRow
+                label="Changes To Profile By Admin"
+                checked={alertProfileChangesByAdmin}
+                disabled={!isEditingProfile}
+                onChange={setAlertProfileChangesByAdmin}
+              />
+            </div>
+          </div>
+
+          <div className="card p-6">
             <h3 className="text-xl font-bold mb-4">Recent Activity</h3>
             <Table
               data={[]}
@@ -584,5 +641,39 @@ export default function DriverProfileEditPage() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2">
+      <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+          checked ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-700"
+        } disabled:opacity-50`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+            checked ? "translate-x-6" : "translate-x-1"
+          }`}
+        />
+      </button>
+    </label>
   );
 }

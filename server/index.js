@@ -25,6 +25,7 @@ import accountsRoute from './src/routes/accounts.js';
 import driverOrdersRoutes from './src/routes/driver-orders.js';
 import driverNotificationsRoutes from './src/routes/driver-notifications.js';
 import sponsorNotificationsRoutes from './src/routes/sponsor-notifications.js';
+import adminNotificationsRoutes from './src/routes/admin-notifications.js';
 import imagesRoutes from './src/routes/images.js';
 import { startDailyReportScheduler } from './src/services/daily-report-scheduler.js';
 import { attachSessionContext } from './src/middleware/session-context.js';
@@ -33,7 +34,7 @@ import reviewRoutes from './src/routes/reviews.js';
 
 const app = express();
 
-const NOTIFICATION_ROUTE_PATTERN = /^\/api\/(?:driver|sponsors)\/\d+\/notifications(?:\/.*)?$/;
+const NOTIFICATION_ROUTE_PATTERN = /^\/api\/(?:driver|sponsors|admin)\/\d+\/notifications(?:\/.*)?$/;
 const DEFAULT_NOTIFICATION_CORS_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -62,6 +63,11 @@ const notificationCorsOriginSet = new Set([
 const notificationCors = cors({
   origin(origin, callback) {
     if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
       callback(null, true);
       return;
     }
@@ -102,6 +108,7 @@ app.use('/api/user', userRoute);
 app.use('/api/accounts', accountsRoute);
 app.use('/api/sponsors', sponsorRoute);
 app.use('/api/drivers', driverRoute);
+app.use('/api/admin/:userId/notifications', adminNotificationsRoutes);
 app.use('/api/admin/store', storeRoutes);
 app.use('/api/admin', adminRoute);
 app.use('/api/admin/catalogs', adminCatalogsRoutes);

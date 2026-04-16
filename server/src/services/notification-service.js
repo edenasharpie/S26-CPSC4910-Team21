@@ -4,6 +4,109 @@ const MAX_CONTENT_LENGTH = 280;
 const DEFAULT_NOTIFICATION_LIMIT = 20;
 const MAX_NOTIFICATION_LIMIT = 100;
 
+export const DEFAULT_NOTIFICATION_PREFERENCES = {
+  alertPoints: true,
+  alertOrders: true,
+  alertApplicationStatusChange: true,
+  alertApplicationEntry: true,
+  alertProfileChangesByAdmin: true,
+};
+
+function parsePermissionsObject(rawPermissions) {
+  if (!rawPermissions) {
+    return {};
+  }
+
+  if (typeof rawPermissions === 'object') {
+    return rawPermissions;
+  }
+
+  if (typeof rawPermissions === 'string') {
+    try {
+      const parsed = JSON.parse(rawPermissions);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+export function normalizeNotificationPreferences(rawPermissions, overrides = {}) {
+  const permissions = parsePermissionsObject(rawPermissions);
+  const normalized = { ...DEFAULT_NOTIFICATION_PREFERENCES };
+
+  for (const key of Object.keys(DEFAULT_NOTIFICATION_PREFERENCES)) {
+    const rawValue = permissions[key];
+    if (typeof rawValue === 'boolean') {
+      normalized[key] = rawValue;
+    }
+  }
+
+  for (const [key, value] of Object.entries(overrides ?? {})) {
+    if (key in normalized && typeof value === 'boolean') {
+      normalized[key] = value;
+    }
+  }
+
+  return normalized;
+}
+
+function resolvePreferenceKey(preference, category) {
+  const normalizedPreference = typeof preference === 'string' ? preference.trim().toLowerCase() : 'none';
+
+  if (normalizedPreference === 'points') return 'alertPoints';
+  if (normalizedPreference === 'orders') return 'alertOrders';
+  if (normalizedPreference === 'application_status') return 'alertApplicationStatusChange';
+  if (normalizedPreference === 'application_entry') return 'alertApplicationEntry';
+  if (normalizedPreference === 'profile_admin') return 'alertProfileChangesByAdmin';
+
+  const normalizedCategory = typeof category === 'string' ? category.trim().toLowerCase() : '';
+  if (!normalizedCategory) {
+    return null;
+  }
+
+  if (normalizedCategory.includes('point')) return 'alertPoints';
+  if (normalizedCategory.includes('order')) return 'alertOrders';
+  if (normalizedCategory.includes('application') && normalizedCategory.includes('decision')) {
+    return 'alertApplicationStatusChange';
+  }
+  if (normalizedCategory.includes('application') && normalizedCategory.includes('submitted')) {
+    return 'alertApplicationEntry';
+  }
+  if (normalizedCategory.includes('application') && normalizedCategory.includes('status')) {
+    return 'alertApplicationStatusChange';
+  }
+  if (normalizedCategory.includes('application')) return 'alertApplicationEntry';
+  if (normalizedCategory.includes('profile') && normalizedCategory.includes('admin')) {
+    return 'alertProfileChangesByAdmin';
+  }
+
+  return null;
+}
+
+async function getUserNotificationPreferences(connection, userId, overrides = {}) {
+  const parsedUserId = Number(userId);
+  if (!Number.isInteger(parsedUserId)) {
+    return { ...DEFAULT_NOTIFICATION_PREFERENCES };
+  }
+
+  const [rows] = await connection.execute(
+    `SELECT Permissions
+     FROM USERS
+     WHERE UserID = ?
+     LIMIT 1`,
+    [parsedUserId]
+  );
+
+  if (rows.length === 0) {
+    return normalizeNotificationPreferences({}, overrides);
+  }
+
+  return normalizeNotificationPreferences(rows[0].Permissions, overrides);
+}
+
 export function normalizeContent(content) {
   if (typeof content !== 'string') {
     return '';
@@ -402,11 +505,19 @@ export async function notifySponsorCompany(connection, {
   actorUserId = null,
   content,
   category,
+  preference = 'none',
   metadata = {},
 }) {
   const recipientUserIds = await getActiveSponsorRecipientUserIds(connection, sponsorCompanyId);
+  const preferenceKey = resolvePreferenceKey(preference, category);
+  let sentCount = 0;
 
   for (const recipientUserId of recipientUserIds) {
+    const preferences = await getUserNotificationPreferences(connection, recipientUserId);
+    if (preferenceKey && !preferences[preferenceKey]) {
+      continue;
+    }
+
     await insertNotificationEvent(connection, {
       recipientUserId,
       actorUserId,
@@ -414,9 +525,10 @@ export async function notifySponsorCompany(connection, {
       category,
       metadata,
     });
+    sentCount += 1;
   }
 
-  return recipientUserIds.length;
+  return sentCount;
 }
 
 export async function getDriverNotificationContextByUserId(connection, driverUserId) {
@@ -426,7 +538,7 @@ export async function getDriverNotificationContextByUserId(connection, driverUse
   }
 
   const [rows] = await connection.execute(
-    `SELECT d.UserID, d.LicenseNumber, d.SponsorCompanyID, d.AlertPoints, d.AlertOrders, u.ActiveStatus
+    `SELECT d.UserID, d.LicenseNumber, d.SponsorCompanyID, d.AlertPoints, d.AlertOrders, u.ActiveStatus, u.Permissions
      FROM DRIVERS d
      JOIN USERS u ON u.UserID = d.UserID
      WHERE d.UserID = ?
@@ -438,12 +550,18 @@ export async function getDriverNotificationContextByUserId(connection, driverUse
     return null;
   }
 
+  const notificationPreferences = normalizeNotificationPreferences(rows[0].Permissions, {
+    alertPoints: Boolean(rows[0].AlertPoints),
+    alertOrders: Boolean(rows[0].AlertOrders),
+  });
+
   return {
     userId: Number(rows[0].UserID),
     licenseNumber: rows[0].LicenseNumber,
     sponsorCompanyId: rows[0].SponsorCompanyID === null ? null : Number(rows[0].SponsorCompanyID),
     alertPoints: Boolean(rows[0].AlertPoints),
     alertOrders: Boolean(rows[0].AlertOrders),
+    notificationPreferences,
     isActive: Boolean(rows[0].ActiveStatus),
   };
 }
@@ -455,7 +573,7 @@ export async function getDriverNotificationContextByLicense(connection, licenseN
   }
 
   const [rows] = await connection.execute(
-    `SELECT d.UserID, d.LicenseNumber, d.SponsorCompanyID, d.AlertPoints, d.AlertOrders, u.ActiveStatus
+    `SELECT d.UserID, d.LicenseNumber, d.SponsorCompanyID, d.AlertPoints, d.AlertOrders, u.ActiveStatus, u.Permissions
      FROM DRIVERS d
      JOIN USERS u ON u.UserID = d.UserID
      WHERE d.LicenseNumber = ?
@@ -467,12 +585,18 @@ export async function getDriverNotificationContextByLicense(connection, licenseN
     return null;
   }
 
+  const notificationPreferences = normalizeNotificationPreferences(rows[0].Permissions, {
+    alertPoints: Boolean(rows[0].AlertPoints),
+    alertOrders: Boolean(rows[0].AlertOrders),
+  });
+
   return {
     userId: Number(rows[0].UserID),
     licenseNumber: rows[0].LicenseNumber,
     sponsorCompanyId: rows[0].SponsorCompanyID === null ? null : Number(rows[0].SponsorCompanyID),
     alertPoints: Boolean(rows[0].AlertPoints),
     alertOrders: Boolean(rows[0].AlertOrders),
+    notificationPreferences,
     isActive: Boolean(rows[0].ActiveStatus),
   };
 }
@@ -494,11 +618,19 @@ export async function notifyDriver(connection, {
     return false;
   }
 
+  const preferenceKey = resolvePreferenceKey(preference, category);
+  const effectivePreferences = normalizeNotificationPreferences(
+    driverContext.notificationPreferences,
+    {
+      alertPoints: Boolean(driverContext.alertPoints),
+      alertOrders: Boolean(driverContext.alertOrders),
+    }
+  );
+
   const shouldSend =
     force ||
     preference === 'none' ||
-    (preference === 'points' && driverContext.alertPoints) ||
-    (preference === 'orders' && driverContext.alertOrders);
+    (!preferenceKey || Boolean(effectivePreferences[preferenceKey]));
 
   if (!shouldSend) {
     return false;

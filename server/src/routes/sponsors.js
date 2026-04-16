@@ -1453,6 +1453,7 @@ router.post('/:userId/process-application', async (req, res) => {
         actorUserId: sponsorUserId,
         content: `Application #${applicationId} was ${status}.`,
         category: 'driver_application_decision',
+        preference: 'application_status',
         metadata: {
           applicationId,
           driverId: appRows[0].DriverID,
@@ -1465,7 +1466,7 @@ router.post('/:userId/process-application', async (req, res) => {
         actorUserId: sponsorUserId,
         content: `Your application was ${status}.`,
         category: 'driver_application_decision',
-        preference: 'none',
+        preference: 'application_status',
         metadata: {
           applicationId,
           driverId: appRows[0].DriverID,
