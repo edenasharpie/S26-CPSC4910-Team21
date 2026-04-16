@@ -775,6 +775,8 @@ function ToggleRow({
       </button>
     </label>
   );
+}
+
 function buildInitials(firstName: string, lastName: string) {
   const first = firstName.trim().charAt(0);
   const last = lastName.trim().charAt(0);
