@@ -217,8 +217,6 @@ export default function SponsorProfileEdit() {
   return (
     <ProfileEditLayout
       apiBaseUrl={API_URL}
-      backTo="/sponsor/dashboard"
-      backLabel="Back to Dashboard"
       title={title}
       subtitle={subtitle}
       profilePicture={profile.profilePicture}

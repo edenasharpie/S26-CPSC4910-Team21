@@ -219,8 +219,6 @@ export default function EditUserProfile() {
   return (
     <ProfileEditLayout
       apiBaseUrl={BASE_URL}
-      backTo="/admin/dashboard"
-      backLabel="Back to Dashboard"
       title={`${user.firstName} ${user.lastName}`.trim() || user.username}
       subtitle={`@${user.username}`}
       profilePicture={user.profilePicture}

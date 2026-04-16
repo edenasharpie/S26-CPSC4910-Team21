@@ -75,7 +75,11 @@ async function getUserForAssume(connection, userId) {
       u.FirstName,
       u.LastName,
       u.ActiveStatus,
+        s.SponsorCompanyID AS SponsorCompanyID,
+        s.SponsorCompanyID AS SponsorCompanyID,
+        CASE WHEN u.UserType = 'sponsor' THEN sc2.PointDollarValue ELSE NULL END AS SponsorPointDollarValue,
       u.Permissions,
+        CASE WHEN u.UserType = 'sponsor' THEN sc2.PointDollarValue ELSE NULL END AS SponsorPointDollarValue,
       s.SponsorCompanyID
      FROM USERS u
      LEFT JOIN SPONSORS s ON s.UserID = u.UserID
@@ -118,7 +122,9 @@ router.get('/users', async (request, response) => {
         u.ActiveStatus,
         DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
         DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange,
+        s.SponsorCompanyID AS SponsorCompanyID,
         COALESCE(d.PointBalance, 0) AS PointBalance,
+        CASE WHEN u.UserType = 'sponsor' THEN sc2.PointDollarValue ELSE NULL END AS SponsorPointDollarValue,
         CASE
           WHEN u.UserType = 'driver'  THEN COALESCE(sc.CompanyName, 'Unassigned')
           WHEN u.UserType = 'sponsor' THEN COALESCE(sc2.CompanyName, 'N/A')
@@ -222,6 +228,7 @@ router.get('/users/:id', async (request, response) => {
         u.Permissions,
         DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
         DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange,
+        s.SponsorCompanyID AS SponsorCompanyID,
         CASE WHEN u.UserType = 'driver'  THEN d.PointBalance  ELSE NULL END AS PointBalance,
         CASE
           WHEN u.UserType = 'driver'  THEN sc.CompanyName
