@@ -5,6 +5,13 @@ import {
   routeUserMatchesEffectiveSession,
 } from '../middleware/session-context.js';
 import { processBulkLoadFile } from '../services/bulk-load-service.js';
+import {
+  getDriverNotificationContextByLicense,
+  getDriverNotificationContextByUserId,
+  insertPointTransactionEvent,
+  notifyDriver,
+  notifySponsorCompany,
+} from '../services/notification-service.js';
 
 const router = express.Router();
 
@@ -388,7 +395,7 @@ router.post('/:userId/drivers/:driverId/point-transactions', async (req, res) =>
     }
 
     // Create transaction
-    await connection.execute(
+    const [insertResult] = await connection.execute(
       `INSERT INTO POINT_TRANSACTIONS (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
        VALUES (?, ?, ?, ?, NOW())`,
       [drivers[0].LicenseNumber, sponsorUserId, pointDelta, reasonText]
@@ -400,6 +407,45 @@ router.post('/:userId/drivers/:driverId/point-transactions', async (req, res) =>
       `UPDATE DRIVERS SET PointBalance = ? WHERE LicenseNumber = ?`,
       [newBalance, drivers[0].LicenseNumber]
     );
+
+    await insertPointTransactionEvent(connection, {
+      actorUserId: sponsorUserId,
+      pointsDelta: pointDelta,
+      reason: reasonText,
+      driverLicenseNumber: drivers[0].LicenseNumber,
+      targetDriverUserId: driverUserId,
+      transactionId: Number(insertResult.insertId),
+      updated: false,
+    });
+
+    await notifySponsorCompany(connection, {
+      sponsorCompanyId: companyId,
+      actorUserId: sponsorUserId,
+      content: `Point transaction recorded for driver ${drivers[0].LicenseNumber}.`,
+      category: 'sponsor_point_transaction',
+      metadata: {
+        driverId: drivers[0].LicenseNumber,
+        driverUserId,
+        pointChange: pointDelta,
+        reason: reasonText,
+      },
+    });
+
+    const driverNotificationContext = await getDriverNotificationContextByUserId(connection, driverUserId);
+    await notifyDriver(connection, {
+      driverContext: driverNotificationContext,
+      actorUserId: sponsorUserId,
+      content:
+        pointDelta >= 0
+          ? `Your sponsor added ${pointDelta} points to your account.`
+          : `Your sponsor deducted ${Math.abs(pointDelta)} points from your account.`,
+      category: 'driver_point_transaction',
+      preference: 'points',
+      metadata: {
+        pointChange: pointDelta,
+        reason: reasonText,
+      },
+    });
 
     await connection.commit();
     res.json({ success: true, newBalance });
@@ -461,7 +507,7 @@ router.put('/:userId/point-transactions/:tId', async (req, res) => {
 
     // Get the transaction
     const [transactions] = await connection.execute(
-      `SELECT pt.TransactionID, pt.DriverID, pt.PointChange
+      `SELECT pt.TransactionID, pt.DriverID, pt.PointChange, d.UserID AS DriverUserID
        FROM POINT_TRANSACTIONS pt
        JOIN DRIVERS d ON d.LicenseNumber = pt.DriverID
        WHERE pt.TransactionID = ? AND d.SponsorCompanyID = ?`,
@@ -487,6 +533,49 @@ router.put('/:userId/point-transactions/:tId', async (req, res) => {
       `UPDATE DRIVERS SET PointBalance = PointBalance + ? WHERE LicenseNumber = ?`,
       [pointDifference, transactions[0].DriverID]
     );
+
+    await insertPointTransactionEvent(connection, {
+      actorUserId: sponsorUserId,
+      pointsDelta: pointValue,
+      reason: reasonText,
+      driverLicenseNumber: transactions[0].DriverID,
+      targetDriverUserId: Number(transactions[0].DriverUserID),
+      transactionId,
+      updated: true,
+    });
+
+    await notifySponsorCompany(connection, {
+      sponsorCompanyId: companyId,
+      actorUserId: sponsorUserId,
+      content: `Point transaction #${transactionId} was updated for driver ${transactions[0].DriverID}.`,
+      category: 'sponsor_point_transaction_update',
+      metadata: {
+        transactionId,
+        driverId: transactions[0].DriverID,
+        driverUserId: Number(transactions[0].DriverUserID),
+        oldPoints,
+        newPoints: pointValue,
+        reason: reasonText,
+      },
+    });
+
+    const updatedDriverNotificationContext = await getDriverNotificationContextByLicense(
+      connection,
+      transactions[0].DriverID
+    );
+    await notifyDriver(connection, {
+      driverContext: updatedDriverNotificationContext,
+      actorUserId: sponsorUserId,
+      content: `Your sponsor updated a point transaction to ${pointValue} points.`,
+      category: 'driver_point_transaction_update',
+      preference: 'points',
+      metadata: {
+        transactionId,
+        oldPoints,
+        newPoints: pointValue,
+        reason: reasonText,
+      },
+    });
 
     await connection.commit();
     res.json({ success: true });
@@ -620,6 +709,135 @@ router.patch('/:userId/drivers/:driverId', async (req, res) => {
     }
     console.error('[SPONSOR_UPDATE_DRIVER] Error:', error);
     return res.status(500).json({ error: 'Failed to update driver profile' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+// DELETE /api/sponsors/:userId/drivers/:driverId/company - Remove a driver from sponsor company
+router.delete('/:userId/drivers/:driverId/company', async (req, res) => {
+  let connection;
+  try {
+    const sponsorUserId = Number(req.params.userId);
+    const driverUserId = Number(req.params.driverId);
+
+    if (!Number.isInteger(sponsorUserId) || !Number.isInteger(driverUserId)) {
+      return res.status(400).json({ error: 'Invalid sponsor user ID or driver user ID' });
+    }
+
+    if (!routeUserMatchesEffectiveSession(req, sponsorUserId)) {
+      return res.status(403).json({ error: 'Access forbidden for requested user context.' });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [sponsorRows] = await connection.execute(
+      `SELECT u.UserType, u.ActiveStatus, u.Permissions, s.SponsorCompanyID
+       FROM USERS u
+       JOIN SPONSORS s ON s.UserID = u.UserID
+       WHERE u.UserID = ?
+       LIMIT 1`,
+      [sponsorUserId]
+    );
+
+    if (sponsorRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Sponsor not found' });
+    }
+
+    const sponsor = sponsorRows[0];
+    if (String(sponsor.UserType).toLowerCase() !== 'sponsor') {
+      await connection.rollback();
+      return res.status(403).json({ error: 'Only sponsors can remove drivers from their company.' });
+    }
+
+    if (!Boolean(sponsor.ActiveStatus)) {
+      await connection.rollback();
+      return res.status(403).json({ error: 'Inactive sponsor accounts cannot modify drivers.' });
+    }
+
+    if (!hasBooleanPermission(sponsor.UserType, sponsor.Permissions, 'canEditDriverAccounts')) {
+      await connection.rollback();
+      return res.status(403).json({ error: 'Missing canEditDriverAccounts permission.' });
+    }
+
+    const sponsorCompanyId = Number(sponsor.SponsorCompanyID);
+
+    const [driverRows] = await connection.execute(
+      `SELECT u.UserID, u.FirstName, u.LastName, d.LicenseNumber, d.SponsorCompanyID
+       FROM USERS u
+       JOIN DRIVERS d ON d.UserID = u.UserID
+       WHERE u.UserID = ?
+       LIMIT 1`,
+      [driverUserId]
+    );
+
+    if (driverRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Driver not found' });
+    }
+
+    const driver = driverRows[0];
+    if (Number(driver.SponsorCompanyID) !== sponsorCompanyId) {
+      await connection.rollback();
+      return res.status(403).json({ error: 'Driver does not belong to this sponsor company.' });
+    }
+
+    await connection.execute(
+      'UPDATE DRIVERS SET SponsorCompanyID = NULL WHERE UserID = ?',
+      [driverUserId]
+    );
+
+    await connection.execute(
+      `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+       VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('SponsorCompanyID'), 'isSelfUpdate', false, 'success', true))`,
+      [sponsorUserId]
+    );
+
+    await notifySponsorCompany(connection, {
+      sponsorCompanyId,
+      actorUserId: sponsorUserId,
+      content: `Driver ${driver.FirstName} ${driver.LastName} was removed from your company.`,
+      category: 'driver_left_company',
+      metadata: {
+        driverUserId,
+        driverId: driver.LicenseNumber,
+        sponsorCompanyId,
+        trigger: 'sponsor_removed_driver',
+      },
+    });
+
+    const driverNotificationContext = await getDriverNotificationContextByUserId(connection, driverUserId);
+    await notifyDriver(connection, {
+      driverContext: driverNotificationContext,
+      actorUserId: sponsorUserId,
+      content: 'You were removed from your sponsor company.',
+      category: 'driver_removed_from_company',
+      force: true,
+      preference: 'none',
+      metadata: {
+        driverUserId,
+        driverId: driver.LicenseNumber,
+        sponsorCompanyId,
+        trigger: 'sponsor_removed_driver',
+      },
+    });
+
+    await connection.commit();
+    return res.status(200).json({
+      success: true,
+      message: 'Driver removed from sponsor company.',
+      driverId: driver.LicenseNumber,
+    });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    console.error('[SPONSOR_REMOVE_DRIVER] Error:', error);
+    return res.status(500).json({ error: 'Failed to remove driver from sponsor company.' });
   } finally {
     if (connection) {
       connection.release();
@@ -1224,6 +1442,36 @@ router.post('/:userId/process-application', async (req, res) => {
          VALUES (?, NOW(), 'ApplicationStatusUpdate', JSON_OBJECT('status', ?, 'reviewNotes', ?, 'applicationId', ?, 'driverId', ?))`,
         [sponsorUserId, status, explanation, applicationId, appRows[0].DriverID]
       );
+
+      const driverNotificationContext = await getDriverNotificationContextByLicense(
+        connection,
+        appRows[0].DriverID
+      );
+
+      await notifySponsorCompany(connection, {
+        sponsorCompanyId: companyId,
+        actorUserId: sponsorUserId,
+        content: `Application #${applicationId} was ${status}.`,
+        category: 'driver_application_decision',
+        metadata: {
+          applicationId,
+          driverId: appRows[0].DriverID,
+          status,
+        },
+      });
+
+      await notifyDriver(connection, {
+        driverContext: driverNotificationContext,
+        actorUserId: sponsorUserId,
+        content: `Your application was ${status}.`,
+        category: 'driver_application_decision',
+        preference: 'none',
+        metadata: {
+          applicationId,
+          driverId: appRows[0].DriverID,
+          status,
+        },
+      });
 
       const [updatedRows] = await connection.execute(
         `SELECT

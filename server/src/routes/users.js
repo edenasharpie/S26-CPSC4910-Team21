@@ -5,6 +5,7 @@ import { pool } from '../db.js';
 import {
   routeUserMatchesEffectiveSession,
 } from '../middleware/session-context.js';
+import { notifySponsorCompany } from '../services/notification-service.js';
 
 const router = express.Router();
 
@@ -520,6 +521,7 @@ router.post('/reviews/finalize', async (req, res) => {
 // Drivers create application
 router.post('/submit-application', async (req, res) => {
   const { driverId, sponsorCompanyId, explanation } = req.body;
+  let connection;
 
   try {
     const rawDriverId = String(driverId ?? '').trim();
@@ -530,40 +532,49 @@ router.post('/submit-application', async (req, res) => {
       return res.status(400).json({ error: 'driverId, sponsorCompanyId, and explanation are required.' });
     }
 
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
     // DRIVER_APPLICATIONS.DriverID should store DRIVERS.LicenseNumber.
     let licenseNumber = rawDriverId;
+    let resolvedDriverUserId = null;
     const numericDriverId = Number(rawDriverId);
 
     if (Number.isInteger(numericDriverId)) {
-      const [driverRows] = await pool.execute(
-        'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+      const [driverRows] = await connection.execute(
+        'SELECT UserID, LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
         [numericDriverId]
       );
 
       if (driverRows.length > 0) {
+        resolvedDriverUserId = Number(driverRows[0].UserID);
         licenseNumber = driverRows[0].LicenseNumber;
       }
     }
 
-    const [driverByLicenseRows] = await pool.execute(
-      'SELECT LicenseNumber FROM DRIVERS WHERE LicenseNumber = ? LIMIT 1',
+    const [driverByLicenseRows] = await connection.execute(
+      'SELECT UserID, LicenseNumber FROM DRIVERS WHERE LicenseNumber = ? LIMIT 1',
       [licenseNumber]
     );
 
     if (driverByLicenseRows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Driver not found. Could not resolve driver license number.' });
     }
 
-    const [sponsorRows] = await pool.execute(
+    resolvedDriverUserId = Number(driverByLicenseRows[0].UserID);
+
+    const [sponsorRows] = await connection.execute(
       'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ? LIMIT 1',
       [rawSponsorCompanyId]
     );
 
     if (sponsorRows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Sponsor company not found.' });
     }
 
-    const [existingPendingRows] = await pool.execute(
+    const [existingPendingRows] = await connection.execute(
       `SELECT ApplicationID
        FROM DRIVER_APPLICATIONS
        WHERE DriverID = ? AND SponsorCompanyID = ? AND ApplicationStatus = 'pending'
@@ -572,26 +583,51 @@ router.post('/submit-application', async (req, res) => {
     );
 
     if (existingPendingRows.length > 0) {
+      await connection.rollback();
       return res.status(409).json({ error: 'You already have a pending application for this sponsor.' });
     }
 
     // ApplicationStatus defaults to 'pending' based on your ENUM
-    const [result] = await pool.execute(
+    const [result] = await connection.execute(
       `INSERT INTO DRIVER_APPLICATIONS 
        (DriverID, SponsorCompanyID, ApplicationStatus, DecisionExplanation, TimeSubmitted)
        VALUES (?, ?, 'pending', ?, NOW())`,
       [licenseNumber, rawSponsorCompanyId, rawExplanation]
     );
 
+    const applicationId = Number(result.insertId);
+
+    await notifySponsorCompany(connection, {
+      sponsorCompanyId: rawSponsorCompanyId,
+      actorUserId: resolvedDriverUserId,
+      content: `New driver application submitted (#${applicationId}).`,
+      category: 'driver_application_submitted',
+      metadata: {
+        applicationId,
+        sponsorCompanyId: rawSponsorCompanyId,
+        driverId: licenseNumber,
+        driverUserId: resolvedDriverUserId,
+      },
+    });
+
+    await connection.commit();
+
     res.status(201).json({ 
       message: "Application submitted successfully!", 
-      applicationId: result.insertId,
+      applicationId,
       driverId: licenseNumber,
       sponsorCompanyId: rawSponsorCompanyId,
     });
   } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
     console.error("Submission Error:", error);
     res.status(500).json({ error: "Could not submit application. You may already have a pending request." });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 

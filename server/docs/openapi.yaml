@@ -114,6 +114,21 @@ paths:
   /driver/{userId}/orders/{orderId}:
     $ref: './paths/driver/orders.yaml#/ordersById'
 
+  /driver/{userId}/orders/{orderId}/status:
+    $ref: './paths/driver/orders.yaml#/ordersByIdStatus'
+
+  /driver/{userId}/notifications:
+    $ref: './paths/driver/notifications.yaml#/notifications'
+
+  /driver/{userId}/notifications/{notificationId}/read:
+    $ref: './paths/driver/notifications.yaml#/notificationByIdRead'
+
+  /driver/{userId}/notifications/read-all:
+    $ref: './paths/driver/notifications.yaml#/notificationsReadAll'
+
+  /drivers/{userId}/company:
+    $ref: './paths/driver/company.yaml#/driverCompanyMembership'
+
   /sponsor/{userId}/catalogs:
     $ref: './paths/sponsor/catalogs.yaml#/catalogs'
 
@@ -134,6 +149,18 @@ paths:
 
   /sponsors/{userId}/process-application:
     $ref: './paths/sponsor/applications.yaml#/processApplication'
+
+  /sponsors/{userId}/drivers/{driverId}/company:
+    $ref: './paths/sponsor/drivers.yaml#/driverCompanyMembership'
+
+  /sponsors/{userId}/notifications:
+    $ref: './paths/sponsor/notifications.yaml#/notifications'
+
+  /sponsors/{userId}/notifications/{notificationId}/read:
+    $ref: './paths/sponsor/notifications.yaml#/notificationByIdRead'
+
+  /sponsors/{userId}/notifications/read-all:
+    $ref: './paths/sponsor/notifications.yaml#/notificationsReadAll'
 
   /sponsors/{userId}/bulk-load:
     $ref: './paths/sponsor/bulk-load.yaml#/bulkLoad'

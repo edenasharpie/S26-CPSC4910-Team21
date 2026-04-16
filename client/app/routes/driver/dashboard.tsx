@@ -1,7 +1,7 @@
 import type { Route } from "./+types/dashboard";
 import { useMemo } from "react";
 import { Table, Button } from "~/components";
-import { useNavigate, useLoaderData } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigate, useNavigation } from "react-router";
 import { requireAuth } from "~/utils/session.server";
 import { getApiBaseUrl } from "~/utils/api-url";
 import { 
@@ -100,10 +100,49 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 }
 
+export async function action({ request }: Route.ActionArgs) {
+  const session = await requireAuth(request, ["driver", "admin"]);
+  const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "");
+
+  if (intent !== "leave-sponsor") {
+    return { success: false, error: "Unsupported action." };
+  }
+
+  const effectiveUserId = String(session.UserID);
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+
+  try {
+    const response = await fetch(`${API_URL}/api/drivers/${effectiveUserId}/company`, {
+      method: "DELETE",
+      headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        success: false,
+        error: String((payload as any).error ?? "Failed to leave sponsor company."),
+      };
+    }
+
+    return {
+      success: true,
+      message: String((payload as any).message ?? "You left your sponsor company."),
+    };
+  } catch (error: any) {
+    return { success: false, error: String(error?.message ?? "Failed to leave sponsor company.") };
+  }
+}
+
 
 export default function DriverDashboard() {
-  const { driver, history, sponsors, effectiveUserId } = useLoaderData<typeof loader>();
+  const { driver, history, sponsors } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   const navigate = useNavigate();
+  const isLeavingSponsor =
+    navigation.state === "submitting" && navigation.formData?.get("intent") === "leave-sponsor";
 
   // Performance status logic
   const statusConfig = {
@@ -186,6 +225,18 @@ export default function DriverDashboard() {
               </div>
             </div>
           </div>
+
+          {actionData && (
+            <div
+              className={`mt-4 rounded-md border px-4 py-3 text-sm ${
+                actionData.success
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : "border-red-200 bg-red-50 text-red-700"
+              }`}
+            >
+              {actionData.success ? actionData.message : actionData.error}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -211,6 +262,29 @@ export default function DriverDashboard() {
                     >
                       View Catalog
                     </Button>
+                    <Form
+                      method="post"
+                      className="mt-2"
+                      onSubmit={(event) => {
+                        const confirmed = window.confirm(
+                          `Leave ${s.CompanyName}? This will remove you from this sponsor company.`
+                        );
+                        if (!confirmed) {
+                          event.preventDefault();
+                        }
+                      }}
+                    >
+                      <input type="hidden" name="intent" value="leave-sponsor" />
+                      <Button
+                        type="submit"
+                        variant="danger"
+                        size="sm"
+                        className="w-full text-[10px] uppercase font-bold tracking-widest py-2"
+                        disabled={isLeavingSponsor}
+                      >
+                        {isLeavingSponsor ? "Leaving..." : "Leave Sponsor"}
+                      </Button>
+                    </Form>
                   </div>
                 )) : (
                   <div className="p-6 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl text-center space-y-4">

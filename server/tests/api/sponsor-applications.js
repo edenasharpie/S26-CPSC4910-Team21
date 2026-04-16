@@ -239,6 +239,33 @@ async function runTests() {
     if (acceptedEventProperties.reviewNotes !== 'Great safety record') {
       throw new Error('Expected accepted event to include reviewNotes');
     }
+
+    const sponsorANotifications = await getEventsByUserId(sponsorA.userId, 'Notification', 30);
+    const sponsorAcceptedNotification = sponsorANotifications.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return (
+        properties.category === 'driver_application_decision' &&
+        Number(properties.applicationId) === Number(appForA) &&
+        properties.status === 'accepted'
+      );
+    });
+    if (!sponsorAcceptedNotification) {
+      throw new Error('Expected sponsor notification for accepted application decision');
+    }
+
+    const driverNotifications = await getEventsByUserId(driver.userId, 'Notification', 30);
+    const driverAcceptedNotification = driverNotifications.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return (
+        properties.category === 'driver_application_decision' &&
+        Number(properties.applicationId) === Number(appForA) &&
+        properties.status === 'accepted'
+      );
+    });
+    if (!driverAcceptedNotification) {
+      throw new Error('Expected driver notification for accepted application decision');
+    }
+
     console.log('PASS: Sponsor A accepted their application');
 
     // TEST 4: Sponsor B can reject their own application
@@ -273,6 +300,20 @@ async function runTests() {
     if (rejectedEventProperties.reviewNotes !== 'Too many violations') {
       throw new Error('Expected rejected event to include reviewNotes');
     }
+
+    const driverNotificationsAfterReject = await getEventsByUserId(driver.userId, 'Notification', 50);
+    const driverRejectedNotification = driverNotificationsAfterReject.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return (
+        properties.category === 'driver_application_decision' &&
+        Number(properties.applicationId) === Number(appForB) &&
+        properties.status === 'rejected'
+      );
+    });
+    if (!driverRejectedNotification) {
+      throw new Error('Expected driver notification for rejected application decision');
+    }
+
     console.log('PASS: Sponsor B rejected their application');
 
     // TEST 5: Sponsor B cannot process Sponsor A's application (403)

@@ -30,6 +30,24 @@ Notification:
           type: string
           description: The content of the notification.
           readOnly: true
+        category:
+          type: string
+          description: Notification category identifier for client filtering.
+          readOnly: true
+        actorUserId:
+          type: integer
+          description: The user who triggered the notification.
+          readOnly: true
+        readAt:
+          type: string
+          format: date-time
+          description: Timestamp when the recipient marked the notification as read.
+          readOnly: true
+        readByAction:
+          type: string
+          enum: [single, all]
+          description: Indicates whether the notification was marked by single-item or mark-all action.
+          readOnly: true
 
 PointTransaction:
   allOf:

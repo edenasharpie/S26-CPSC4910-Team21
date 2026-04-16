@@ -9,6 +9,7 @@ import {
   createTestUser,
   createTestDriverProfile,
   createTestSponsorProfile,
+  getEventsByUserId,
 } from '../setup.js';
 import { pool } from '../../src/db.js';
 
@@ -98,6 +99,25 @@ async function getDriverPointBalance(userId) {
   }
 }
 
+function parseEventProperties(rawProperties) {
+  if (!rawProperties) return {};
+  if (typeof rawProperties === 'object') return rawProperties;
+  try {
+    return JSON.parse(rawProperties);
+  } catch {
+    return {};
+  }
+}
+
+async function setDriverAlertPoints(userId, value) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.query('UPDATE DRIVERS SET AlertPoints = ? WHERE UserID = ?', [value ? 1 : 0, userId]);
+  } finally {
+    connection.release();
+  }
+}
+
 async function runTests() {
   try {
     console.log('Starting sponsor point transaction mutation tests...\n');
@@ -166,6 +186,36 @@ async function runTests() {
       throw new Error(`Expected PointBalance 140 after create; received ${balanceAfterCreate}`);
     }
 
+    const pointEventsAfterCreate = await getEventsByUserId(sponsorA.userId, 'PointTransaction', 20);
+    const createPointEvent = pointEventsAfterCreate.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return Number(properties.pointsDelta) === 40 && String(properties.reason) === createReason;
+    });
+
+    if (!createPointEvent) {
+      throw new Error('Expected PointTransaction event for sponsor create transaction');
+    }
+
+    const sponsorNotificationsAfterCreate = await getEventsByUserId(sponsorA.userId, 'Notification', 50);
+    const sponsorCreateNotification = sponsorNotificationsAfterCreate.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return properties.category === 'sponsor_point_transaction' && Number(properties.pointChange) === 40;
+    });
+
+    if (!sponsorCreateNotification) {
+      throw new Error('Expected sponsor notification for point transaction create');
+    }
+
+    const driverNotificationsAfterCreate = await getEventsByUserId(driverA.userId, 'Notification', 50);
+    const driverCreateNotification = driverNotificationsAfterCreate.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return properties.category === 'driver_point_transaction' && Number(properties.pointChange) === 40;
+    });
+
+    if (!driverCreateNotification) {
+      throw new Error('Expected driver notification for point transaction create');
+    }
+
     log('TEST 2: Sponsor edits own scoped transaction and balance diff applies', `PUT /api/sponsors/${sponsorA.userId}/point-transactions/${createdTx.TransactionID}`);
     const editReason = `mutation-edit-${Date.now()}`;
     const editRes = await axios.put(
@@ -185,6 +235,29 @@ async function runTests() {
     const balanceAfterEdit = await getDriverPointBalance(driverA.userId);
     if (Number(balanceAfterEdit) !== 125) {
       throw new Error(`Expected PointBalance 125 after edit; received ${balanceAfterEdit}`);
+    }
+
+    const pointEventsAfterEdit = await getEventsByUserId(sponsorA.userId, 'PointTransaction', 30);
+    const editPointEvent = pointEventsAfterEdit.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return Number(properties.transactionId) === Number(createdTx.TransactionID) && properties.updated === true;
+    });
+
+    if (!editPointEvent) {
+      throw new Error('Expected PointTransaction event for sponsor edit transaction');
+    }
+
+    const driverNotificationsAfterEdit = await getEventsByUserId(driverA.userId, 'Notification', 60);
+    const driverEditNotification = driverNotificationsAfterEdit.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return (
+        properties.category === 'driver_point_transaction_update' &&
+        Number(properties.transactionId) === Number(createdTx.TransactionID)
+      );
+    });
+
+    if (!driverEditNotification) {
+      throw new Error('Expected driver notification for point transaction edit');
     }
 
     log('TEST 3: Sponsor cannot edit a transaction outside company scope', 'PUT /api/sponsors/:userId/point-transactions/:tId');
@@ -251,7 +324,24 @@ async function runTests() {
       throw new Error('Expected transaction written during assumed sponsor flow');
     }
 
-    log('TEST 6: Removed legacy deduct endpoint returns not found', 'POST /api/sponsors/deduct-points');
+    log('TEST 6: Driver point notifications respect AlertPoints preference', `POST /api/sponsors/${sponsorA.userId}/drivers/${driverA.userId}/point-transactions`);
+    await setDriverAlertPoints(driverA.userId, false);
+
+    const beforeSuppressedNotifications = await getEventsByUserId(driverA.userId, 'Notification', 200);
+
+    await axios.post(
+      `${API_BASE_URL}/sponsors/${sponsorA.userId}/drivers/${driverA.userId}/point-transactions`,
+      { pointChange: 3, reason: `alert-points-off-${Date.now()}` }
+    );
+
+    const afterSuppressedNotifications = await getEventsByUserId(driverA.userId, 'Notification', 200);
+    if (afterSuppressedNotifications.length !== beforeSuppressedNotifications.length) {
+      throw new Error('Expected no new driver Notification events when AlertPoints is disabled');
+    }
+
+    await setDriverAlertPoints(driverA.userId, true);
+
+    log('TEST 7: Removed legacy deduct endpoint returns not found', 'POST /api/sponsors/deduct-points');
     try {
       await axios.post(`${API_BASE_URL}/sponsors/deduct-points`, {
         driverId: driverA.userId,

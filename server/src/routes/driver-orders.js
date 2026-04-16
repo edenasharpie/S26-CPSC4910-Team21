@@ -4,6 +4,10 @@ import {
   getEffectiveSessionUser,
   routeUserMatchesEffectiveSession,
 } from '../middleware/session-context.js';
+import {
+  getDriverNotificationContextByUserId,
+  notifyDriver,
+} from '../services/notification-service.js';
 
 const router = express.Router({ mergeParams: true });
 
@@ -81,6 +85,28 @@ function normalizeOrderItems(items) {
       quantity: Number.isFinite(item.quantity) ? Math.floor(item.quantity) : 0,
     }))
     .filter((item) => item.quantity > 0);
+}
+
+function getAssumedSponsorOriginalUser(req, expectedDriverUserId) {
+  const sessionContext = req.sessionContext;
+  if (!sessionContext?.isAssumed) {
+    return null;
+  }
+
+  const effectiveUser = sessionContext.effectiveUser;
+  const originalUser = sessionContext.originalUser;
+
+  if (
+    !effectiveUser ||
+    !originalUser ||
+    String(effectiveUser.UserType).toLowerCase() !== 'driver' ||
+    String(originalUser.UserType).toLowerCase() !== 'sponsor' ||
+    Number(effectiveUser.UserID) !== Number(expectedDriverUserId)
+  ) {
+    return null;
+  }
+
+  return originalUser;
 }
 
 async function fetchCatalogItems(connection, itemIds, sponsorCompanyId) {
@@ -167,6 +193,11 @@ router.post('/', async (req, res) => {
   if (items.length === 0) {
     return res.status(400).json({ error: 'At least one order item is required' });
   }
+
+  const assumedSponsorOriginalUser = getAssumedSponsorOriginalUser(req, req.driver.userId);
+  const pointActorUserId = assumedSponsorOriginalUser
+    ? Number(assumedSponsorOriginalUser.UserID)
+    : req.driver.userId;
 
   const connection = await pool.getConnection();
   try {
@@ -266,8 +297,28 @@ router.post('/', async (req, res) => {
       `INSERT INTO POINT_TRANSACTIONS
         (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
        VALUES (?, ?, ?, ?, NOW())`,
-      [req.driver.licenseNumber, req.driver.userId, -totalPoints, `Order #${orderId} placed`]
+      [req.driver.licenseNumber, pointActorUserId, -totalPoints, `Order #${orderId} placed`]
     );
+
+    if (assumedSponsorOriginalUser) {
+      const driverNotificationContext = await getDriverNotificationContextByUserId(
+        connection,
+        req.driver.userId
+      );
+
+      await notifyDriver(connection, {
+        driverContext: driverNotificationContext,
+        actorUserId: pointActorUserId,
+        content: `Your sponsor placed order #${orderId} on your behalf.`,
+        category: 'driver_order_changed_by_sponsor',
+        preference: 'orders',
+        metadata: {
+          orderId,
+          sponsorCompanyId: req.driver.sponsorCompanyId,
+          changeType: 'created_by_sponsor',
+        },
+      });
+    }
 
     await connection.commit();
 
@@ -297,6 +348,11 @@ router.patch('/:orderId', async (req, res) => {
   if (!Number.isInteger(orderId)) {
     return res.status(400).json({ error: 'Invalid order ID' });
   }
+
+  const assumedSponsorOriginalUser = getAssumedSponsorOriginalUser(req, req.driver.userId);
+  const pointActorUserId = assumedSponsorOriginalUser
+    ? Number(assumedSponsorOriginalUser.UserID)
+    : req.driver.userId;
 
   const connection = await pool.getConnection();
   try {
@@ -407,11 +463,31 @@ router.patch('/:orderId', async (req, res) => {
          VALUES (?, ?, ?, ?, NOW())`,
         [
           req.driver.licenseNumber,
-          req.driver.userId,
+          pointActorUserId,
           -delta,
           `Order #${orderId} updated`,
         ]
       );
+    }
+
+    if (assumedSponsorOriginalUser) {
+      const driverNotificationContext = await getDriverNotificationContextByUserId(
+        connection,
+        req.driver.userId
+      );
+
+      await notifyDriver(connection, {
+        driverContext: driverNotificationContext,
+        actorUserId: pointActorUserId,
+        content: `Your sponsor updated order #${orderId}.`,
+        category: 'driver_order_changed_by_sponsor',
+        preference: 'orders',
+        metadata: {
+          orderId,
+          sponsorCompanyId: req.driver.sponsorCompanyId,
+          changeType: 'updated_by_sponsor',
+        },
+      });
     }
 
     await connection.commit();
@@ -431,12 +507,123 @@ router.patch('/:orderId', async (req, res) => {
   }
 });
 
+// PATCH /api/driver/:userId/orders/:orderId/status
+// Only sponsors in assumed-driver view can change status.
+router.patch('/:orderId/status', async (req, res) => {
+  const orderId = Number(req.params.orderId);
+  const nextStatus = String(req.body?.orderStatus ?? '').trim().toLowerCase();
+
+  if (!Number.isInteger(orderId)) {
+    return res.status(400).json({ error: 'Invalid order ID' });
+  }
+
+  const allowedStatuses = ['confirmed', 'shipped', 'delivered', 'cancelled'];
+  if (!allowedStatuses.includes(nextStatus)) {
+    return res.status(400).json({ error: 'orderStatus must be one of confirmed, shipped, delivered, cancelled' });
+  }
+
+  const assumedSponsorOriginalUser = getAssumedSponsorOriginalUser(req, req.driver.userId);
+  if (!assumedSponsorOriginalUser) {
+    return res.status(403).json({ error: 'Only sponsors in assumed-driver view can update order status.' });
+  }
+
+  const sponsorUserId = Number(assumedSponsorOriginalUser.UserID);
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [sponsorRows] = await connection.execute(
+      'SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ? LIMIT 1',
+      [sponsorUserId]
+    );
+
+    if (sponsorRows.length === 0) {
+      await connection.rollback();
+      return res.status(403).json({ error: 'Assumed sponsor context is invalid.' });
+    }
+
+    const sponsorCompanyId = Number(sponsorRows[0].SponsorCompanyID);
+
+    const [orderRows] = await connection.execute(
+      `SELECT OrderStatus
+       FROM ORDERS
+       WHERE OrderID = ? AND DriverID = ? AND SponsorCompanyID = ?
+       LIMIT 1`,
+      [orderId, req.driver.licenseNumber, sponsorCompanyId]
+    );
+
+    if (orderRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const currentStatus = String(orderRows[0].OrderStatus ?? '').toLowerCase();
+    if (currentStatus === nextStatus) {
+      await connection.rollback();
+      return res.status(200).json({ orderId, orderStatus: nextStatus });
+    }
+
+    if (currentStatus === 'cancelled' || currentStatus === 'delivered') {
+      await connection.rollback();
+      return res.status(409).json({ error: `Cannot change order status from ${currentStatus}.` });
+    }
+
+    const validTransitions = {
+      confirmed: ['shipped', 'cancelled', 'delivered'],
+      shipped: ['delivered', 'cancelled'],
+    };
+
+    if (!validTransitions[currentStatus]?.includes(nextStatus)) {
+      await connection.rollback();
+      return res.status(409).json({ error: `Cannot change order status from ${currentStatus} to ${nextStatus}.` });
+    }
+
+    await connection.execute(
+      'UPDATE ORDERS SET OrderStatus = ? WHERE OrderID = ?',
+      [nextStatus, orderId]
+    );
+
+    const driverNotificationContext = await getDriverNotificationContextByUserId(
+      connection,
+      req.driver.userId
+    );
+    await notifyDriver(connection, {
+      driverContext: driverNotificationContext,
+      actorUserId: sponsorUserId,
+      content: `Your order #${orderId} status changed to ${nextStatus}.`,
+      category: 'driver_order_status_changed',
+      preference: 'orders',
+      metadata: {
+        orderId,
+        oldStatus: currentStatus,
+        newStatus: nextStatus,
+        sponsorCompanyId,
+      },
+    });
+
+    await connection.commit();
+    return res.status(200).json({ orderId, orderStatus: nextStatus });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating order status:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    connection.release();
+  }
+});
+
 // DELETE /api/driver/:userId/orders/:orderId (cancel)
 router.delete('/:orderId', async (req, res) => {
   const orderId = Number(req.params.orderId);
   if (!Number.isInteger(orderId)) {
     return res.status(400).json({ error: 'Invalid order ID' });
   }
+
+  const assumedSponsorOriginalUser = getAssumedSponsorOriginalUser(req, req.driver.userId);
+  const pointActorUserId = assumedSponsorOriginalUser
+    ? Number(assumedSponsorOriginalUser.UserID)
+    : req.driver.userId;
 
   const connection = await pool.getConnection();
   try {
@@ -477,11 +664,31 @@ router.delete('/:orderId', async (req, res) => {
        VALUES (?, ?, ?, ?, NOW())`,
       [
         req.driver.licenseNumber,
-        req.driver.userId,
+        pointActorUserId,
         refundPoints,
         `Order #${orderId} cancelled`,
       ]
     );
+
+    if (assumedSponsorOriginalUser) {
+      const driverNotificationContext = await getDriverNotificationContextByUserId(
+        connection,
+        req.driver.userId
+      );
+
+      await notifyDriver(connection, {
+        driverContext: driverNotificationContext,
+        actorUserId: pointActorUserId,
+        content: `Your sponsor cancelled order #${orderId}.`,
+        category: 'driver_order_changed_by_sponsor',
+        preference: 'orders',
+        metadata: {
+          orderId,
+          sponsorCompanyId: req.driver.sponsorCompanyId,
+          changeType: 'cancelled_by_sponsor',
+        },
+      });
+    }
 
     await connection.commit();
     return res.json({ orderId, orderStatus: 'cancelled' });
