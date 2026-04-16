@@ -9,7 +9,12 @@ import {
   updatePointTransaction,
   getAllPointTransactions,
 } from '../db.js';
-import { hashPassword, hasBooleanPermission } from '../utils/auth.js';
+import {
+  hashPassword,
+  hasBooleanPermission,
+  validatePasswordComplexity,
+  verifyPassword,
+} from '../utils/auth.js';
 import { processBulkLoadFile } from '../services/bulk-load-service.js';
 import {
   getDriverNotificationContextByUserId,
@@ -75,14 +80,12 @@ async function getUserForAssume(connection, userId) {
       u.FirstName,
       u.LastName,
       u.ActiveStatus,
-        s.SponsorCompanyID AS SponsorCompanyID,
-        s.SponsorCompanyID AS SponsorCompanyID,
-        CASE WHEN u.UserType = 'sponsor' THEN sc2.PointDollarValue ELSE NULL END AS SponsorPointDollarValue,
       u.Permissions,
-        CASE WHEN u.UserType = 'sponsor' THEN sc2.PointDollarValue ELSE NULL END AS SponsorPointDollarValue,
-      s.SponsorCompanyID
+      s.SponsorCompanyID AS SponsorCompanyID,
+      CASE WHEN u.UserType = 'sponsor' THEN sc2.PointDollarValue ELSE NULL END AS SponsorPointDollarValue
      FROM USERS u
      LEFT JOIN SPONSORS s ON s.UserID = u.UserID
+      LEFT JOIN SPONSOR_COMPANIES sc2 ON s.SponsorCompanyID = sc2.SponsorCompanyID
      WHERE u.UserID = ?
      LIMIT 1`,
     [userId]
@@ -228,7 +231,7 @@ router.get('/users/:id', async (request, response) => {
         u.Permissions,
         DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
         DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange,
-        s.SponsorCompanyID AS SponsorCompanyID,
+        sp.SponsorCompanyID AS SponsorCompanyID,
         CASE WHEN u.UserType = 'driver'  THEN d.PointBalance  ELSE NULL END AS PointBalance,
         CASE
           WHEN u.UserType = 'driver'  THEN sc.CompanyName
@@ -485,6 +488,7 @@ router.patch('/users/:id', async (request, response) => {
       username,
       email,
       phone,
+      password,
       firstName,
       middleName,
       lastName,
@@ -499,6 +503,17 @@ router.patch('/users/:id', async (request, response) => {
       alertPoints,   // Boolean flag: enable point transaction notifications
       alertOrders    // Boolean flag: enable order notifications
     } = request.body;
+
+    const normalizedPassword =
+      typeof password === 'string' ? password.trim() : undefined;
+
+    if (normalizedPassword !== undefined && normalizedPassword.length > 0) {
+      const complexity = validatePasswordComplexity(normalizedPassword);
+      if (!complexity.valid) {
+        await connection.rollback();
+        return response.status(400).json({ error: complexity.error });
+      }
+    }
 
     // Build dynamic update query
     const updates = [];
@@ -572,6 +587,58 @@ router.patch('/users/:id', async (request, response) => {
     }
 
     const userType = userTypeResult[0][0].UserType;
+
+    if (normalizedPassword !== undefined && normalizedPassword.length > 0) {
+      const [historyRows] = await connection.query(
+        `SELECT JSON_UNQUOTE(JSON_EXTRACT(Properties, '$.oldHash')) AS PassHash
+         FROM EVENTS
+         WHERE UserID = ? AND EventType = 'PasswordChange'
+           AND JSON_EXTRACT(Properties, '$.oldHash') IS NOT NULL
+         ORDER BY Timestamp DESC
+         LIMIT 5`,
+        [id]
+      );
+
+      const [currentHashRows] = await connection.query(
+        'SELECT PassHash FROM USERS WHERE UserID = ? LIMIT 1',
+        [id]
+      );
+
+      const allHashes = [
+        ...currentHashRows.map((row) => row.PassHash),
+        ...historyRows.map((row) => row.PassHash),
+      ].filter(Boolean);
+
+      for (const historicalHash of allHashes) {
+        const isMatch = await verifyPassword(normalizedPassword, historicalHash);
+        if (isMatch) {
+          await connection.rollback();
+          return response.status(400).json({ error: 'Cannot reuse one of the last 5 passwords.' });
+        }
+      }
+
+      const oldHash = currentHashRows[0]?.PassHash ?? null;
+      const newHash = await hashPassword(normalizedPassword);
+
+      await connection.query(
+        'UPDATE USERS SET PassHash = ?, LastPasswordChange = NOW() WHERE UserID = ?',
+        [newHash, id]
+      );
+
+      await connection.query(
+        'INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties) VALUES (?, NOW(), ?, ?)',
+        [
+          Number(id),
+          'PasswordChange',
+          JSON.stringify({
+            success: true,
+            changeMethod: 'admin_initiated',
+            oldHash,
+            actorUserId,
+          }),
+        ]
+      );
+    }
 
     // Update role-specific tables
     let previousSponsorCompanyId = null;
