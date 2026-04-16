@@ -102,7 +102,7 @@ export function ProfileEditLayout({
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 dark:from-blue-950 dark:via-gray-950 dark:to-blue-900">
       <div className="p-8 max-w-5xl mx-auto space-y-10">
         {successMessage && (
           <Alert
