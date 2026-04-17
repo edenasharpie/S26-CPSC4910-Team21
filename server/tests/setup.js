@@ -181,6 +181,25 @@ export async function createTestDriverProfile(options) {
       [licenseNumber, userId, sponsorCompanyId, pointBalance, performanceStatus]
     );
 
+    if (Number.isInteger(sponsorCompanyId) && sponsorCompanyId > 0) {
+      try {
+        await connection.query(
+          `INSERT INTO DRIVER_COMPANY_ENROLLMENT
+            (DriverID, SponsorCompanyID, PointBalance, EnrollmentStatus, JoinedAt, LeftAt)
+           VALUES (?, ?, ?, 'active', NOW(), NULL)
+           ON DUPLICATE KEY UPDATE
+             EnrollmentStatus = 'active',
+             LeftAt = NULL,
+             PointBalance = VALUES(PointBalance)`,
+          [licenseNumber, sponsorCompanyId, pointBalance]
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
+    }
+
     return { userId, licenseNumber, sponsorCompanyId };
   } finally {
     connection.release();
