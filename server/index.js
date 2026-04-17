@@ -36,7 +36,7 @@ import reviewRoutes from './src/routes/reviews.js';
 
 const app = express();
 
-const NOTIFICATION_ROUTE_PATTERN = /^\/api\/(?:driver|sponsors|admin)\/\d+\/notifications(?:\/.*)?$/;
+const NOTIFICATION_ROUTE_PATTERN = /^\/api\/(?:driver|drivers|sponsors|admin)\/\d+\/notifications(?:\/.*)?$/;
 const DEFAULT_NOTIFICATION_CORS_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -122,6 +122,7 @@ app.use('/api/images', imagesRoutes);
 app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/driver/:userId/orders', driverOrdersRoutes);
 app.use('/api/driver/:userId/reviews', driverReviewsRoutes);
+app.use('/api/driver/:userId/notifications', driverNotificationsRoutes);
 app.use('/api/drivers/:userId/notifications', driverNotificationsRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);

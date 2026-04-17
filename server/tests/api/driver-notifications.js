@@ -122,6 +122,19 @@ async function runTests() {
       throw new Error(`Expected unreadCount 2, got ${listRes.data.unreadCount}`);
     }
 
+    log('TEST 1B: List notifications via singular driver alias', `GET /api/driver/${driverUser.userId}/notifications`);
+    const singularListRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
+      params: { limit: 10, offset: 0 },
+    });
+
+    if (singularListRes.status !== 200) {
+      throw new Error('Expected singular driver notifications list to return 200');
+    }
+
+    if (!Array.isArray(singularListRes.data.notifications) || singularListRes.data.notifications.length !== 3) {
+      throw new Error('Expected singular driver alias to return three notifications');
+    }
+
     log('TEST 2: unreadOnly filter', `GET /api/drivers/${driverUser.userId}/notifications?unreadOnly=true`);
     const unreadRes = await axios.get(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications`, {
       params: { unreadOnly: true },
@@ -140,8 +153,8 @@ async function runTests() {
       throw new Error('Expected category filter to return one notification');
     }
 
-    log('TEST 4: mark single as read', `PATCH /api/drivers/${driverUser.userId}/notifications/${unreadOneId}/read`);
-    const markOneRes = await axios.patch(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications/${unreadOneId}/read`);
+    log('TEST 4: mark single as read (singular alias)', `PATCH /api/driver/${driverUser.userId}/notifications/${unreadOneId}/read`);
+    const markOneRes = await axios.patch(`${API_BASE_URL}/driver/${driverUser.userId}/notifications/${unreadOneId}/read`);
 
     if (markOneRes.status !== 200 || markOneRes.data.success !== true) {
       throw new Error('Expected mark single read to succeed');

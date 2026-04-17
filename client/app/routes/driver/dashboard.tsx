@@ -15,16 +15,6 @@ import {
   Area 
 } from "recharts";
 
-interface Notification {
-  NotificationID: number;
-  UserID?: number;
-  Title: string;
-  Message: string;
-  Type?: string;
-  IsRead: boolean;
-  CreatedAt: string;
-}
-
 const API_URL = getApiBaseUrl();
 
 function parseCookieNumber(cookieHeader: string, name: string): number | null {
@@ -67,13 +57,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   const cookieHeader = request.headers.get("Cookie") ?? "";
   const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
 
-  console.log("FETCHING FOR USER:", effectiveUserId);
-
   try {
-    const [performanceRes, sponsorsRes, notificationsRes] = await Promise.all([
+    const [performanceRes, sponsorsRes] = await Promise.all([
       fetch(`${API_URL}/api/drivers/performance/${effectiveUserId}`, requestInit),
       fetch(`${API_URL}/api/drivers/sponsors/${effectiveUserId}`, requestInit),
-      fetch(`${API_URL}/api/drivers/${effectiveUserId}/notifications`, requestInit),
     ]);
 
     const performancePayload = performanceRes.ok ? await performanceRes.json() : null;
@@ -96,22 +83,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     const pointsPayload = pointsRes && pointsRes.ok ? await pointsRes.json() : null;
 
-    const notificationsPayload = notificationsRes.ok ? await notificationsRes.json() : null;
-
     const history = Array.isArray(pointsPayload?.history) ? pointsPayload.history : [];
     const pointBalance = Number(pointsPayload?.balance ?? 0);
-    const notificationsRaw = (notificationsPayload as any)?.notifications ?? notificationsPayload;
-    const notifications = Array.isArray(notificationsRaw) ? notificationsRaw : [];
-
-    const normalizedNotifications = notifications.map((n: any) => ({
-        NotificationID: n.notificationId ?? 0,
-        UserID: n.actorUserId ?? Number(effectiveUserId),
-        Title: n.category?.toUpperCase() ?? "NOTIFICATION", // Using category as title
-        Message: n.content ?? "No content available",
-        Type: n.category ?? "info",
-        IsRead: Boolean(n.readAt),
-        CreatedAt: n.timestamp ?? new Date().toISOString(),
-    }));
 
     const driver = {
       UserID: session.UserID,
@@ -126,7 +99,6 @@ export async function loader({ request }: Route.LoaderArgs) {
       driver,
       history,
       sponsors,
-      notifications: normalizedNotifications,
       session,
       effectiveUserId,
       selectedSponsorCompanyId,
@@ -144,7 +116,6 @@ export async function loader({ request }: Route.LoaderArgs) {
       },
       history: [],
       sponsors: [],
-      notifications: [],
       session,
       effectiveUserId,
       selectedSponsorCompanyId: null,
@@ -156,24 +127,6 @@ export async function action({ request }: Route.ActionArgs) {
   const session = await requireAuth(request, ["driver", "admin"]);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
-  const notificationId = formData.get("notificationId");
-
-  if (intent === "mark-read" && notificationId) {
-    try {
-      const response = await fetch(`${API_URL}/api/notifications/${notificationId}/read`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.UserID }),
-      });
-
-      if (!response.ok) throw new Error("Failed to update");
-      
-      return { success: true };
-    } catch (error) {
-      console.error("Notification update error:", error);
-      return { success: false, error: "Could not mark as read" };
-    }
-  }
 
   if (intent !== "leave-sponsor") {
     return { success: false, error: "Unsupported action." };
@@ -215,8 +168,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 
 export default function DriverDashboard() {
-  const { driver, history, sponsors, notifications } = useLoaderData<typeof loader>();
-  console.log("DEBUG: Notifications received:", notifications);
+  const { driver, history, sponsors } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const navigate = useNavigate();
@@ -320,44 +272,6 @@ export default function DriverDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <aside className="lg:col-span-4 space-y-6">
-
-            {/* --- NOTIFICATIONS SECTION --- */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between px-1">
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-left">
-                  Notifications {notifications.length === 0 && "(Offline)"}
-                </h2>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-900 border dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
-                <div className="max-h-[300px] overflow-y-auto divide-y dark:divide-gray-800">
-                  {notifications.length > 0 ? (
-                    notifications.map((n: Notification) => (
-                      <div 
-                        key={n.NotificationID} 
-                        className={`p-4 text-left transition-colors ${!n.IsRead ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}
-                      >
-                        <div className="flex justify-between items-start gap-2">
-                          <p className={`text-xs font-bold uppercase tracking-tight ${!n.IsRead ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}>
-                            {n.Title}
-                          </p>
-                          <span className="text-[10px] text-gray-400 whitespace-nowrap">
-                            {new Date(n.CreatedAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 leading-normal">
-                          {n.Message}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-8 text-center border-2 border-dashed border-indigo-500">
-                      <p className="text-xs text-gray-400 italic">No new notifications</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
             <div className="space-y-4">
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">My Sponsors</h2>
               <div className="flex flex-col gap-3">

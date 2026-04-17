@@ -52,6 +52,11 @@ async function runTests() {
     );
 
     await assertNotificationPreflight(
+      '/drivers/999999/notifications/read-all',
+      'Drivers notifications preflight (plural alias)'
+    );
+
+    await assertNotificationPreflight(
       '/sponsors/999999/notifications/read-all',
       'Sponsor notifications preflight'
     );
@@ -59,6 +64,11 @@ async function runTests() {
     await assertNotificationPreflight(
       '/driver/999999/notifications/123/read',
       'Driver single-read preflight'
+    );
+
+    await assertNotificationPreflight(
+      '/drivers/999999/notifications/123/read',
+      'Drivers single-read preflight (plural alias)'
     );
 
     await assertNotificationPreflight(
