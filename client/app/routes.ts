@@ -63,8 +63,6 @@ export default [
   route("sponsor/driver-purchases", "routes/sponsor/driver-purchases.tsx"),
   route("sponsor/applications", "routes/sponsor/applications.tsx"),
   route("sponsor/bulk-upload", "routes/sponsor/bulk-upload.tsx"),
-  route("sponsor/manage-users", "routes/sponsor/manage-users.tsx"),
-  route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
 
   // Legacy driver dashboard (accessed by URL param)
   route("driver-dashboard/:id", "routes/driver-dashboard.tsx"),

@@ -60,7 +60,7 @@ router.get('/my-points/:userId', async (req, res) => {
 
     const assumedOriginalSponsor = getAssumedSponsorOriginalUser(req, driverUserId);
 
-    let sponsorCompanyId: number | null = null;
+    let sponsorCompanyId = null;
     if (assumedOriginalSponsor) {
       const [sponsorRows] = await pool.execute(
         'SELECT SponsorCompanyID FROM SPONSORS WHERE UserID = ? LIMIT 1',
