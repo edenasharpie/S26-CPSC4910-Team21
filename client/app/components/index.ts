@@ -8,3 +8,4 @@ export { Badge } from "./Badge";
 export { Alert } from "./Alert";
 export { ProfileEditLayout, getProfileEditFieldClass } from "./ProfileEditLayout";
 export { TopNav } from "./TopNav";
+export { CreateReview } from "./create-review";

@@ -17,6 +17,8 @@ tags:
     description: User account management
   - name: catalog
     description: Product catalog management
+  - name: reviews
+    description: Product review management
   - name: orders
     description: Order processing and history
   - name: notifications
@@ -116,6 +118,9 @@ paths:
 
   /driver/{userId}/orders/{orderId}/status:
     $ref: './paths/driver/orders.yaml#/ordersByIdStatus'
+
+  /driver/{userId}/reviews:
+    $ref: './paths/driver/reviews.yaml#/reviews'
 
   /driver/{userId}/notifications:
     $ref: './paths/driver/notifications.yaml#/notifications'

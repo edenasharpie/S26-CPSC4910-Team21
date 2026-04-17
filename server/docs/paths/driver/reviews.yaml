@@ -1,0 +1,68 @@
+reviews:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver.
+      required: true
+      schema:
+        type: integer
+    - name: sponsorCompanyId
+      in: query
+      description: Sponsor company context for driver-scoped access.
+      required: true
+      schema:
+        type: integer
+  post:
+    tags:
+      - reviews
+    summary: Create a driver product review
+    description: Allows a driver to review a catalog item after placing an eligible order for that item.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - itemId
+              - rating
+              - body
+            properties:
+              itemId:
+                type: integer
+              rating:
+                type: integer
+                minimum: 1
+                maximum: 5
+              body:
+                type: string
+                minLength: 1
+                maxLength: 1000
+    responses:
+      '201':
+        description: Review created successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Review submitted successfully!
+                reviewId:
+                  type: integer
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Driver is not eligible to review this item in the requested sponsor context.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
-import { Button, Card, Table, Modal, Alert } from "~/components";
+import { Button, Card, Table, Modal, Alert, CreateReview } from "~/components";
 import { createApiClient } from "~/utils/api";
 import { requireAuth } from "~/utils/session.server";
 
@@ -59,6 +59,8 @@ export default function DriverOrders() {
   const [editingOrder, setEditingOrder] = useState<DriverOrder | null>(null);
   const [editItems, setEditItems] = useState<OrderItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<{ orderId: number; item: OrderItem } | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const readSponsorCompanyIdFromCookie = () => {
     if (typeof document === "undefined") return null;
@@ -164,9 +166,19 @@ export default function DriverOrders() {
   };
 
   const handleEditOrder = (order: DriverOrder) => {
+    setSuccessMessage(null);
     setEditingOrder(order);
     setEditItems(order.items.map((item) => ({ ...item })));
   };
+
+  const handleOpenReview = (order: DriverOrder, item: OrderItem) => {
+    setError(null);
+    setSuccessMessage(null);
+    setReviewTarget({ orderId: order.orderId, item });
+  };
+
+  const isReviewableOrderStatus = (orderStatus: string) =>
+    ["confirmed", "shipped", "delivered"].includes(String(orderStatus).toLowerCase());
 
   const handleEditQuantity = (itemId: number, quantity: number) => {
     setEditItems((prev) =>
@@ -208,7 +220,7 @@ export default function DriverOrders() {
     }
   };
 
-  const itemColumns = [
+  const buildItemColumns = (order: DriverOrder) => [
     {
       key: "name",
       header: "Item",
@@ -238,6 +250,18 @@ export default function DriverOrders() {
       header: "Total Price",
       render: (item: OrderItem) => (item.unitDollarCost * item.quantity).toFixed(2),
     },
+    {
+      key: "review",
+      header: "Review",
+      render: (item: OrderItem) =>
+        isReviewableOrderStatus(order.orderStatus) ? (
+          <Button variant="secondary" size="sm" onClick={() => handleOpenReview(order, item)}>
+            Write Review
+          </Button>
+        ) : (
+          <span className="text-xs text-gray-500">Not available</span>
+        ),
+    },
   ];
 
   return (
@@ -258,6 +282,13 @@ export default function DriverOrders() {
         </div>
 
         {error && <Alert message={error} onDismiss={() => setError(null)} />}
+        {successMessage && (
+          <Alert
+            message={successMessage}
+            variant="success"
+            onDismiss={() => setSuccessMessage(null)}
+          />
+        )}
 
         {loading ? (
           <Card>
@@ -285,7 +316,7 @@ export default function DriverOrders() {
                   </div>
                 </div>
 
-                <Table data={order.items} columns={itemColumns} />
+                <Table data={order.items} columns={buildItemColumns(order)} />
 
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-gray-700">
                   <div className="text-sm text-gray-600 dark:text-gray-300">
@@ -345,6 +376,26 @@ export default function DriverOrders() {
               </Button>
             </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(reviewTarget)}
+        onClose={() => setReviewTarget(null)}
+        title={reviewTarget ? `Review ${reviewTarget.item.name}` : "Write Review"}
+      >
+        {reviewTarget && sponsorCompanyId && (
+          <CreateReview
+            itemId={reviewTarget.item.itemId}
+            itemName={reviewTarget.item.name}
+            userId={user.UserID}
+            sponsorCompanyId={sponsorCompanyId}
+            onCancel={() => setReviewTarget(null)}
+            onSuccess={() => {
+              setReviewTarget(null);
+              setSuccessMessage(`Review for ${reviewTarget.item.name} submitted successfully.`);
+            }}
+          />
         )}
       </Modal>
     </div>
