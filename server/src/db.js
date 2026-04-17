@@ -553,3 +553,20 @@ export async function logLoginAttempt(userId, success, result, ipAddress) {
     });
   }
 }
+
+export async function getNotifications(userId) {
+  const [rows] = await pool.execute(
+    'SELECT * FROM NOTIFICATIONS WHERE UserID = ? ORDER BY CreatedAt DESC',
+    [userId]
+  );
+  return rows;
+}
+
+export async function markNotificationAsRead(notificationId) {
+  await pool.execute(
+    'UPDATE NOTIFICATIONS SET IsRead = TRUE WHERE NotificationID = ?',
+    [notificationId]
+  );
+
+  return result.affectedRows > 0;
+}

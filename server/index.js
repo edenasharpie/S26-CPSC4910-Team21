@@ -120,7 +120,7 @@ app.use('/api/images/u', express.static(PROFILE_IMAGE_UPLOAD_DIR));
 app.use('/api/images', imagesRoutes);
 app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/driver/:userId/orders', driverOrdersRoutes);
-app.use('/api/driver/:userId/notifications', driverNotificationsRoutes);
+app.use('/api/drivers/:userId/notifications', driverNotificationsRoutes);
 app.use('/api/sponsor/:userId/catalogs', sponsorCatalogsRoutes);
 app.use('/api/sponsor/:userId/reports', sponsorReportsRoutes);
 app.use('/api/sponsor/:userId/reviews', reviewRoutes);
@@ -133,7 +133,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // Start the server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const HOST = process.env.HOST || '0.0.0.0';
 
 const startServer = async () => {
