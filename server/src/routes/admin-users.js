@@ -856,6 +856,35 @@ router.patch('/users/:id', async (request, response) => {
         }
 
         const companyChanged = previousSponsorCompanyId !== nextSponsorCompanyId;
+        if (companyChanged && driverLicenseNumber) {
+          try {
+            if (Number.isInteger(previousSponsorCompanyId)) {
+              await connection.query(
+                `UPDATE DRIVER_COMPANY_ENROLLMENT
+                 SET EnrollmentStatus = 'inactive', LeftAt = NOW()
+                 WHERE DriverID = ? AND SponsorCompanyID = ? AND EnrollmentStatus = 'active'`,
+                [driverLicenseNumber, previousSponsorCompanyId]
+              );
+            }
+
+            if (Number.isInteger(nextSponsorCompanyId)) {
+              await connection.query(
+                `INSERT INTO DRIVER_COMPANY_ENROLLMENT
+                  (DriverID, SponsorCompanyID, PointBalance, EnrollmentStatus, JoinedAt, LeftAt)
+                 VALUES (?, ?, 0, 'active', NOW(), NULL)
+                 ON DUPLICATE KEY UPDATE
+                  EnrollmentStatus = 'active',
+                  LeftAt = NULL`,
+                [driverLicenseNumber, nextSponsorCompanyId]
+              );
+            }
+          } catch (error) {
+            if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+              throw error;
+            }
+          }
+        }
+
         if (companyChanged && Number.isInteger(previousSponsorCompanyId)) {
           await connection.query(
             `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)

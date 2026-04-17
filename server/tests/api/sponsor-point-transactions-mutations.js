@@ -89,10 +89,39 @@ async function getLatestTransactionByReason(driverLicenseNumber, reason) {
   }
 }
 
-async function getDriverPointBalance(userId) {
+async function getDriverPointBalance(userId, sponsorCompanyId = null) {
   const connection = await pool.getConnection();
   try {
+    if (Number.isInteger(Number(sponsorCompanyId)) && Number(sponsorCompanyId) > 0) {
+      const [rows] = await connection.query(
+        `SELECT e.PointBalance
+         FROM DRIVERS d
+         JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber
+         WHERE d.UserID = ? AND e.SponsorCompanyID = ?
+         LIMIT 1`,
+        [userId, sponsorCompanyId]
+      );
+      return rows[0]?.PointBalance;
+    }
+
     const [rows] = await connection.query('SELECT PointBalance FROM DRIVERS WHERE UserID = ?', [userId]);
+    return rows[0]?.PointBalance;
+  } finally {
+    connection.release();
+  }
+}
+
+async function getDriverEnrollmentPointBalance(userId, sponsorCompanyId) {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.query(
+      `SELECT e.PointBalance
+       FROM DRIVERS d
+       JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber
+       WHERE d.UserID = ? AND e.SponsorCompanyID = ?
+       LIMIT 1`,
+      [userId, sponsorCompanyId]
+    );
     return rows[0]?.PointBalance;
   } finally {
     connection.release();
@@ -181,7 +210,7 @@ async function runTests() {
       throw new Error('Expected transaction UserChanged and PointChange to match request');
     }
 
-    const balanceAfterCreate = await getDriverPointBalance(driverA.userId);
+    const balanceAfterCreate = await getDriverEnrollmentPointBalance(driverA.userId, companyA);
     if (Number(balanceAfterCreate) !== 140) {
       throw new Error(`Expected PointBalance 140 after create; received ${balanceAfterCreate}`);
     }
@@ -232,7 +261,7 @@ async function runTests() {
       throw new Error('Expected edited transaction reason to persist on same transaction');
     }
 
-    const balanceAfterEdit = await getDriverPointBalance(driverA.userId);
+    const balanceAfterEdit = await getDriverEnrollmentPointBalance(driverA.userId, companyA);
     if (Number(balanceAfterEdit) !== 125) {
       throw new Error(`Expected PointBalance 125 after edit; received ${balanceAfterEdit}`);
     }

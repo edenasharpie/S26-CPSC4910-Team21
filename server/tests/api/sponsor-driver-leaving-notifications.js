@@ -58,6 +58,53 @@ async function getDriverSponsorCompanyId(driverUserId) {
   }
 }
 
+async function getDriverEnrollmentStatus(driverUserId, sponsorCompanyId) {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.query(
+      `SELECT e.EnrollmentStatus
+       FROM DRIVERS d
+       JOIN DRIVER_COMPANY_ENROLLMENT e ON e.DriverID = d.LicenseNumber
+       WHERE d.UserID = ? AND e.SponsorCompanyID = ?
+       LIMIT 1`,
+      [driverUserId, sponsorCompanyId]
+    );
+    return rows[0]?.EnrollmentStatus ?? null;
+  } finally {
+    connection.release();
+  }
+}
+
+async function setDriverEnrollmentActive(driverUserId, sponsorCompanyId, pointBalance = 0) {
+  const connection = await pool.getConnection();
+  try {
+    const [driverRows] = await connection.query(
+      'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+      [driverUserId]
+    );
+    const licenseNumber = driverRows[0]?.LicenseNumber;
+    if (!licenseNumber) return;
+
+    const [updateResult] = await connection.query(
+      `UPDATE DRIVER_COMPANY_ENROLLMENT
+       SET EnrollmentStatus = 'active', LeftAt = NULL, PointBalance = ?
+       WHERE DriverID = ? AND SponsorCompanyID = ?`,
+      [pointBalance, licenseNumber, sponsorCompanyId]
+    );
+
+    if (Number(updateResult?.affectedRows ?? 0) === 0) {
+      await connection.query(
+        `INSERT INTO DRIVER_COMPANY_ENROLLMENT
+          (DriverID, SponsorCompanyID, PointBalance, EnrollmentStatus, JoinedAt, LeftAt)
+         VALUES (?, ?, ?, 'active', NOW(), NULL)`,
+        [licenseNumber, sponsorCompanyId, pointBalance]
+      );
+    }
+  } finally {
+    connection.release();
+  }
+}
+
 async function setDriverSponsorCompanyId(driverUserId, sponsorCompanyId) {
   const connection = await pool.getConnection();
   try {
@@ -125,9 +172,11 @@ async function runTests() {
       throw new Error('Expected sponsor driver removal endpoint to succeed');
     }
 
-    const sponsorAfterRemove = await getDriverSponsorCompanyId(driver.userId);
-    if (sponsorAfterRemove !== null) {
-      throw new Error(`Expected SponsorCompanyID NULL after sponsor removal, got ${sponsorAfterRemove}`);
+    const enrollmentStatusAfterSponsorRemove = await getDriverEnrollmentStatus(driver.userId, companyA);
+    if (String(enrollmentStatusAfterSponsorRemove).toLowerCase() !== 'inactive') {
+      throw new Error(
+        `Expected enrollment inactive after sponsor removal; got ${enrollmentStatusAfterSponsorRemove}`
+      );
     }
 
     const sponsorNotificationsAfterRemove = await getEventsByUserId(sponsorA.userId, 'Notification', 30);
@@ -158,7 +207,10 @@ async function runTests() {
     }
 
     // Prepare for admin-triggered flow.
+    // Admin patch currently operates on DRIVERS.SponsorCompanyID; keep that in sync for this test.
     await setDriverSponsorCompanyId(driver.userId, companyA);
+    // Also reactivate enrollment so subsequent enrollment-based routes work.
+    await setDriverEnrollmentActive(driver.userId, companyA, 75);
 
     // TEST 2: Admin updates driver sponsor company to NULL and notifications are generated.
     log('TEST 2: Admin unassigns driver from company', `PATCH /api/admin/users/${driver.userId}`);
@@ -173,6 +225,13 @@ async function runTests() {
     const sponsorAfterAdminPatch = await getDriverSponsorCompanyId(driver.userId);
     if (sponsorAfterAdminPatch !== null) {
       throw new Error(`Expected SponsorCompanyID NULL after admin patch, got ${sponsorAfterAdminPatch}`);
+    }
+
+    const enrollmentStatusAfterAdminPatch = await getDriverEnrollmentStatus(driver.userId, companyA);
+    if (String(enrollmentStatusAfterAdminPatch).toLowerCase() !== 'inactive') {
+      throw new Error(
+        `Expected enrollment inactive after admin patch; got ${enrollmentStatusAfterAdminPatch}`
+      );
     }
 
     const sponsorNotificationsAfterAdminPatch = await getEventsByUserId(sponsorA.userId, 'Notification', 60);
@@ -204,20 +263,23 @@ async function runTests() {
 
     // Prepare for driver self-leave flow.
     await setDriverSponsorCompanyId(driver.userId, companyA);
+    await setDriverEnrollmentActive(driver.userId, companyA, 75);
 
     // TEST 3: Driver leaves company and notifications are generated.
     log('TEST 3: Driver leaves sponsor company', `DELETE /api/drivers/${driver.userId}/company`);
     const driverLeaveResponse = await axios.delete(
-      `${API_BASE_URL}/drivers/${driver.userId}/company`
+      `${API_BASE_URL}/drivers/${driver.userId}/company?sponsorCompanyId=${companyA}`
     );
 
     if (driverLeaveResponse.status !== 200 || driverLeaveResponse.data?.success !== true) {
       throw new Error('Expected driver leave endpoint to succeed');
     }
 
-    const sponsorAfterDriverLeave = await getDriverSponsorCompanyId(driver.userId);
-    if (sponsorAfterDriverLeave !== null) {
-      throw new Error(`Expected SponsorCompanyID NULL after driver leave, got ${sponsorAfterDriverLeave}`);
+    const enrollmentStatusAfterDriverLeave = await getDriverEnrollmentStatus(driver.userId, companyA);
+    if (String(enrollmentStatusAfterDriverLeave).toLowerCase() !== 'inactive') {
+      throw new Error(
+        `Expected enrollment inactive after driver leave; got ${enrollmentStatusAfterDriverLeave}`
+      );
     }
 
     const sponsorNotificationsAfterDriverLeave = await getEventsByUserId(sponsorA.userId, 'Notification', 90);
@@ -249,6 +311,7 @@ async function runTests() {
 
     // Prepare for inactive driver guard flow.
     await setDriverSponsorCompanyId(driver.userId, companyA);
+    await setDriverEnrollmentActive(driver.userId, companyA, 75);
 
     const sponsorNotificationsBeforeInactiveAttempt = await getEventsByUserId(sponsorA.userId, 'Notification', 120);
     const driverNotificationsBeforeInactiveAttempt = await getEventsByUserId(driver.userId, 'Notification', 120);
@@ -266,7 +329,7 @@ async function runTests() {
     log('TEST 4: Inactive driver leave is blocked', `DELETE /api/drivers/${driver.userId}/company`);
     await setUserActiveStatus(driver.userId, 0);
     try {
-      await axios.delete(`${API_BASE_URL}/drivers/${driver.userId}/company`);
+      await axios.delete(`${API_BASE_URL}/drivers/${driver.userId}/company?sponsorCompanyId=${companyA}`);
       throw new Error('Expected inactive driver leave to return 403');
     } catch (error) {
       if (error?.response?.status !== 403) {
@@ -276,9 +339,11 @@ async function runTests() {
       await setUserActiveStatus(driver.userId, 1);
     }
 
-    const sponsorAfterInactiveAttempt = await getDriverSponsorCompanyId(driver.userId);
-    if (Number(sponsorAfterInactiveAttempt) !== Number(companyA)) {
-      throw new Error(`Expected inactive leave attempt to preserve SponsorCompanyID=${companyA}, got ${sponsorAfterInactiveAttempt}`);
+    const enrollmentStatusAfterInactiveAttempt = await getDriverEnrollmentStatus(driver.userId, companyA);
+    if (String(enrollmentStatusAfterInactiveAttempt).toLowerCase() !== 'active') {
+      throw new Error(
+        `Expected inactive leave attempt to preserve active enrollment; got ${enrollmentStatusAfterInactiveAttempt}`
+      );
     }
 
     const sponsorNotificationsAfterInactiveAttempt = await getEventsByUserId(sponsorA.userId, 'Notification', 120);

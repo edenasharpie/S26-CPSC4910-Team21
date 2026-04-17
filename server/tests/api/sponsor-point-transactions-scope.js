@@ -53,13 +53,13 @@ async function cleanupPointTransactions() {
   }
 }
 
-async function insertPointTransaction(driverRef, userChanged, pointChange, reason) {
+async function insertPointTransaction(driverRef, sponsorCompanyId, userChanged, pointChange, reason) {
   const connection = await pool.getConnection();
   try {
     await connection.query(
-      `INSERT INTO POINT_TRANSACTIONS (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
-       VALUES (?, ?, ?, ?, NOW())`,
-      [driverRef, userChanged, pointChange, reason]
+      `INSERT INTO POINT_TRANSACTIONS (DriverID, SponsorCompanyID, UserChanged, PointChange, ReasonForChange, TimeChanged)
+       VALUES (?, ?, ?, ?, ?, NOW())`,
+      [driverRef, sponsorCompanyId, userChanged, pointChange, reason]
     );
   } finally {
     connection.release();
@@ -101,8 +101,8 @@ async function runTests() {
     driverReferences.push(driverAProfile.licenseNumber);
     driverReferences.push(driverBProfile.licenseNumber);
 
-    await insertPointTransaction(driverAProfile.licenseNumber, sponsorA.userId, 15, 'scope-test-license-a');
-    await insertPointTransaction(driverBProfile.licenseNumber, sponsorB.userId, 22, 'scope-test-license-b');
+    await insertPointTransaction(driverAProfile.licenseNumber, companyA, sponsorA.userId, 15, 'scope-test-license-a');
+    await insertPointTransaction(driverBProfile.licenseNumber, companyB, sponsorB.userId, 22, 'scope-test-license-b');
 
     log('TEST 1: Sponsor A sees only company A transactions', `GET /api/sponsors/${sponsorA.userId}/point-transactions`);
     const sponsorARes = await axios.get(`${API_BASE_URL}/sponsors/${sponsorA.userId}/point-transactions`);
