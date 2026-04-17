@@ -248,11 +248,6 @@ export default function SponsorPortal() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap justify-end">
-            {isAssumedMode && (
-              <Form method="post" action="/exit-assumption">
-                <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
-              </Form>
-            )}
             <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
               <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
               <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
