@@ -100,13 +100,17 @@ async function runTests() {
 
     // Baseline checks while active
     log('TEST 1: Active driver can list catalogs', `GET /api/driver/${driverUser.userId}/catalogs`);
-    const activeCatalogRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/catalogs`);
+    const activeCatalogRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/catalogs`, {
+      params: { sponsorCompanyId },
+    });
     if (activeCatalogRes.status !== 200) {
       throw new Error('Expected active driver to access catalogs');
     }
 
     log('TEST 2: Active driver can list orders', `GET /api/driver/${driverUser.userId}/orders`);
-    const activeOrdersRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/orders`);
+    const activeOrdersRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/orders`, {
+      params: { sponsorCompanyId },
+    });
     if (activeOrdersRes.status !== 200) {
       throw new Error('Expected active driver to access orders');
     }
@@ -116,7 +120,9 @@ async function runTests() {
     // Catalog guards
     log('TEST 3: Inactive driver blocked from catalogs list', `GET /api/driver/${driverUser.userId}/catalogs`);
     try {
-      await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/catalogs`);
+      await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/catalogs`, {
+        params: { sponsorCompanyId },
+      });
       throw new Error('Expected 403 for inactive driver catalog list');
     } catch (error) {
       if (!error.response || error.response.status !== 403) {
@@ -126,7 +132,9 @@ async function runTests() {
 
     log('TEST 4: Inactive driver blocked from catalog details', `GET /api/driver/${driverUser.userId}/catalogs/${catalogId}`);
     try {
-      await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/catalogs/${catalogId}`);
+      await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/catalogs/${catalogId}`, {
+        params: { sponsorCompanyId },
+      });
       throw new Error('Expected 403 for inactive driver catalog detail');
     } catch (error) {
       if (!error.response || error.response.status !== 403) {
@@ -136,7 +144,9 @@ async function runTests() {
 
     log('TEST 5: Inactive driver blocked from catalog item details', `GET /api/driver/${driverUser.userId}/catalogs/${catalogId}/items/${itemId}`);
     try {
-      await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/catalogs/${catalogId}/items/${itemId}`);
+      await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/catalogs/${catalogId}/items/${itemId}`, {
+        params: { sponsorCompanyId },
+      });
       throw new Error('Expected 403 for inactive driver catalog item detail');
     } catch (error) {
       if (!error.response || error.response.status !== 403) {
@@ -147,7 +157,9 @@ async function runTests() {
     // Order guards
     log('TEST 6: Inactive driver blocked from order list', `GET /api/driver/${driverUser.userId}/orders`);
     try {
-      await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/orders`);
+      await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/orders`, {
+        params: { sponsorCompanyId },
+      });
       throw new Error('Expected 403 for inactive driver order list');
     } catch (error) {
       if (!error.response || error.response.status !== 403) {
@@ -157,9 +169,11 @@ async function runTests() {
 
     log('TEST 7: Inactive driver blocked from order creation', `POST /api/driver/${driverUser.userId}/orders`);
     try {
-      await axios.post(`${API_BASE_URL}/driver/${driverUser.userId}/orders`, {
-        items: [{ itemId, quantity: 1 }],
-      });
+      await axios.post(
+        `${API_BASE_URL}/driver/${driverUser.userId}/orders`,
+        { items: [{ itemId, quantity: 1 }] },
+        { params: { sponsorCompanyId } }
+      );
       throw new Error('Expected 403 for inactive driver order creation');
     } catch (error) {
       if (!error.response || error.response.status !== 403) {

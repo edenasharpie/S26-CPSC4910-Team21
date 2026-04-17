@@ -51,11 +51,23 @@ async function createTestDriver(userId, sponsorCompanyId) {
   const connection = await pool.getConnection();
   
   try {
+    const licenseNumber = `LICENSE_${userId}`;
     await connection.query(
       `INSERT INTO DRIVERS (LicenseNumber, UserID, SponsorCompanyID, PointBalance, 
        PerformanceStatus, AlertPoints, AlertOrders) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [`LICENSE_${userId}`, userId, sponsorCompanyId, 1000, 'good', 0, 0]
+      [licenseNumber, userId, sponsorCompanyId, 1000, 'good', 0, 0]
+    );
+
+    await connection.query(
+      `INSERT INTO DRIVER_COMPANY_ENROLLMENT
+        (DriverID, SponsorCompanyID, PointBalance, EnrollmentStatus, JoinedAt, LeftAt)
+       VALUES (?, ?, ?, 'active', NOW(), NULL)
+       ON DUPLICATE KEY UPDATE
+         EnrollmentStatus = 'active',
+         LeftAt = NULL,
+         PointBalance = VALUES(PointBalance)`,
+      [licenseNumber, sponsorCompanyId, 1000]
     );
   } finally {
     connection.release();
@@ -175,7 +187,9 @@ async function runTests() {
 
     // Test 1: Driver gets list of catalogs
     log('TEST 1: Driver fetching catalogs...', `GET /api/driver/${driverUserId}/catalogs`);
-    const catalogsResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs`);
+    const catalogsResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs`, {
+      params: { sponsorCompanyId },
+    });
     log('Driver catalogs:', catalogsResponse.data);
     
     if (catalogsResponse.data.length === 0) {
@@ -184,7 +198,9 @@ async function runTests() {
 
     // Test 2: Driver gets specific catalog with items
     log('TEST 2: Driver fetching specific catalog...', `GET /api/driver/${driverUserId}/catalogs/${catalogId}`);
-    const catalogDetailResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs/${catalogId}`);
+    const catalogDetailResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs/${catalogId}`, {
+      params: { sponsorCompanyId },
+    });
     log('Catalog details:', catalogDetailResponse.data);
     
     if (!catalogDetailResponse.data.items || catalogDetailResponse.data.items.length === 0) {
@@ -193,12 +209,16 @@ async function runTests() {
 
     // Test 3: Driver gets specific item
     log('TEST 3: Driver fetching specific item...', `GET /api/driver/${driverUserId}/catalogs/${catalogId}/items/${itemId}`);
-    const itemResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs/${catalogId}/items/${itemId}`);
+    const itemResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs/${catalogId}/items/${itemId}`, {
+      params: { sponsorCompanyId },
+    });
     log('Item details:', itemResponse.data);
 
     // Test 4: Driver with pagination
     log('TEST 4: Driver fetching catalogs with pagination...', `GET /api/driver/${driverUserId}/catalogs?limit=5&offset=0`);
-    const paginatedResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs?limit=5&offset=0`);
+    const paginatedResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs`, {
+      params: { limit: 5, offset: 0, sponsorCompanyId },
+    });
     log('Paginated catalogs:', paginatedResponse.data);
 
     // Test 5: Invalid user ID (should return 404)
@@ -232,7 +252,9 @@ async function runTests() {
     }
     
     try {
-      await axios.get(`${API_BASE_URL}/driver/${orphanDriverUserId}/catalogs`);
+      await axios.get(`${API_BASE_URL}/driver/${orphanDriverUserId}/catalogs`, {
+        params: { sponsorCompanyId },
+      });
       throw new Error('Expected 403 error for driver without sponsor company');
     } catch (error) {
       if (error.response && error.response.status === 403) {
@@ -253,7 +275,9 @@ async function runTests() {
     createdCatalogIds.push(otherCatalogId);
     
     try {
-      await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs/${otherCatalogId}`);
+      await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs/${otherCatalogId}`, {
+        params: { sponsorCompanyId },
+      });
       throw new Error('Expected 404 for catalog from different sponsor company');
     } catch (error) {
       if (error.response && error.response.status === 404) {
@@ -266,6 +290,7 @@ async function runTests() {
     console.log('\nAll driver catalog tests completed successfully!');
   } catch (error) {
     console.error('\nTest failed:');
+    process.exitCode = 1;
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Data:', error.response.data);
@@ -279,7 +304,7 @@ async function runTests() {
     await cleanupUsers(createdUserIds);
     await cleanupSponsorCompanies(createdSponsorIds);
     await closePool();
-    process.exit(0);
+    process.exit(process.exitCode ?? 0);
   }
 }
 

@@ -63,6 +63,17 @@ async function createTestDriver(userId, sponsorCompanyId, pointBalance = 1000) {
       [licenseNumber, userId, sponsorCompanyId, pointBalance]
     );
 
+    await connection.query(
+      `INSERT INTO DRIVER_COMPANY_ENROLLMENT
+        (DriverID, SponsorCompanyID, PointBalance, EnrollmentStatus, JoinedAt, LeftAt)
+       VALUES (?, ?, ?, 'active', NOW(), NULL)
+       ON DUPLICATE KEY UPDATE
+         EnrollmentStatus = 'active',
+         LeftAt = NULL,
+         PointBalance = VALUES(PointBalance)`,
+      [licenseNumber, sponsorCompanyId, pointBalance]
+    );
+
     return licenseNumber;
   } finally {
     connection.release();
@@ -122,10 +133,21 @@ async function createLegacyOrder(driverLicense, sponsorCompanyId, itemId) {
   }
 }
 
-async function getDriverPointBalance(userId) {
+async function getDriverPointBalance(userId, sponsorCompanyId) {
   const connection = await pool.getConnection();
   try {
-    const [rows] = await connection.query('SELECT PointBalance FROM DRIVERS WHERE UserID = ?', [userId]);
+    const [rows] = await connection.query(
+      `SELECT
+         COALESCE(e.PointBalance, d.PointBalance) AS PointBalance
+       FROM DRIVERS d
+       LEFT JOIN DRIVER_COMPANY_ENROLLMENT e
+         ON e.DriverID = d.LicenseNumber
+        AND e.SponsorCompanyID = ?
+        AND e.EnrollmentStatus = 'active'
+       WHERE d.UserID = ?
+       LIMIT 1`,
+      [sponsorCompanyId, userId]
+    );
     return rows[0]?.PointBalance ?? null;
   } finally {
     connection.release();
@@ -271,9 +293,13 @@ async function runTests() {
     const legacyOrderId = await createLegacyOrder(license, sponsorCompanyId, itemA);
     createdOrderIds.push(legacyOrderId);
 
+    const scopeParams = { sponsorCompanyId };
+
     // Test 1: list orders initially empty
     log('TEST 1: Listing orders before creation...', `GET /api/driver/${driverUserId}/orders`);
-    const emptyListResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/orders`);
+    const emptyListResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
+      params: scopeParams,
+    });
     log('Initial orders response:', emptyListResponse.data);
     if (!Array.isArray(emptyListResponse.data) || emptyListResponse.data.length !== 0) {
       throw new Error('Expected initial orders list to be empty');
@@ -281,12 +307,16 @@ async function runTests() {
 
     // Test 2: create order successfully
     log('TEST 2: Creating driver order...', `POST /api/driver/${driverUserId}/orders`);
-    const createOrderResponse = await axios.post(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
-      items: [
-        { itemId: itemA, quantity: 2 },
-        { itemId: itemB, quantity: 1 },
-      ],
-    });
+    const createOrderResponse = await axios.post(
+      `${API_BASE_URL}/driver/${driverUserId}/orders`,
+      {
+        items: [
+          { itemId: itemA, quantity: 2 },
+          { itemId: itemB, quantity: 1 },
+        ],
+      },
+      { params: scopeParams }
+    );
     log('Created order response:', createOrderResponse.data);
 
     if (createOrderResponse.status !== 201 || createOrderResponse.data.orderStatus !== 'confirmed') {
@@ -296,14 +326,16 @@ async function runTests() {
     const orderId = createOrderResponse.data.orderId;
     createdOrderIds.push(orderId);
 
-    const balanceAfterCreate = await getDriverPointBalance(driverUserId);
+    const balanceAfterCreate = await getDriverPointBalance(driverUserId, sponsorCompanyId);
     if (balanceAfterCreate !== 500) {
       throw new Error(`Expected point balance 500 after creation, got ${balanceAfterCreate}`);
     }
 
     // Test 3: list returns created order + items
     log('TEST 3: Listing orders after creation...', `GET /api/driver/${driverUserId}/orders`);
-    const listResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/orders`);
+    const listResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
+      params: scopeParams,
+    });
     log('Orders after create:', listResponse.data);
 
     if (!Array.isArray(listResponse.data) || listResponse.data.length < 1) {
@@ -326,15 +358,19 @@ async function runTests() {
 
     // Test 4: update confirmed order
     log('TEST 4: Updating confirmed order...', `PATCH /api/driver/${driverUserId}/orders/${orderId}`);
-    const updateResponse = await axios.patch(`${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`, {
-      items: [
-        { itemId: itemA, quantity: 1 },
-        { itemId: itemB, quantity: 1 },
-      ],
-    });
+    const updateResponse = await axios.patch(
+      `${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`,
+      {
+        items: [
+          { itemId: itemA, quantity: 1 },
+          { itemId: itemB, quantity: 1 },
+        ],
+      },
+      { params: scopeParams }
+    );
     log('Order update response:', updateResponse.data);
 
-    const balanceAfterUpdate = await getDriverPointBalance(driverUserId);
+    const balanceAfterUpdate = await getDriverPointBalance(driverUserId, sponsorCompanyId);
     if (balanceAfterUpdate !== 600) {
       throw new Error(`Expected point balance 600 after update, got ${balanceAfterUpdate}`);
     }
@@ -342,9 +378,11 @@ async function runTests() {
     // Test 5: reject foreign sponsor item
     log('TEST 5: Rejecting foreign sponsor item...', `POST /api/driver/${driverUserId}/orders`);
     try {
-      await axios.post(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
-        items: [{ itemId: forbiddenItem, quantity: 1 }],
-      });
+      await axios.post(
+        `${API_BASE_URL}/driver/${driverUserId}/orders`,
+        { items: [{ itemId: forbiddenItem, quantity: 1 }] },
+        { params: scopeParams }
+      );
       throw new Error('Expected request to fail for foreign sponsor item');
     } catch (error) {
       if (!error.response || error.response.status !== 400) {
@@ -356,9 +394,11 @@ async function runTests() {
     // Test 6: reject insufficient points
     log('TEST 6: Rejecting order for insufficient points...', `POST /api/driver/${driverUserId}/orders`);
     try {
-      await axios.post(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
-        items: [{ itemId: itemB, quantity: 10 }],
-      });
+      await axios.post(
+        `${API_BASE_URL}/driver/${driverUserId}/orders`,
+        { items: [{ itemId: itemB, quantity: 10 }] },
+        { params: scopeParams }
+      );
       throw new Error('Expected insufficient points failure');
     } catch (error) {
       if (!error.response || error.response.status !== 400) {
@@ -369,10 +409,12 @@ async function runTests() {
 
     // Test 7: cancel confirmed order
     log('TEST 7: Cancelling confirmed order...', `DELETE /api/driver/${driverUserId}/orders/${orderId}`);
-    const cancelResponse = await axios.delete(`${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`);
+    const cancelResponse = await axios.delete(`${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`, {
+      params: scopeParams,
+    });
     log('Order cancel response:', cancelResponse.data);
 
-    const balanceAfterCancel = await getDriverPointBalance(driverUserId);
+    const balanceAfterCancel = await getDriverPointBalance(driverUserId, sponsorCompanyId);
     if (balanceAfterCancel !== 1000) {
       throw new Error(`Expected point balance 1000 after cancellation, got ${balanceAfterCancel}`);
     }
@@ -380,9 +422,11 @@ async function runTests() {
     // Test 8: update cancelled order should fail
     log('TEST 8: Updating cancelled order should fail...', `PATCH /api/driver/${driverUserId}/orders/${orderId}`);
     try {
-      await axios.patch(`${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`, {
-        items: [{ itemId: itemA, quantity: 1 }],
-      });
+      await axios.patch(
+        `${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`,
+        { items: [{ itemId: itemA, quantity: 1 }] },
+        { params: scopeParams }
+      );
       throw new Error('Expected update on cancelled order to fail');
     } catch (error) {
       if (!error.response || error.response.status !== 409) {
@@ -393,9 +437,11 @@ async function runTests() {
 
     // Test 9: sponsor-assumed update attributes UserChanged and notifies driver
     log('TEST 9: Sponsor assumed-view update records actor and notifies driver', `PATCH /api/driver/${driverUserId}/orders/:orderId`);
-    const sponsorManagedOrderResponse = await axios.post(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
-      items: [{ itemId: itemA, quantity: 1 }],
-    });
+    const sponsorManagedOrderResponse = await axios.post(
+      `${API_BASE_URL}/driver/${driverUserId}/orders`,
+      { items: [{ itemId: itemA, quantity: 1 }] },
+      { params: scopeParams }
+    );
 
     const sponsorManagedOrderId = sponsorManagedOrderResponse.data.orderId;
     createdOrderIds.push(sponsorManagedOrderId);
@@ -409,6 +455,7 @@ async function runTests() {
         ],
       },
       {
+        params: scopeParams,
         headers: { Cookie: assumedSponsorCookie },
       }
     );
@@ -452,6 +499,7 @@ async function runTests() {
       `${API_BASE_URL}/driver/${driverUserId}/orders/${sponsorManagedOrderId}/status`,
       { orderStatus: 'shipped' },
       {
+        params: scopeParams,
         headers: { Cookie: assumedSponsorCookie },
       }
     );
@@ -482,6 +530,7 @@ async function runTests() {
       `${API_BASE_URL}/driver/${driverUserId}/orders/${sponsorManagedOrderId}/status`,
       { orderStatus: 'delivered' },
       {
+        params: scopeParams,
         headers: { Cookie: assumedSponsorCookie },
       }
     );
@@ -508,6 +557,7 @@ async function runTests() {
     console.log('\nAll driver orders tests completed successfully!');
   } catch (error) {
     console.error('\nDriver orders tests failed:');
+    process.exitCode = 1;
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Data:', error.response.data);
@@ -518,7 +568,7 @@ async function runTests() {
     console.log('\nCleaning up test data...');
     await cleanupTestData();
     await closePool();
-    process.exit(0);
+    process.exit(process.exitCode ?? 0);
   }
 }
 

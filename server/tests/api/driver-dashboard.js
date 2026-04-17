@@ -17,22 +17,22 @@ const createdUserIds = [];
 const createdSponsorIds = [];
 const createdDriverLicenses = [];
 
-async function insertPointTransaction({ driverId, userChanged, pointChange, reason, timeChanged = null }) {
+async function insertPointTransaction({ driverId, userChanged, pointChange, reason, sponsorCompanyId, timeChanged = null }) {
   const connection = await pool.getConnection();
   try {
     if (timeChanged) {
       await connection.query(
         `INSERT INTO POINT_TRANSACTIONS
-          (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
-         VALUES (?, ?, ?, ?, ?)`,
-        [driverId, userChanged, pointChange, reason, timeChanged]
+          (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged, SponsorCompanyID)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [driverId, userChanged, pointChange, reason, timeChanged, sponsorCompanyId]
       );
     } else {
       await connection.query(
         `INSERT INTO POINT_TRANSACTIONS
-          (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged)
-         VALUES (?, ?, ?, ?, NOW())`,
-        [driverId, userChanged, pointChange, reason]
+          (DriverID, UserChanged, PointChange, ReasonForChange, TimeChanged, SponsorCompanyID)
+         VALUES (?, ?, ?, ?, NOW(), ?)`,
+        [driverId, userChanged, pointChange, reason, sponsorCompanyId]
       );
     }
   } finally {
@@ -88,6 +88,7 @@ async function runTests() {
       userChanged: dashboardDriver.userId,
       pointChange: 500,
       reason: 'Initial points',
+      sponsorCompanyId,
     });
 
     await insertPointTransaction({
@@ -95,6 +96,7 @@ async function runTests() {
       userChanged: dashboardDriver.userId,
       pointChange: -180,
       reason: 'Order #1 placed',
+      sponsorCompanyId,
     });
 
     await insertPointTransaction({
@@ -102,11 +104,14 @@ async function runTests() {
       userChanged: dashboardDriver.userId,
       pointChange: -80,
       reason: 'Legacy bad timestamp',
+      sponsorCompanyId,
       timeChanged: '1970-01-01 00:00:00',
     });
 
     log('TEST 1: Fetching driver points history...', `GET /api/drivers/my-points/${dashboardDriver.userId}`);
-    const pointsRes = await axios.get(`${API_BASE_URL}/drivers/my-points/${dashboardDriver.userId}`);
+    const pointsRes = await axios.get(`${API_BASE_URL}/drivers/my-points/${dashboardDriver.userId}`, {
+      params: { sponsorCompanyId },
+    });
 
     if (typeof pointsRes.data?.balance !== 'number') {
       throw new Error('Expected points balance to be numeric');
@@ -147,7 +152,9 @@ async function runTests() {
     log('TEST 3: Inactive driver points endpoint blocked...', `GET /api/drivers/my-points/${dashboardDriver.userId}`);
     await setUserActiveStatus(dashboardDriver.userId, 0);
     try {
-      await axios.get(`${API_BASE_URL}/drivers/my-points/${dashboardDriver.userId}`);
+      await axios.get(`${API_BASE_URL}/drivers/my-points/${dashboardDriver.userId}`, {
+        params: { sponsorCompanyId },
+      });
       throw new Error('Expected inactive driver points request to fail with 403');
     } catch (error) {
       if (!error.response || error.response.status !== 403) {
@@ -162,7 +169,9 @@ async function runTests() {
     createdUserIds.push(noProfileDriver.userId);
 
     try {
-      await axios.get(`${API_BASE_URL}/drivers/my-points/${noProfileDriver.userId}`);
+      await axios.get(`${API_BASE_URL}/drivers/my-points/${noProfileDriver.userId}`, {
+        params: { sponsorCompanyId },
+      });
       throw new Error('Expected missing driver profile to return 404');
     } catch (error) {
       if (!error.response || error.response.status !== 404) {
@@ -173,6 +182,7 @@ async function runTests() {
     console.log('\nDriver dashboard endpoint tests completed successfully!');
   } catch (error) {
     console.error('\nDriver dashboard tests failed:');
+    process.exitCode = 1;
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Data:', error.response.data);
@@ -183,7 +193,7 @@ async function runTests() {
     await cleanupUsers(createdUserIds, createdDriverLicenses);
     await cleanupSponsorCompanies(createdSponsorIds);
     await closePool();
-    process.exit(0);
+    process.exit(process.exitCode ?? 0);
   }
 }
 

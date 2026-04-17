@@ -105,8 +105,8 @@ async function runTests() {
       'driver_order_changed_by_sponsor'
     );
 
-    log('TEST 1: List driver notifications', `GET /api/driver/${driverUser.userId}/notifications`);
-    const listRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
+    log('TEST 1: List driver notifications', `GET /api/drivers/${driverUser.userId}/notifications`);
+    const listRes = await axios.get(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications`, {
       params: { limit: 10, offset: 0 },
     });
 
@@ -122,8 +122,8 @@ async function runTests() {
       throw new Error(`Expected unreadCount 2, got ${listRes.data.unreadCount}`);
     }
 
-    log('TEST 2: unreadOnly filter', `GET /api/driver/${driverUser.userId}/notifications?unreadOnly=true`);
-    const unreadRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
+    log('TEST 2: unreadOnly filter', `GET /api/drivers/${driverUser.userId}/notifications?unreadOnly=true`);
+    const unreadRes = await axios.get(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications`, {
       params: { unreadOnly: true },
     });
 
@@ -131,8 +131,8 @@ async function runTests() {
       throw new Error('Expected unreadOnly list to return two notifications');
     }
 
-    log('TEST 3: category filter', `GET /api/driver/${driverUser.userId}/notifications?category=driver_order_changed_by_sponsor`);
-    const categoryRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
+    log('TEST 3: category filter', `GET /api/drivers/${driverUser.userId}/notifications?category=driver_order_changed_by_sponsor`);
+    const categoryRes = await axios.get(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications`, {
       params: { category: 'driver_order_changed_by_sponsor' },
     });
 
@@ -140,26 +140,26 @@ async function runTests() {
       throw new Error('Expected category filter to return one notification');
     }
 
-    log('TEST 4: mark single as read', `PATCH /api/driver/${driverUser.userId}/notifications/${unreadOneId}/read`);
-    const markOneRes = await axios.patch(`${API_BASE_URL}/driver/${driverUser.userId}/notifications/${unreadOneId}/read`);
+    log('TEST 4: mark single as read', `PATCH /api/drivers/${driverUser.userId}/notifications/${unreadOneId}/read`);
+    const markOneRes = await axios.patch(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications/${unreadOneId}/read`);
 
     if (markOneRes.status !== 200 || markOneRes.data.success !== true) {
       throw new Error('Expected mark single read to succeed');
     }
 
-    const postSingleRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`);
+    const postSingleRes = await axios.get(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications`);
     if (Number(postSingleRes.data.unreadCount) !== 1) {
       throw new Error(`Expected unreadCount 1 after mark single, got ${postSingleRes.data.unreadCount}`);
     }
 
-    log('TEST 5: mark all as read', `PATCH /api/driver/${driverUser.userId}/notifications/read-all`);
-    const markAllRes = await axios.patch(`${API_BASE_URL}/driver/${driverUser.userId}/notifications/read-all`);
+    log('TEST 5: mark all as read', `PATCH /api/drivers/${driverUser.userId}/notifications/read-all`);
+    const markAllRes = await axios.patch(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications/read-all`);
 
     if (markAllRes.status !== 200 || markAllRes.data.success !== true) {
       throw new Error('Expected mark all read to succeed');
     }
 
-    const postAllRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`);
+    const postAllRes = await axios.get(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications`);
     if (Number(postAllRes.data.unreadCount) !== 0) {
       throw new Error(`Expected unreadCount 0 after mark all, got ${postAllRes.data.unreadCount}`);
     }
@@ -178,14 +178,14 @@ async function runTests() {
       { readAt: '2026-04-16 09:00:00', readByAction: 'single' }
     );
 
-    log('TEST 6: clear single notification', `DELETE /api/driver/${driverUser.userId}/notifications/${clearUnreadId}`);
-    const clearOneRes = await axios.delete(`${API_BASE_URL}/driver/${driverUser.userId}/notifications/${clearUnreadId}`);
+    log('TEST 6: clear single notification', `DELETE /api/drivers/${driverUser.userId}/notifications/${clearUnreadId}`);
+    const clearOneRes = await axios.delete(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications/${clearUnreadId}`);
 
     if (clearOneRes.status !== 200 || clearOneRes.data.success !== true || clearOneRes.data.cleared !== true) {
       throw new Error('Expected clear single notification to succeed');
     }
 
-    const postClearSingleRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
+    const postClearSingleRes = await axios.get(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications`, {
       params: { category: clearCategory },
     });
     if (postClearSingleRes.data.notifications.length !== 1) {
@@ -195,8 +195,8 @@ async function runTests() {
       throw new Error(`Expected unreadCount 0 after single clear in category, got ${postClearSingleRes.data.unreadCount}`);
     }
 
-    log('TEST 7: clear all notifications by category', `DELETE /api/driver/${driverUser.userId}/notifications/clear-all?category=${clearCategory}`);
-    const clearAllRes = await axios.delete(`${API_BASE_URL}/driver/${driverUser.userId}/notifications/clear-all`, {
+    log('TEST 7: clear all notifications by category', `DELETE /api/drivers/${driverUser.userId}/notifications/clear-all?category=${clearCategory}`);
+    const clearAllRes = await axios.delete(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications/clear-all`, {
       params: { category: clearCategory },
     });
 
@@ -204,16 +204,16 @@ async function runTests() {
       throw new Error('Expected clear-all by category to clear one remaining notification');
     }
 
-    const postClearAllRes = await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
+    const postClearAllRes = await axios.get(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications`, {
       params: { category: clearCategory },
     });
     if (postClearAllRes.data.notifications.length !== 0) {
       throw new Error('Expected no notifications in clear validation category after clear-all');
     }
 
-    log('TEST 8: clear missing notification should 404', `DELETE /api/driver/${driverUser.userId}/notifications/999999999`);
+    log('TEST 8: clear missing notification should 404', `DELETE /api/drivers/${driverUser.userId}/notifications/999999999`);
     try {
-      await axios.delete(`${API_BASE_URL}/driver/${driverUser.userId}/notifications/999999999`);
+      await axios.delete(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications/999999999`);
       throw new Error('Expected clear missing notification request to fail with 404');
     } catch (error) {
       if (error?.response?.status !== 404) {
@@ -221,9 +221,9 @@ async function runTests() {
       }
     }
 
-    log('TEST 9: mismatched session should be rejected', `GET /api/driver/${driverUser.userId}/notifications`);
+    log('TEST 9: mismatched session should be rejected', `GET /api/drivers/${driverUser.userId}/notifications`);
     try {
-      await axios.get(`${API_BASE_URL}/driver/${driverUser.userId}/notifications`, {
+      await axios.get(`${API_BASE_URL}/drivers/${driverUser.userId}/notifications`, {
         headers: { Cookie: mismatchCookie },
       });
       throw new Error('Expected mismatched session request to fail with 403');

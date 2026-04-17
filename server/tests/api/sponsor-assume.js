@@ -149,7 +149,9 @@ async function runTests() {
     // Test 1b: Sponsor-assumed driver can load dashboard points widgets
     log('TEST 1b: Assumed driver dashboard points data loads', 'GET /api/drivers/my-points/:userId, /api/drivers/performance/:userId');
     const assumedDriverUserId = happyPathRes.data.assumedUser.UserID;
-    const pointsWidgetRes = await axios.get(`${API_BASE_URL}/drivers/my-points/${assumedDriverUserId}`);
+    const pointsWidgetRes = await axios.get(`${API_BASE_URL}/drivers/my-points/${assumedDriverUserId}`, {
+      params: { sponsorCompanyId: companyA },
+    });
     if (
       pointsWidgetRes.status !== 200 ||
       typeof pointsWidgetRes.data?.balance !== 'number' ||
