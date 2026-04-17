@@ -87,15 +87,9 @@ export default function SponsorBulkUploadPage() {
   const report = actionData?.report;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-6 md:p-10">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 p-6 md:p-10 dark:from-blue-950 dark:via-gray-950 dark:to-blue-900">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="text-left">
-          <Link to="/sponsor/dashboard" className="text-sm font-medium text-blue-600 hover:underline">
-            &larr; Back to Sponsor Dashboard
-          </Link>
-        </div>
-
-        <Card className="p-6 md:p-8 border border-gray-200 dark:border-gray-800 shadow-sm">
+        <Card className="p-6 md:p-8 border border-blue-200 dark:border-blue-900 shadow-sm bg-white/90 dark:bg-gray-900/90 backdrop-blur">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Sponsor Bulk Upload</h1>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 text-left">
             Upload a pipe-delimited text file to add drivers and sponsor users to your company.
@@ -136,7 +130,7 @@ export default function SponsorBulkUploadPage() {
         )}
 
         {report && (
-          <Card className="p-6 md:p-8 border border-gray-200 dark:border-gray-800 shadow-sm">
+          <Card className="p-6 md:p-8 border border-blue-200 dark:border-blue-900 shadow-sm bg-white/90 dark:bg-gray-900/90 backdrop-blur">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white text-left">Upload Result</h2>
 
             <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-left">

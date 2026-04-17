@@ -316,17 +316,8 @@ export default function AuditLogs() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Navigation */}
-        <div className="mb-4">
-          <Link
-            to="/admin/dashboard"
-            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline block mb-2"
-          >
-            ← Return to Admin Dashboard
-          </Link>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 p-8 dark:from-blue-950 dark:via-gray-950 dark:to-blue-900">
+      <div className="mx-auto max-w-7xl">
 
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -343,6 +334,9 @@ export default function AuditLogs() {
               disabled={filteredLogs.length === 0}
             >
               Download CSV
+            </Button>
+            <Button variant="secondary" onClick={() => window.print()}>
+              Print Report
             </Button>
           </div>
         </div>
