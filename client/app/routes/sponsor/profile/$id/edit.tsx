@@ -156,17 +156,21 @@ export default function SponsorProfileEdit() {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    const payload = {
-      firstName: String(formData.get("FirstName") ?? "").trim(),
-      lastName: String(formData.get("LastName") ?? "").trim(),
-      email: String(formData.get("Email") ?? "").trim(),
-      phone: String(formData.get("Phone") ?? "").trim(),
-        alertPoints,
-        alertOrders,
-        alertApplicationStatusChange,
-        alertApplicationEntry,
-        alertProfileChangesByAdmin,
-    };
+    const payload = new FormData();
+    payload.set("firstName", String(formData.get("FirstName") ?? "").trim());
+    payload.set("lastName", String(formData.get("LastName") ?? "").trim());
+    payload.set("email", String(formData.get("Email") ?? "").trim());
+    payload.set("phone", String(formData.get("Phone") ?? "").trim());
+    payload.set("alertPoints", String(alertPoints));
+    payload.set("alertOrders", String(alertOrders));
+    payload.set("alertApplicationStatusChange", String(alertApplicationStatusChange));
+    payload.set("alertApplicationEntry", String(alertApplicationEntry));
+    payload.set("alertProfileChangesByAdmin", String(alertProfileChangesByAdmin));
+
+    const profileImage = formData.get("profileImage");
+    if (profileImage instanceof File && profileImage.size > 0) {
+      payload.set("profileImage", profileImage);
+    }
 
     try {
       setErrorMessage(null);
@@ -179,8 +183,7 @@ export default function SponsorProfileEdit() {
 
       const response = await fetch(endpoint, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: payload,
       });
 
       const body = await response.json().catch(() => ({}));
@@ -330,11 +333,13 @@ export default function SponsorProfileEdit() {
               className={getProfileEditFieldClass(isEditing)}
             />
             <Input
-              label="Profile Picture URL"
-              name="ProfilePicture"
-              defaultValue={profile.profilePicture}
-              disabled
-              className={getProfileEditFieldClass(false)}
+              label="Profile Picture Upload"
+              name="profileImage"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={!isEditing}
+              className={getProfileEditFieldClass(isEditing)}
+              helperText="Upload PNG, JPG, WEBP, or GIF (max 5MB)."
             />
           </div>
 

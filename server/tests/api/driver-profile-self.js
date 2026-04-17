@@ -12,6 +12,10 @@ import { pool } from '../../src/db.js';
 const API_BASE_URL = `${BASE_URL}/api`;
 const SESSION_COOKIE_NAME = 'sessionId';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production-fleetscore';
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wn0jL0AAAAASUVORK5CYII=',
+  'base64'
+);
 
 const createdUserIds = [];
 
@@ -89,23 +93,25 @@ async function runTests() {
       throw new Error('Expected profile response to omit PassHash');
     }
 
-    // Test 2: Driver can patch own profile through /api/user/profile/:id
-    log('TEST 2: Driver self profile patch succeeds', `PATCH /api/user/profile/${driver.userId}`);
+    // Test 2: Driver can patch own profile and upload a profile image
+    log('TEST 2: Driver self profile patch with image upload succeeds', `PATCH /api/user/profile/${driver.userId}`);
     const updatedFirst = 'DriverSelf';
     const updatedLast = 'Updated';
     const updatedEmail = `dp${Date.now()}@e.co`;
     const updatedPhone = '5552223333';
     const updatedBio = 'Updated by driver self-profile test';
 
+    const formData = new FormData();
+    formData.append('firstName', updatedFirst);
+    formData.append('lastName', updatedLast);
+    formData.append('email', updatedEmail);
+    formData.append('phone', updatedPhone);
+    formData.append('bio', updatedBio);
+    formData.append('profileImage', new Blob([ONE_PIXEL_PNG], { type: 'image/png' }), 'driver-profile.png');
+
     const patchRes = await axios.patch(
       `${API_BASE_URL}/user/profile/${driver.userId}`,
-      {
-        firstName: updatedFirst,
-        lastName: updatedLast,
-        email: updatedEmail,
-        phone: updatedPhone,
-        bio: updatedBio,
-      },
+      formData,
       {
         headers: {
           Cookie: buildSessionCookie(driver.userId, 'driver'),
@@ -120,14 +126,46 @@ async function runTests() {
       patchRes.data?.LastName !== updatedLast ||
       patchRes.data?.Email !== updatedEmail ||
       patchRes.data?.Phone !== updatedPhone ||
-      patchRes.data?.Bio !== updatedBio
+      patchRes.data?.Bio !== updatedBio ||
+      typeof patchRes.data?.ProfilePicture !== 'string' ||
+      !patchRes.data.ProfilePicture.startsWith('/api/images/u/')
     ) {
-      throw new Error('Expected driver self profile PATCH to persist updated fields');
+      throw new Error('Expected driver self profile PATCH to persist updated fields and profile image path');
     }
 
-    // Test 3: Session context mismatch blocks profile patch
+    const imageReadRes = await axios.get(`${BASE_URL}${patchRes.data.ProfilePicture}`, {
+      responseType: 'arraybuffer',
+    });
+    if (imageReadRes.status !== 200 || !String(imageReadRes.headers['content-type'] || '').includes('image/')) {
+      throw new Error('Expected uploaded profile image to be retrievable from static image route');
+    }
+
+    // Test 3: Invalid image mime type is rejected
+    log('TEST 3: Driver profile image rejects invalid file type', `PATCH /api/user/profile/${driver.userId}`);
+    const invalidFormData = new FormData();
+    invalidFormData.append('firstName', updatedFirst);
+    invalidFormData.append('profileImage', new Blob([Buffer.from('not-an-image')], { type: 'text/plain' }), 'invalid.txt');
+
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/user/profile/${driver.userId}`,
+        invalidFormData,
+        {
+          headers: {
+            Cookie: buildSessionCookie(driver.userId, 'driver'),
+          },
+        }
+      );
+      throw new Error('Expected 400 for invalid profile image mime type');
+    } catch (error) {
+      if (!error.response || error.response.status !== 400) {
+        throw error;
+      }
+    }
+
+    // Test 4: Session context mismatch blocks profile patch
     log(
-      'TEST 3: Driver cannot patch profile for different session user context',
+      'TEST 4: Driver cannot patch profile for different session user context',
       `PATCH /api/user/profile/${driver.userId} with session for ${otherDriver.userId}`
     );
 
