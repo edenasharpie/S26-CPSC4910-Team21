@@ -135,9 +135,10 @@ export default function DriverProfileEditPage() {
   const [pronouns, setPronouns] = useState(user.pronouns || "");
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone_number || "");
-  const [profilePictureUrl, setProfilePictureUrl] = useState(
+  const [profilePicture, setProfilePicture] = useState(
     user.profile_picture_url || ""
   );
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [bio, setBio] = useState(user.bio || "");
   const [licenseNumber, setLicenseNumber] = useState(user.license_number || "");
 
@@ -169,7 +170,8 @@ export default function DriverProfileEditPage() {
     setPronouns(user.pronouns || "");
     setEmail(user.email || "");
     setPhone(user.phone_number || "");
-    setProfilePictureUrl(user.profile_picture_url || "");
+    setProfilePicture(user.profile_picture_url || "");
+    setProfileImageFile(null);
     setBio(user.bio || "");
     setLicenseNumber(user.license_number || "");
     setAlertPoints(Boolean(user.alert_points));
@@ -194,26 +196,29 @@ export default function DriverProfileEditPage() {
 
     try {
       setIsSavingProfile(true);
+      const payload = new FormData();
+      payload.set("username", trimmedUsername);
+      payload.set("firstName", trimmedFirstName);
+      payload.set("middleName", middleName.trim());
+      payload.set("lastName", trimmedLastName);
+      payload.set("pronouns", pronouns.trim());
+      payload.set("email", email.trim());
+      payload.set("phone", phone.trim());
+      payload.set("bio", bio.trim());
+      payload.set("licenseNumber", licenseNumber.trim());
+      payload.set("alertPoints", String(alertPoints));
+      payload.set("alertOrders", String(alertOrders));
+      payload.set("alertApplicationStatusChange", String(alertApplicationStatusChange));
+      payload.set("alertApplicationEntry", String(alertApplicationEntry));
+      payload.set("alertProfileChangesByAdmin", String(alertProfileChangesByAdmin));
+
+      if (profileImageFile) {
+        payload.set("profileImage", profileImageFile);
+      }
+
       const response = await fetch(`${API_URL}/api/user/profile/${user.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: trimmedUsername,
-          firstName: trimmedFirstName,
-          middleName: middleName.trim(),
-          lastName: trimmedLastName,
-          pronouns: pronouns.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
-          profilePicture: profilePictureUrl.trim(),
-          bio: bio.trim(),
-          licenseNumber: licenseNumber.trim(),
-          alertPoints,
-          alertOrders,
-          alertApplicationStatusChange,
-          alertApplicationEntry,
-          alertProfileChangesByAdmin,
-        }),
+        body: payload,
       });
 
       const result = await response
@@ -230,6 +235,12 @@ export default function DriverProfileEditPage() {
       } else {
         setLicenseNumber(licenseNumber.trim());
       }
+
+      if (typeof result.ProfilePicture === "string") {
+        setProfilePicture(result.ProfilePicture);
+      }
+
+      setProfileImageFile(null);
 
       setSuccessMessage("Profile updated successfully.");
       setIsEditingProfile(false);
@@ -338,7 +349,7 @@ export default function DriverProfileEditPage() {
         apiBaseUrl={API_URL}
         title={`${firstName} ${lastName}`.trim() || username || "Driver"}
         subtitle={`@${username || "unknown"}`}
-        profilePicture={profilePictureUrl}
+        profilePicture={profilePicture}
         initials={buildInitials(firstName, lastName)}
         profileMeta={profileMeta}
         successMessage={successMessage}
@@ -457,11 +468,14 @@ export default function DriverProfileEditPage() {
                 onChange={(e) => setLicenseNumber(e.target.value)}
               />
               <Input
-                label="Profile Picture URL"
-                value={profilePictureUrl}
+                label="Profile Picture Upload"
+                name="profileImage"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
                 disabled={!isEditingProfile}
                 className={getProfileEditFieldClass(isEditingProfile)}
-                onChange={(e) => setProfilePictureUrl(e.target.value)}
+                onChange={(e) => setProfileImageFile(e.target.files?.[0] ?? null)}
+                helperText="Upload PNG, JPG, WEBP, or GIF (max 5MB)."
               />
 
               <div className="pt-2">

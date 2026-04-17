@@ -9,6 +9,10 @@ import { notifySponsorCompany } from '../services/notification-service.js';
 import {
   normalizeNotificationPreferences,
 } from '../services/notification-service.js';
+import {
+  handleProfileImageUpload,
+  normalizeProfilePictureValue,
+} from '../utils/profile-image-upload.js';
 
 const router = express.Router();
 
@@ -69,7 +73,7 @@ router.get('/profile/:id', async (req, res) => {
 /**
  * PATCH /api/user/profile/:id
  */
-router.patch('/profile/:id', async (req, res) => {
+router.patch('/profile/:id', handleProfileImageUpload, async (req, res) => {
   let connection;
   try {
     const userId = Number(req.params.id);
@@ -91,8 +95,7 @@ router.patch('/profile/:id', async (req, res) => {
     const middleName = middleNameRaw === '' ? null : middleNameRaw;
     const pronounsRaw = typeof req.body?.pronouns === 'string' ? req.body.pronouns.trim() : undefined;
     const pronouns = pronounsRaw === '' ? null : pronounsRaw;
-    const profilePictureRaw = typeof req.body?.profilePicture === 'string' ? req.body.profilePicture.trim() : undefined;
-    const profilePicture = profilePictureRaw === '' ? null : profilePictureRaw;
+    const profilePicture = normalizeProfilePictureValue(req.body?.profilePicture, req.file);
     const bioRaw = typeof req.body?.bio === 'string' ? req.body.bio.trim() : undefined;
     const bio = bioRaw === '' ? null : bioRaw;
     const licenseNumberRaw = typeof req.body?.licenseNumber === 'string' ? req.body.licenseNumber.trim() : undefined;

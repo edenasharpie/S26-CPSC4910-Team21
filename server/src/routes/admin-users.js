@@ -24,6 +24,10 @@ import {
   notifyDriver,
   notifySponsorCompany,
 } from '../services/notification-service.js';
+import {
+  handleProfileImageUpload,
+  normalizeProfilePictureValue,
+} from '../utils/profile-image-upload.js';
 
 const router = Router();
 const DEFAULT_PAGE_SIZE = 25;
@@ -548,7 +552,7 @@ router.post('/users/bulk-load', async (request, response) => {
 });
 
 // PATCH /api/admin/users/:id — partial update
-router.patch('/users/:id', async (request, response) => {
+router.patch('/users/:id', handleProfileImageUpload, async (request, response) => {
   let connection;
   try {
     connection = await pool.getConnection();
@@ -580,6 +584,7 @@ router.patch('/users/:id', async (request, response) => {
       alertApplicationEntry,
       alertProfileChangesByAdmin,
     } = request.body;
+    const normalizedProfilePicture = normalizeProfilePictureValue(profilePicture, request.file);
 
     const normalizedAlertPoints = normalizeBooleanPreferenceInput(alertPoints);
     const normalizedAlertOrders = normalizeBooleanPreferenceInput(alertOrders);
@@ -646,9 +651,9 @@ router.patch('/users/:id', async (request, response) => {
       updates.push('Pronouns = ?');
       values.push(pronouns);
     }
-    if (profilePicture !== undefined) {
+    if (normalizedProfilePicture !== undefined) {
       updates.push('ProfilePicture = ?');
-      values.push(profilePicture);
+      values.push(normalizedProfilePicture);
     }
     if (bio !== undefined) {
       updates.push('Bio = ?');
@@ -679,7 +684,7 @@ router.patch('/users/:id', async (request, response) => {
       middleName,
       lastName,
       pronouns,
-      profilePicture,
+      normalizedProfilePicture,
       bio,
       activeStatus,
       licenseNumber,

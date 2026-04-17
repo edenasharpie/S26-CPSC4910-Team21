@@ -436,7 +436,14 @@ function toRenderableImageUrl(profilePicture?: string) {
   const resolved = resolveProfileImageUrl(profilePicture);
   if (!resolved) return null;
   if (resolved.startsWith('data:image')) return resolved;
+  if (resolved.startsWith('/api/images/u/')) return `${API_URL}${resolved}`;
+  if (resolved.startsWith('api/images/u/')) return `${API_URL}/${resolved}`;
+  if (resolved.startsWith(`${API_URL}/api/images/u/`)) return resolved;
+  if (resolved.startsWith('/')) return `${API_URL}${resolved}`;
   if (resolved.startsWith(`${API_URL}/api/images/proxy?url=`)) return resolved;
+  if (resolved.startsWith('http://') || resolved.startsWith('https://')) {
+    return `${API_URL}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
+  }
   return `${API_URL}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
 }
 

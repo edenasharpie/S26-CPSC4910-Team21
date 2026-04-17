@@ -11,6 +11,10 @@ import {
 import { pool } from '../../src/db.js';
 
 const API_BASE_URL = `${BASE_URL}/api`;
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wn0jL0AAAAASUVORK5CYII=',
+  'base64'
+);
 
 const createdUserIds = [];
 const createdSponsorIds = [];
@@ -58,19 +62,21 @@ async function runTests() {
       throw new Error('Expected sponsor self profile GET to return requested user');
     }
 
-    // Test 2: Sponsor can patch own profile through /api/user/profile/:id
-    log('TEST 2: Sponsor self profile patch succeeds', `PATCH /api/user/profile/${sponsor.userId}`);
+    // Test 2: Sponsor can patch own profile and upload image through /api/user/profile/:id
+    log('TEST 2: Sponsor self profile patch with image upload succeeds', `PATCH /api/user/profile/${sponsor.userId}`);
     const updatedFirst = 'SponsorSelf';
     const updatedLast = 'Patched';
     const updatedEmail = `sponsor-self-${Date.now()}@example.com`;
     const updatedPhone = '5551112222';
 
-    const patchRes = await axios.patch(`${API_BASE_URL}/user/profile/${sponsor.userId}`, {
-      firstName: updatedFirst,
-      lastName: updatedLast,
-      email: updatedEmail,
-      phone: updatedPhone,
-    });
+    const formData = new FormData();
+    formData.append('firstName', updatedFirst);
+    formData.append('lastName', updatedLast);
+    formData.append('email', updatedEmail);
+    formData.append('phone', updatedPhone);
+    formData.append('profileImage', new Blob([ONE_PIXEL_PNG], { type: 'image/png' }), 'sponsor-profile.png');
+
+    const patchRes = await axios.patch(`${API_BASE_URL}/user/profile/${sponsor.userId}`, formData);
 
     if (
       patchRes.status !== 200 ||
@@ -78,9 +84,11 @@ async function runTests() {
       patchRes.data?.FirstName !== updatedFirst ||
       patchRes.data?.LastName !== updatedLast ||
       patchRes.data?.Email !== updatedEmail ||
-      patchRes.data?.Phone !== updatedPhone
+      patchRes.data?.Phone !== updatedPhone ||
+      typeof patchRes.data?.ProfilePicture !== 'string' ||
+      !patchRes.data.ProfilePicture.startsWith('/api/images/u/')
     ) {
-      throw new Error('Expected sponsor self profile PATCH to persist updated fields');
+      throw new Error('Expected sponsor self profile PATCH to persist updated fields and profile image path');
     }
 
     // Test 3: Defensive negative check documenting prior 404 path

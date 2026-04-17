@@ -6,6 +6,7 @@ dotenv.config();
 
 import express from 'express';
 import cors from 'cors';
+import { PROFILE_IMAGE_UPLOAD_DIR } from './src/utils/profile-image-upload.js';
 import { pool, verifyDatabaseConnection, initializeSystemAuditUserCache } from './src/db.js';
 import aboutRoutes from './src/routes/about.js';
 import loginRoutes from './src/routes/login.js';
@@ -115,6 +116,7 @@ app.use('/api/admin/catalogs', adminCatalogsRoutes);
 app.use('/api/admin', adminUsersRoutes);
 app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/admin/audit-logs', adminEventsRoutes);
+app.use('/api/images/u', express.static(PROFILE_IMAGE_UPLOAD_DIR));
 app.use('/api/images', imagesRoutes);
 app.use('/api/driver/:userId/catalogs', driverCatalogsRoutes);
 app.use('/api/driver/:userId/orders', driverOrdersRoutes);

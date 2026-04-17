@@ -64,7 +64,14 @@ function toRenderableImageUrl(apiBaseUrl: string, profilePicture?: string | null
   const resolved = resolveProfileImageUrl(profilePicture);
   if (!resolved) return null;
   if (resolved.startsWith("data:image")) return resolved;
+  if (resolved.startsWith('/api/images/u/')) return `${apiBaseUrl}${resolved}`;
+  if (resolved.startsWith('api/images/u/')) return `${apiBaseUrl}/${resolved}`;
+  if (resolved.startsWith(`${apiBaseUrl}/api/images/u/`)) return resolved;
+  if (resolved.startsWith('/')) return `${apiBaseUrl}${resolved}`;
   if (resolved.startsWith(`${apiBaseUrl}/api/images/proxy?url=`)) return resolved;
+  if (resolved.startsWith('http://') || resolved.startsWith('https://')) {
+    return `${apiBaseUrl}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
+  }
   return `${apiBaseUrl}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
 }
 

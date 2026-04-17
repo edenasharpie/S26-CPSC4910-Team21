@@ -122,29 +122,34 @@ export default function EditUserProfile() {
       setSuccessMessage(null);
 
       const formData = new FormData(event.currentTarget);
-      const updates = {
-        username: String(formData.get("Username") ?? ""),
-        email: String(formData.get("Email") ?? ""),
-        phone: String(formData.get("Phone") ?? ""),
-        firstName: String(formData.get("FirstName") ?? ""),
-        middleName: String(formData.get("MiddleName") ?? ""),
-        lastName: String(formData.get("LastName") ?? ""),
-        pronouns: String(formData.get("Pronouns") ?? ""),
-        profilePicture: String(formData.get("ProfilePicture") ?? ""),
-        bio: String(formData.get("Bio") ?? ""),
-        activeStatus: formData.get("ActiveStatus") === "1" ? 1 : 0,
-        alertPoints,
-        alertOrders,
-        alertApplicationStatusChange,
-        alertApplicationEntry,
-        alertProfileChangesByAdmin,
-        ...(newPassword.trim() ? { password: newPassword.trim() } : {}),
-      };
+      const updates = new FormData();
+      updates.set("username", String(formData.get("Username") ?? ""));
+      updates.set("email", String(formData.get("Email") ?? ""));
+      updates.set("phone", String(formData.get("Phone") ?? ""));
+      updates.set("firstName", String(formData.get("FirstName") ?? ""));
+      updates.set("middleName", String(formData.get("MiddleName") ?? ""));
+      updates.set("lastName", String(formData.get("LastName") ?? ""));
+      updates.set("pronouns", String(formData.get("Pronouns") ?? ""));
+      updates.set("bio", String(formData.get("Bio") ?? ""));
+      updates.set("activeStatus", formData.get("ActiveStatus") === "1" ? "1" : "0");
+      updates.set("alertPoints", String(alertPoints));
+      updates.set("alertOrders", String(alertOrders));
+      updates.set("alertApplicationStatusChange", String(alertApplicationStatusChange));
+      updates.set("alertApplicationEntry", String(alertApplicationEntry));
+      updates.set("alertProfileChangesByAdmin", String(alertProfileChangesByAdmin));
+
+      const profileImage = formData.get("profileImage");
+      if (profileImage instanceof File && profileImage.size > 0) {
+        updates.set("profileImage", profileImage);
+      }
+
+      if (newPassword.trim()) {
+        updates.set("password", newPassword.trim());
+      }
 
       const response = await fetch(`${BASE_URL}/api/admin/users/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
+        body: updates,
       });
 
       if (!response.ok) {
@@ -328,11 +333,13 @@ export default function EditUserProfile() {
               className={getProfileEditFieldClass(isEditing)}
             />
             <Input
-              label="Profile Picture URL"
-              name="ProfilePicture"
-              defaultValue={user.profilePicture}
+              label="Profile Picture Upload"
+              name="profileImage"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
               disabled={!isEditing}
               className={getProfileEditFieldClass(isEditing)}
+              helperText="Upload PNG, JPG, WEBP, or GIF (max 5MB)."
             />
           </div>
 

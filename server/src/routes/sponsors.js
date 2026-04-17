@@ -12,6 +12,10 @@ import {
   notifyDriver,
   notifySponsorCompany,
 } from '../services/notification-service.js';
+import {
+  handleProfileImageUpload,
+  normalizeProfilePictureValue,
+} from '../utils/profile-image-upload.js';
 
 const router = express.Router();
 
@@ -615,7 +619,7 @@ router.put('/:userId/point-transactions/:tId', async (req, res) => {
 });
 
 // PATCH /api/sponsors/:userId/drivers/:driverId - Update sponsor-owned driver profile fields
-router.patch('/:userId/drivers/:driverId', async (req, res) => {
+router.patch('/:userId/drivers/:driverId', handleProfileImageUpload, async (req, res) => {
   let connection;
   try {
     const sponsorUserId = Number(req.params.userId);
@@ -634,6 +638,7 @@ router.patch('/:userId/drivers/:driverId', async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim() : undefined;
     const phoneRaw = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
     const phone = phoneRaw === '' ? null : phoneRaw;
+    const profilePicture = normalizeProfilePictureValue(req.body?.profilePicture, req.file);
 
     const userUpdates = [];
     const updateValues = [];
@@ -665,6 +670,11 @@ router.patch('/:userId/drivers/:driverId', async (req, res) => {
     if (phone !== undefined) {
       userUpdates.push('Phone = ?');
       updateValues.push(phone);
+    }
+
+    if (profilePicture !== undefined) {
+      userUpdates.push('ProfilePicture = ?');
+      updateValues.push(profilePicture);
     }
 
     if (userUpdates.length === 0) {
@@ -717,6 +727,7 @@ router.patch('/:userId/drivers/:driverId', async (req, res) => {
     const [updatedRows] = await connection.execute(
       `SELECT
          u.UserID, u.FirstName, u.LastName, u.Username, u.Email, u.Phone,
+        u.ProfilePicture,
          d.PerformanceStatus,
          e.PointBalance,
          u.ActiveStatus
