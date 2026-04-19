@@ -37,16 +37,8 @@ interface TopNavProps {
   isSponsorAssumedDriver?: boolean;
 }
 
-const NAV_SHELL_BY_ROLE: Record<"guest" | NavRole, string> = {
-  guest:
-    "bg-gradient-to-r from-amber-50 via-orange-50 to-amber-100 border-amber-200 text-amber-900 dark:from-amber-900/40 dark:via-orange-900/30 dark:to-amber-900/40 dark:border-amber-700 dark:text-amber-100",
-  driver:
-    "bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100 border-emerald-200 text-emerald-900 dark:from-emerald-900/40 dark:via-teal-900/30 dark:to-emerald-900/40 dark:border-emerald-700 dark:text-emerald-100",
-  sponsor:
-    "bg-gradient-to-r from-sky-50 via-cyan-50 to-sky-100 border-sky-200 text-sky-900 dark:from-sky-900/40 dark:via-cyan-900/30 dark:to-sky-900/40 dark:border-sky-700 dark:text-sky-100",
-  admin:
-    "bg-gradient-to-r from-rose-50 via-red-50 to-rose-100 border-rose-200 text-rose-900 dark:from-rose-900/40 dark:via-red-900/30 dark:to-rose-900/40 dark:border-rose-700 dark:text-rose-100",
-};
+const NAV_SHELL =
+  "bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 border-slate-200 text-slate-900 dark:from-slate-900/80 dark:via-slate-900/70 dark:to-slate-900/80 dark:border-slate-700 dark:text-slate-100";
 
 const NOTIFICATION_SCROLL_THRESHOLD = 5;
 
@@ -60,7 +52,6 @@ export function TopNav({
   isSponsorAssumedDriver,
 }: TopNavProps) {
   const navigate = useNavigate();
-  const role = user?.role ?? "guest";
   const initials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`.trim() ||
     (user?.username?.[0]?.toUpperCase() ?? "U");
   const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
@@ -319,7 +310,7 @@ export function TopNav({
   const shouldUseNotificationScroll = notificationItems.length > NOTIFICATION_SCROLL_THRESHOLD;
 
   return (
-    <header className={`border-b ${NAV_SHELL_BY_ROLE[role]}`}>
+    <header className={`border-b ${NAV_SHELL}`}>
       <div className="container-padding py-3">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4">
@@ -354,18 +345,22 @@ export function TopNav({
           </div>
 
           <nav className="flex flex-wrap items-center gap-2 text-sm font-medium">
-            <Link
-              to="/features"
-              className="rounded-md px-3 py-1.5 text-current/90 hover:bg-black/5 hover:text-current dark:hover:bg-white/10"
-            >
-              Features
-            </Link>
-            <Link
-              to="/about"
-              className="rounded-md px-3 py-1.5 text-current/90 hover:bg-black/5 hover:text-current dark:hover:bg-white/10"
-            >
-              About
-            </Link>
+            {!user ? (
+              <>
+                <Link
+                  to="/features"
+                  className="rounded-md px-3 py-1.5 text-current/90 hover:bg-black/5 hover:text-current dark:hover:bg-white/10"
+                >
+                  Features
+                </Link>
+                <Link
+                  to="/about"
+                  className="rounded-md px-3 py-1.5 text-current/90 hover:bg-black/5 hover:text-current dark:hover:bg-white/10"
+                >
+                  About
+                </Link>
+              </>
+            ) : null}
             {user ? (
               <>
                 <Link

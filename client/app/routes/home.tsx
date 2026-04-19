@@ -1,4 +1,4 @@
-import { Link, Form, useLoaderData } from "react-router";
+import { Link, Form, useLoaderData, redirect } from "react-router";
 import type { Route } from "./+types/home";
 import { Card } from "~/components";
 import { Button } from "~/components/Button";
@@ -12,6 +12,9 @@ const ROLE_HOME_PATHS = {
 
 export function loader({ request }: Route.LoaderArgs) {
   const session = getSession(request);
+  if (session) {
+    throw redirect(ROLE_HOME_PATHS[session.UserType as keyof typeof ROLE_HOME_PATHS] ?? "/");
+  }
   return { user: session ?? null };
 }
 
