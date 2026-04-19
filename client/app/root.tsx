@@ -26,6 +26,23 @@ const ROLE_HOME_PATHS = {
 } as const;
 
 export const links: Route.LinksFunction = () => [
+  {
+    rel: "icon",
+    type: "image/svg+xml",
+    href: "/favicon.svg",
+    media: "(prefers-color-scheme: light)",
+  },
+  {
+    rel: "icon",
+    type: "image/svg+xml",
+    href: "/favicon-dark.svg",
+    media: "(prefers-color-scheme: dark)",
+  },
+  {
+    rel: "icon",
+    href: "/favicon.ico",
+    sizes: "any",
+  },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",

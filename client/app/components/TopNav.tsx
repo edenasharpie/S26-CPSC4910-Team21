@@ -337,19 +337,15 @@ export function TopNav({
                 <path
                   d="M4 8.5L12 4L20 8.5V15.5L12 20L4 15.5V8.5Z"
                   stroke="currentColor"
-                  strokeWidth="1.8"
+                  strokeWidth="2.2"
                   strokeLinejoin="round"
-                />
-                <path
-                  d="M8 12H16"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
                   strokeLinecap="round"
                 />
                 <path
-                  d="M9.5 15H14.5"
+                  d="M5.1 10.6C9.6 10.6 14.4 13.4 18.9 13.4"
                   stroke="currentColor"
-                  strokeWidth="1.8"
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
                   strokeLinecap="round"
                 />
               </svg>
