@@ -17,6 +17,10 @@ const createdUserIds = [];
 const createdCatalogIds = [];
 const createdSponsorIds = [];
 
+const longImageUrl = `https://example.com/catalog-images/${'a'.repeat(80)}.jpg`;
+const updatedImageUrl = `${longImageUrl}?v=2`;
+const oversizedImageUrl = `https://example.com/${'b'.repeat(990)}`;
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -159,11 +163,15 @@ async function runTests() {
       name: 'Test Product',
       description: 'A test product for sponsors',
       pointCost: 250,
-      imageUrl: 'https://example.com/product.jpg',
+      imageUrl: longImageUrl,
       originalSource: 'manual'
     });
     const itemId = addItemResponse.data.id;
     log('Added item:', addItemResponse.data);
+
+    if (addItemResponse.data.imageUrl !== longImageUrl) {
+      throw new Error('Expected created sponsor item to preserve full imageUrl');
+    }
 
     // Test 4: Sponsor gets catalog with items
     log('TEST 4: Sponsor fetching catalog with items...', `GET /api/sponsor/${sponsorUserId}/catalogs/${catalogId}`);
@@ -174,10 +182,61 @@ async function runTests() {
       throw new Error('Expected catalog to have items');
     }
 
+    const storedItem = catalogDetailResponse.data.items.find((item) => item.id === itemId);
+    if (!storedItem) {
+      throw new Error('Expected created item in sponsor catalog detail response');
+    }
+
+    if (storedItem.imageUrl !== longImageUrl) {
+      throw new Error('Expected sponsor catalog detail to preserve full imageUrl');
+    }
+
     // Test 5: Sponsor gets specific item
     log('TEST 5: Sponsor fetching specific item...', `GET /api/sponsor/${sponsorUserId}/catalogs/${catalogId}/items/${itemId}`);
     const itemResponse = await axios.get(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs/${catalogId}/items/${itemId}`);
     log('Item details:', itemResponse.data);
+
+    if (itemResponse.data.imageUrl !== longImageUrl) {
+      throw new Error('Expected sponsor item detail to preserve full imageUrl');
+    }
+
+    // Test 5a: Reject invalid image URL format
+    log('TEST 5a: Sponsor adding item with invalid imageUrl should fail...', `POST /api/sponsor/${sponsorUserId}/catalogs/${catalogId}/items`);
+    try {
+      await axios.post(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs/${catalogId}/items`, {
+        name: 'Invalid Image Product',
+        description: 'Should fail due to invalid URL',
+        pointCost: 100,
+        imageUrl: 'not-a-url',
+        originalSource: 'manual'
+      });
+      throw new Error('Expected 400 for invalid imageUrl format');
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        log('Correctly returned 400 for invalid imageUrl format', error.response.data);
+      } else {
+        throw error;
+      }
+    }
+
+    // Test 5b: Reject oversized image URL
+    log('TEST 5b: Sponsor adding item with oversized imageUrl should fail...', `POST /api/sponsor/${sponsorUserId}/catalogs/${catalogId}/items`);
+    try {
+      await axios.post(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs/${catalogId}/items`, {
+        name: 'Oversized Image Product',
+        description: 'Should fail due to oversized URL',
+        pointCost: 100,
+        imageUrl: oversizedImageUrl,
+        originalSource: 'manual'
+      });
+      throw new Error('Expected 400 for oversized imageUrl');
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        log('Correctly returned 400 for oversized imageUrl', error.response.data);
+      } else {
+        throw error;
+      }
+    }
 
     // Test 6: Sponsor updates item
     log('TEST 6: Sponsor updating item...', `PATCH /api/sponsor/${sponsorUserId}/catalogs/${catalogId}/items/${itemId}`);
@@ -185,13 +244,33 @@ async function runTests() {
       `${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs/${catalogId}/items/${itemId}`,
       {
         pointCost: 300,
-        description: 'Updated test product description'
+        description: 'Updated test product description',
+        imageUrl: updatedImageUrl
       }
     );
     log('Updated item:', updateItemResponse.data);
     
     if (updateItemResponse.data.pointCost !== 300) {
       throw new Error('Item point cost not updated correctly');
+    }
+
+    if (updateItemResponse.data.imageUrl !== updatedImageUrl) {
+      throw new Error('Expected sponsor updated item to preserve updated imageUrl');
+    }
+
+    // Test 6a: Reject invalid protocol on update
+    log('TEST 6a: Sponsor updating item with non-http imageUrl should fail...', `PATCH /api/sponsor/${sponsorUserId}/catalogs/${catalogId}/items/${itemId}`);
+    try {
+      await axios.patch(`${API_BASE_URL}/sponsor/${sponsorUserId}/catalogs/${catalogId}/items/${itemId}`, {
+        imageUrl: 'ftp://example.com/image.jpg'
+      });
+      throw new Error('Expected 400 for non-http imageUrl update');
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        log('Correctly returned 400 for non-http imageUrl update', error.response.data);
+      } else {
+        throw error;
+      }
     }
 
     // Test 7: Sponsor updates catalog

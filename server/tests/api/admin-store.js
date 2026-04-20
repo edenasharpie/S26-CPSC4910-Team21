@@ -46,6 +46,45 @@ async function runTests() {
 
       assertProductShape(searchResponse.data[0], 'Store search item');
       productId = Number(searchResponse.data[0].id);
+
+      log('TEST 1b: Searching with query and limit...', `GET ${SEARCH_URL}?query=<derived>&limit=2&offset=0`);
+      const categoryQuery = String(searchResponse.data[0].category || '').trim().split(/\s+/)[0];
+      if (!categoryQuery) {
+        throw new Error('Unable to derive category query from search result.');
+      }
+
+      const filteredResponse = await axios.get(SEARCH_URL, {
+        params: {
+          query: categoryQuery,
+          limit: 2,
+          offset: 0,
+        },
+      });
+
+      if (filteredResponse.status !== 200) {
+        throw new Error(`Expected status 200 from filtered search, received ${filteredResponse.status}`);
+      }
+
+      if (!Array.isArray(filteredResponse.data)) {
+        throw new Error('Expected filtered store search response to be an array.');
+      }
+
+      if (filteredResponse.data.length === 0) {
+        throw new Error('Expected at least one product from filtered store search.');
+      }
+
+      if (filteredResponse.data.length > 2) {
+        throw new Error(`Expected filtered results length <= 2, received ${filteredResponse.data.length}`);
+      }
+
+      const normalizedQuery = categoryQuery.toLowerCase();
+      for (const product of filteredResponse.data) {
+        assertProductShape(product, 'Filtered store search item');
+        const haystack = `${product.title} ${product.description} ${product.category}`.toLowerCase();
+        if (!haystack.includes(normalizedQuery)) {
+          throw new Error(`Expected filtered product to match query "${categoryQuery}".`);
+        }
+      }
     } catch (error) {
       const status = error?.response?.status;
       const upstreamError = error?.response?.data?.error;

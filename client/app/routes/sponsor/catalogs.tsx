@@ -184,12 +184,21 @@ export default function SponsorCatalogs() {
 
   const handleSearchStore = async () => {
     try {
+      setError(null);
       setSearchLoading(true);
       const response = await api.fetchApi(`/admin/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
+
+      if (!response.ok) {
+        setSearchResults([]);
+        setError(await getCatalogErrorMessage(response, 'Failed to search store.'));
+        return;
+      }
+
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
       console.error('Error searching store:', error);
+      setSearchResults([]);
       setError('Failed to search store.');
     } finally {
       setSearchLoading(false);

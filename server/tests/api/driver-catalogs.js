@@ -3,6 +3,7 @@ import { BASE_URL, log, createTestSponsor, cleanupSponsorCompanies, closePool } 
 import { pool } from '../../src/db.js';
 
 const API_BASE_URL = `${BASE_URL}/api`;
+const longImageUrl = `https://example.com/catalog-images/${'a'.repeat(80)}.jpg`;
 
 // track created resources for cleanup
 const createdUserIds = [];
@@ -103,7 +104,7 @@ async function addTestCatalogItem(catalogId) {
       `INSERT INTO CATALOG_ITEMS 
        (CatalogID, APIID, ItemName, OriginalSource, Description, PointCost, ImageUrl) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [catalogId, '', 'Test Product', 'manual', 'Test description', 500, 'https://example.com/image.jpg']
+      [catalogId, '', 'Test Product', 'manual', 'Test description', 500, longImageUrl]
     );
     
     return itemResult.insertId;
@@ -239,12 +240,25 @@ async function runTests() {
       throw new Error('Expected catalog to have items');
     }
 
+    const storedItem = catalogDetailResponse.data.items.find((item) => item.id === itemId);
+    if (!storedItem) {
+      throw new Error('Expected item in driver catalog detail response');
+    }
+
+    if (storedItem.imageUrl !== longImageUrl) {
+      throw new Error('Expected driver catalog detail to preserve full imageUrl');
+    }
+
     // Test 3: Driver gets specific item
     log('TEST 3: Driver fetching specific item...', `GET /api/driver/${driverUserId}/catalogs/${catalogId}/items/${itemId}`);
     const itemResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs/${catalogId}/items/${itemId}`, {
       params: { sponsorCompanyId },
     });
     log('Item details:', itemResponse.data);
+
+    if (itemResponse.data.imageUrl !== longImageUrl) {
+      throw new Error('Expected driver item detail to preserve full imageUrl');
+    }
 
     // Test 4: Driver with pagination
     log('TEST 4: Driver fetching catalogs with pagination...', `GET /api/driver/${driverUserId}/catalogs?limit=5&offset=0`);
