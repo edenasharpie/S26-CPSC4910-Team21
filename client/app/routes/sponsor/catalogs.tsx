@@ -64,6 +64,7 @@ export default function SponsorCatalogs() {
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isCreatingCatalog, setIsCreatingCatalog] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Store search states
@@ -101,7 +102,7 @@ export default function SponsorCatalogs() {
     }
   }, [selectedCatalog]);
 
-  const getCatalogFetchErrorMessage = async (response: Response) => {
+  const getCatalogErrorMessage = async (response: Response, fallback: string) => {
     if (response.status >= 500) {
       return 'Failed to fetch catalogs. Please check your catalog connection.';
     }
@@ -115,7 +116,7 @@ export default function SponsorCatalogs() {
       // Ignore non-JSON responses and fall back to generic copy.
     }
 
-    return 'Unable to load catalogs right now.';
+    return fallback;
   };
 
   const fetchCatalogs = async () => {
@@ -124,7 +125,7 @@ export default function SponsorCatalogs() {
       const response = await api.get('/catalogs');
       if (!response.ok) {
         setCatalogs([]);
-        setError(await getCatalogFetchErrorMessage(response));
+        setError(await getCatalogErrorMessage(response, 'Unable to load catalogs right now.'));
         return;
       }
       const data = await response.json();
@@ -139,11 +140,18 @@ export default function SponsorCatalogs() {
   const fetchCatalogItems = async (catalogId: number) => {
     try {
       setLoading(true);
+      setError(null);
       const response = await api.get(`/catalogs/${catalogId}`);
+      if (!response.ok) {
+        setCatalogItems([]);
+        setError(await getCatalogErrorMessage(response, 'Unable to load catalog items right now.'));
+        return;
+      }
       const data = await response.json();
       setCatalogItems(data.items || []);
     } catch (error) {
       console.error('Error fetching catalog items:', error);
+      setError('Unable to load catalog items right now. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -152,18 +160,25 @@ export default function SponsorCatalogs() {
   const handleCreateCatalog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setError(null);
+      setIsCreatingCatalog(true);
       const response = await api.post('/catalogs', {
         externalProductIds: [],
         pointCost: 0
       });
 
-      if (response.ok) {
-        setIsCreateCatalogOpen(false);
-        fetchCatalogs();
+      if (!response.ok) {
+        setError(await getCatalogErrorMessage(response, 'Unable to create catalog right now.'));
+        return;
       }
+
+      setIsCreateCatalogOpen(false);
+      fetchCatalogs();
     } catch (error) {
       console.error('Error creating catalog:', error);
-      setError('Failed to create catalog.');
+      setError('Unable to create catalog right now. Please try again.');
+    } finally {
+      setIsCreatingCatalog(false);
     }
   };
 
@@ -422,11 +437,11 @@ export default function SponsorCatalogs() {
             Create a new catalog for your company. You can add items after creation.
           </p>
           <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setIsCreateCatalogOpen(false)}>
+            <Button variant="secondary" onClick={() => setIsCreateCatalogOpen(false)} disabled={isCreatingCatalog}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              Create
+            <Button variant="primary" type="submit" disabled={isCreatingCatalog}>
+              {isCreatingCatalog ? 'Creating...' : 'Create'}
             </Button>
           </div>
         </form>

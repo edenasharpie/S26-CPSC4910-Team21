@@ -43,24 +43,53 @@ router.get('/', async (request, response) => {
 router.post('/', async (request, response) => {
   let connection;
   try {
+    const payload = request.body && typeof request.body === 'object' ? request.body : {};
+    const sponsorCompanyId = Number(payload.sponsorCompanyId);
+    const externalProductIds = payload.externalProductIds ?? [];
+    const pointCost = Number(payload.pointCost ?? 0);
+
+    if (!Number.isInteger(sponsorCompanyId) || sponsorCompanyId <= 0) {
+      return response.status(400).json({ error: 'sponsorCompanyId must be a positive integer' });
+    }
+
+    if (!Array.isArray(externalProductIds)) {
+      return response.status(400).json({ error: 'externalProductIds must be an array when provided' });
+    }
+
+    const hasInvalidExternalProductId = externalProductIds.some((value) => {
+      if (typeof value !== 'string' && typeof value !== 'number') {
+        return true;
+      }
+
+      return String(value).trim().length === 0;
+    });
+
+    if (hasInvalidExternalProductId) {
+      return response.status(400).json({ error: 'externalProductIds must contain non-empty string or numeric values' });
+    }
+
+    if (!Number.isFinite(pointCost) || pointCost < 0) {
+      return response.status(400).json({ error: 'pointCost must be a non-negative number when provided' });
+    }
+
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
     // create catalog
     const catalogResult = await connection.query(
       'INSERT INTO CATALOGS (SponsorCompanyID) VALUES (?)',
-      [request.body.sponsorCompanyId]
+      [sponsorCompanyId]
     );
     
     const catalogId = catalogResult[0].insertId;
 
     // if items with store ids are provided, find and add them
-    if (request.body.externalProductIds && request.body.externalProductIds.length > 0) {
-      for (const itemId of request.body.externalProductIds) {
+    if (externalProductIds.length > 0) {
+      for (const itemId of externalProductIds) {
         const product = await store.getProductById(itemId);
         const catalogItem = store.transformToCatalogItem(
           product,
-          request.body.pointCost
+          pointCost
         );
 
         await connection.query(

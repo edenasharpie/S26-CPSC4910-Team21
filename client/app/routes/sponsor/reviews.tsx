@@ -126,8 +126,8 @@ export default function SponsorReviewsPage() {
                   <span
                     className={`px-2 py-1 rounded text-xs ${
                       review.IsVisible
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                        : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                        ? "border border-green-200 bg-green-100 text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300"
+                        : "border border-red-200 bg-red-100 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300"
                     }`}
                   >
                     {review.IsVisible ? "Visible" : "Hidden"}

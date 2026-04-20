@@ -273,6 +273,11 @@ export default function DriverOrders() {
             <p className="text-gray-600 dark:text-gray-400">Track recent purchases and update confirmed orders.</p>
           </div>
           <div className="flex items-center gap-2">
+            <Link to="/driver/reviews">
+              <Button variant="secondary" size="sm">
+                Review Discussions
+              </Button>
+            </Link>
             <Link to="/driver/catalogs">
               <Button variant="ghost" size="sm">
                 Back to Catalog

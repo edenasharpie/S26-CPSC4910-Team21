@@ -120,24 +120,53 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   let connection;
   try {
+    const sponsorCompanyId = Number(req.sponsorCompanyId);
+    if (!Number.isInteger(sponsorCompanyId) || sponsorCompanyId <= 0) {
+      return res.status(400).json({ error: 'Sponsor company context is missing for this request' });
+    }
+
+    const payload = req.body && typeof req.body === 'object' ? req.body : {};
+    const externalProductIds = payload.externalProductIds ?? [];
+    const pointCost = Number(payload.pointCost ?? 0);
+
+    if (!Array.isArray(externalProductIds)) {
+      return res.status(400).json({ error: 'externalProductIds must be an array when provided' });
+    }
+
+    const hasInvalidExternalProductId = externalProductIds.some((value) => {
+      if (typeof value !== 'string' && typeof value !== 'number') {
+        return true;
+      }
+
+      return String(value).trim().length === 0;
+    });
+
+    if (hasInvalidExternalProductId) {
+      return res.status(400).json({ error: 'externalProductIds must contain non-empty string or numeric values' });
+    }
+
+    if (!Number.isFinite(pointCost) || pointCost < 0) {
+      return res.status(400).json({ error: 'pointCost must be a non-negative number when provided' });
+    }
+
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
     // Create catalog with sponsor's company ID (auto-populated from auth)
     const catalogResult = await connection.query(
       'INSERT INTO CATALOGS (SponsorCompanyID) VALUES (?)',
-      [req.sponsorCompanyId]
+      [sponsorCompanyId]
     );
     
     const catalogId = catalogResult[0].insertId;
 
     // If items with store IDs are provided, find and add them
-    if (req.body.externalProductIds && req.body.externalProductIds.length > 0) {
-      for (const itemId of req.body.externalProductIds) {
+    if (externalProductIds.length > 0) {
+      for (const itemId of externalProductIds) {
         const product = await store.getProductById(itemId);
         const catalogItem = store.transformToCatalogItem(
           product,
-          req.body.pointCost
+          pointCost
         );
 
         await connection.query(

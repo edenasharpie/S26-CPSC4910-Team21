@@ -159,3 +159,64 @@ ApplicationStatusUpdate:
           type: integer
         driverId:
           type: string
+
+ReviewComment:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      required:
+        - reviewId
+        - sponsorCompanyId
+        - text
+      properties:
+        reviewId:
+          type: integer
+        sponsorCompanyId:
+          type: integer
+        authorUserId:
+          type: integer
+        parentCommentId:
+          type: integer
+          nullable: true
+        text:
+          type: string
+          maxLength: 1000
+        hiddenAt:
+          type: string
+          format: date-time
+          nullable: true
+
+ReviewDraft:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      required:
+        - itemId
+        - sponsorCompanyId
+        - rating
+        - body
+      properties:
+        itemId:
+          type: integer
+        sponsorCompanyId:
+          type: integer
+        authorUserId:
+          type: integer
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        body:
+          type: string
+          maxLength: 1000
+        updatedAt:
+          type: string
+          format: date-time
+        finalizedAt:
+          type: string
+          format: date-time
+          nullable: true
+        clearedAt:
+          type: string
+          format: date-time
+          nullable: true

@@ -92,9 +92,10 @@ export default function DriverCatalogs() {
     }
 
     try {
+      setError(null);
       const response = await api.getApi(`/drivers/sponsors/${user.UserID}`);
       if (!response.ok) {
-        setError('Select a sponsor company before browsing catalogs.');
+        setError(await getCatalogFetchErrorMessage(response));
         return;
       }
 
@@ -184,6 +185,7 @@ export default function DriverCatalogs() {
   const fetchCatalogItems = async (catalogId: number) => {
     try {
       setLoading(true);
+      setError(null);
       if (!sponsorCompanyId) {
         setCatalogItems([]);
         setError('Select a sponsor company before viewing items.');
@@ -191,11 +193,16 @@ export default function DriverCatalogs() {
       }
 
       const response = await api.get(`/catalogs/${catalogId}?sponsorCompanyId=${sponsorCompanyId}`);
+      if (!response.ok) {
+        setCatalogItems([]);
+        setError(await getCatalogFetchErrorMessage(response));
+        return;
+      }
       const data = await response.json();
       setCatalogItems(data.items || []);
     } catch (error) {
       console.error('Error fetching catalog items:', error);
-      setError('Failed to fetch catalog items.');
+      setError('Unable to load catalog items right now. Please try again.');
     } finally {
       setLoading(false);
     }
