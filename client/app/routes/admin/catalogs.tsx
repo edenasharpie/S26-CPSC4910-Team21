@@ -213,12 +213,22 @@ export default function Catalogs() {
 
   const handleSearchStore = async () => {
     try {
+      setError(null);
       setSearchLoading(true);
       const response = await api.fetchApi(`/admin/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
+
+      if (!response.ok) {
+        setSearchResults([]);
+        setError(await getCatalogErrorMessage(response, 'Failed to search store.'));
+        return;
+      }
+
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
       console.error('Error searching store:', error);
+      setSearchResults([]);
+      setError('Failed to search store.');
     } finally {
       setSearchLoading(false);
     }
@@ -528,6 +538,12 @@ export default function Catalogs() {
                   label="Search Products"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSearchStore();
+                    }
+                  }}
                   placeholder="Enter product name or category..."
                 />
                 <Button

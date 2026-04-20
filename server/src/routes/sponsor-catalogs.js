@@ -1,6 +1,7 @@
 import express from 'express';
 import { pool } from '../db.js';
 import store from '../services/fakeStoreService.js';
+import { validateCatalogImageUrl } from '../utils/catalog-image-url.js';
 import {
   getEffectiveSessionUser,
   routeUserMatchesEffectiveSession,
@@ -169,6 +170,12 @@ router.post('/', async (req, res) => {
           pointCost
         );
 
+        const imageUrlValidation = validateCatalogImageUrl(catalogItem.imageUrl, { required: true });
+        if (!imageUrlValidation.isValid) {
+          await connection.rollback();
+          return res.status(400).json({ error: imageUrlValidation.error });
+        }
+
         await connection.query(
           `INSERT INTO CATALOG_ITEMS 
            (CatalogID, APIID, ItemName, OriginalSource, Description, PointCost, ImageUrl) 
@@ -180,7 +187,7 @@ router.post('/', async (req, res) => {
             catalogItem.originalSource,
             catalogItem.description,
             catalogItem.pointCost,
-            catalogItem.imageUrl
+            imageUrlValidation.value
           ]
         );
       }
@@ -404,6 +411,12 @@ router.post('/:catalogId/items', async (req, res) => {
       itemData = { name, description, pointCost, imageUrl, originalSource };
     }
 
+    const imageUrlValidation = validateCatalogImageUrl(itemData.imageUrl, { required: true });
+    if (!imageUrlValidation.isValid) {
+      await connection.rollback();
+      return res.status(400).json({ error: imageUrlValidation.error });
+    }
+
     const result = await connection.query(
       `INSERT INTO CATALOG_ITEMS 
        (CatalogID, APIID, ItemName, OriginalSource, Description, PointCost, ImageUrl) 
@@ -415,7 +428,7 @@ router.post('/:catalogId/items', async (req, res) => {
         itemData.originalSource || '',
         itemData.description,
         itemData.pointCost,
-        itemData.imageUrl || ''
+        imageUrlValidation.value
       ]
     );
 
@@ -530,9 +543,16 @@ router.patch('/:catalogId/items/:itemId', async (req, res) => {
       updates.push('PointCost = ?');
       values.push(pointCost);
     }
-    if (imageUrl) {
+
+    if (imageUrl !== undefined) {
+      const imageUrlValidation = validateCatalogImageUrl(imageUrl, { required: true });
+      if (!imageUrlValidation.isValid) {
+        await connection.rollback();
+        return res.status(400).json({ error: imageUrlValidation.error });
+      }
+
       updates.push('ImageUrl = ?');
-      values.push(imageUrl);
+      values.push(imageUrlValidation.value);
     }
 
     if (updates.length === 0) {

@@ -57,6 +57,8 @@ CatalogItem:
     imageUrl:
       type: string
       format: uri
+      maxLength: 1000
+      description: Public product image URL. Must use http or https.
     reviews:
       type: array
       items:
