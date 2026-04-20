@@ -237,6 +237,37 @@ async function runTests() {
       }
     }
 
+    // Test 10b: Sponsor user without sponsor company profile should be rejected
+    log('TEST 10b: Testing sponsor user without company profile...', 'Setup');
+    const orphanSponsorUser = await createSharedTestUser({ userType: 'sponsor', firstName: 'Orphan', lastName: 'Sponsor' });
+    const orphanSponsorUserId = orphanSponsorUser.userId;
+    createdUserIds.push(orphanSponsorUserId);
+
+    try {
+      await axios.get(`${API_BASE_URL}/sponsor/${orphanSponsorUserId}/catalogs`);
+      throw new Error('Expected 403 error for sponsor user without company profile');
+    } catch (error) {
+      if (error.response && error.response.status === 403) {
+        log('Correctly returned 403 for sponsor user without company profile', { status: 403 });
+      } else {
+        throw error;
+      }
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/sponsor/${orphanSponsorUserId}/catalogs`, {
+        externalProductIds: [],
+        pointCost: 100,
+      });
+      throw new Error('Expected 403 error when creating catalog without sponsor company profile');
+    } catch (error) {
+      if (error.response && error.response.status === 403) {
+        log('Correctly returned 403 for catalog create without sponsor company profile', { status: 403 });
+      } else {
+        throw error;
+      }
+    }
+
     // Test 11: Cross-company access control
     log('TEST 11: Testing access control across sponsor companies...', 'Setup');
     const otherSponsorCompanyId = await createTestSponsor({

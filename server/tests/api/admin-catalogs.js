@@ -20,6 +20,39 @@ async function runTests() {
     createdSponsorIds.push(sponsorCompanyId);
     log('Created sponsor company:', { id: sponsorCompanyId, companyName: 'Test Sponsor Company' });
 
+    // test 0a: reject missing sponsorCompanyId in create payload
+    log('TEST 0a: Creating catalog with missing sponsorCompanyId should fail...', 'POST /api/admin/catalogs');
+    try {
+      await axios.post(API_URL, {
+        externalProductIds: [],
+        pointCost: 100
+      });
+      throw new Error('Expected 400 for missing sponsorCompanyId');
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        log('Correctly returned 400 for missing sponsorCompanyId', { status: 400 });
+      } else {
+        throw error;
+      }
+    }
+
+    // test 0b: reject invalid sponsorCompanyId type in create payload
+    log('TEST 0b: Creating catalog with invalid sponsorCompanyId should fail...', 'POST /api/admin/catalogs');
+    try {
+      await axios.post(API_URL, {
+        sponsorCompanyId: 'abc',
+        externalProductIds: [],
+        pointCost: 100
+      });
+      throw new Error('Expected 400 for invalid sponsorCompanyId');
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        log('Correctly returned 400 for invalid sponsorCompanyId', { status: 400 });
+      } else {
+        throw error;
+      }
+    }
+
     // test 1: create a catalog
     log('TEST 1: Creating catalog...', 'POST /api/admin/catalogs');
     const createResponse = await axios.post(API_URL, {

@@ -122,6 +122,12 @@ paths:
   /driver/{userId}/reviews:
     $ref: './paths/driver/reviews.yaml#/reviews'
 
+  /driver/{userId}/reviews/{reviewId}/comments:
+    $ref: './paths/driver/reviews.yaml#/reviewComments'
+
+  /driver/{userId}/reviews/drafts/{itemId}:
+    $ref: './paths/driver/reviews.yaml#/reviewDraftByItem'
+
   /driver/{userId}/notifications:
     $ref: './paths/driver/notifications.yaml#/notifications'
 

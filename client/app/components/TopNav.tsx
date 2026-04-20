@@ -378,6 +378,14 @@ export function TopNav({
                 >
                   Dashboard
                 </Link>
+                {user.role === "driver" ? (
+                  <Link
+                    to="/driver/reviews"
+                    className="rounded-md border border-current/20 px-3 py-1.5 text-current hover:bg-black/5 dark:hover:bg-white/10"
+                  >
+                    Reviews
+                  </Link>
+                ) : null}
                 {shouldShowSponsorSwitcher ? (
                   <label className="flex items-center gap-2 rounded-md border border-current/20 px-3 py-1.5 text-current">
                     <span className="text-xs font-semibold text-current/80">Sponsor</span>

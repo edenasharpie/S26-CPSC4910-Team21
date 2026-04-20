@@ -62,19 +62,29 @@ const notificationCorsOriginSet = new Set([
   ...parseConfiguredOrigins(process.env.NOTIFICATION_CORS_ORIGINS),
 ]);
 
+const apiCorsOriginSet = new Set([
+  ...DEFAULT_NOTIFICATION_CORS_ORIGINS,
+  ...parseConfiguredOrigins(process.env.API_CORS_ORIGINS),
+  ...parseConfiguredOrigins(process.env.NOTIFICATION_CORS_ORIGINS),
+]);
+
+function resolveCorsOrigin(origin, allowedOriginSet, callback) {
+  if (!origin) {
+    callback(null, true);
+    return;
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    callback(null, true);
+    return;
+  }
+
+  callback(null, allowedOriginSet.has(origin));
+}
+
 const notificationCors = cors({
   origin(origin, callback) {
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
-
-    if (process.env.NODE_ENV !== 'production') {
-      callback(null, true);
-      return;
-    }
-
-    callback(null, notificationCorsOriginSet.has(origin));
+    resolveCorsOrigin(origin, notificationCorsOriginSet, callback);
   },
   methods: ['GET', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -83,9 +93,13 @@ const notificationCors = cors({
 });
 
 const publicCors = cors({
-  origin: '*',
+  origin(origin, callback) {
+    resolveCorsOrigin(origin, apiCorsOriginSet, callback);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 204,
 });
 
 app.set('pool', pool);

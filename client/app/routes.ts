@@ -52,6 +52,7 @@ export default [
   route("admin/catalogs", "routes/admin/catalogs.tsx"),
   route("driver/catalogs", "routes/driver/catalogs.tsx"),
   route("driver/orders", "routes/driver/orders.tsx"),
+  route("driver/reviews", "routes/driver/reviews.tsx"),
   route("sponsor/catalogs", "routes/sponsor/catalogs.tsx"),
 
   //ADMIN USER MANAGEMENT (quick-add forms)

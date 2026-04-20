@@ -122,6 +122,10 @@ async function cleanupUsers(userIds) {
   
   try {
     for (const id of userIds) {
+      await connection.query(
+        'DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE DriverID IN (SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?)',
+        [id]
+      );
       // Delete driver records first (foreign key constraint)
       await connection.query('DELETE FROM DRIVERS WHERE UserID = ?', [id]);
       // Delete user
@@ -184,6 +188,34 @@ async function runTests() {
     createdCatalogIds.push(catalogId);
     const itemId = await addTestCatalogItem(catalogId);
     log('Created catalog with item:', { catalogId, itemId });
+
+    // Test 0a: Missing sponsorCompanyId query param should fail
+    log('TEST 0a: Driver fetching catalogs without sponsorCompanyId...', `GET /api/driver/${driverUserId}/catalogs`);
+    try {
+      await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs`);
+      throw new Error('Expected 400 error for missing sponsorCompanyId');
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        log('Correctly returned 400 for missing sponsorCompanyId', { status: 400 });
+      } else {
+        throw error;
+      }
+    }
+
+    // Test 0b: Invalid sponsorCompanyId query param should fail
+    log('TEST 0b: Driver fetching catalogs with invalid sponsorCompanyId...', `GET /api/driver/${driverUserId}/catalogs?sponsorCompanyId=invalid`);
+    try {
+      await axios.get(`${API_BASE_URL}/driver/${driverUserId}/catalogs`, {
+        params: { sponsorCompanyId: 'invalid' },
+      });
+      throw new Error('Expected 400 error for invalid sponsorCompanyId');
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        log('Correctly returned 400 for invalid sponsorCompanyId', { status: 400 });
+      } else {
+        throw error;
+      }
+    }
 
     // Test 1: Driver gets list of catalogs
     log('TEST 1: Driver fetching catalogs...', `GET /api/driver/${driverUserId}/catalogs`);
