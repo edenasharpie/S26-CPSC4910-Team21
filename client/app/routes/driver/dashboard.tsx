@@ -1,7 +1,7 @@
 import type { Route } from "./+types/dashboard";
 import { useMemo } from "react";
 import { Table, Button } from "~/components";
-import { useNavigate, useLoaderData, Link, Form } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigate, useNavigation } from "react-router";
 import { requireAuth } from "~/utils/session.server";
 import { getApiBaseUrl } from "~/utils/api-url";
 import { 
@@ -16,6 +16,14 @@ import {
 } from "recharts";
 
 const API_URL = getApiBaseUrl();
+
+function parseCookieNumber(cookieHeader: string, name: string): number | null {
+  const pattern = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`);
+  const match = cookieHeader.match(pattern);
+  if (!match) return null;
+  const parsed = Number(decodeURIComponent(match[1]));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
 
 function normalizePointChange(value: unknown): number {
   const parsed = Number(value);
@@ -50,19 +58,32 @@ export async function loader({ request }: Route.LoaderArgs) {
   const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
 
   try {
-    // Use the existing driver endpoints and gracefully degrade on partial failures.
-    const [pointsRes, performanceRes, sponsorsRes] = await Promise.all([
-      fetch(`${API_URL}/api/drivers/my-points/${effectiveUserId}`, requestInit),
+    const [performanceRes, sponsorsRes] = await Promise.all([
       fetch(`${API_URL}/api/drivers/performance/${effectiveUserId}`, requestInit),
       fetch(`${API_URL}/api/drivers/sponsors/${effectiveUserId}`, requestInit),
     ]);
 
-    const pointsPayload = pointsRes.ok ? await pointsRes.json() : null;
     const performancePayload = performanceRes.ok ? await performanceRes.json() : null;
     const sponsorsPayload = sponsorsRes.ok ? await sponsorsRes.json() : [];
+    const sponsors = Array.isArray(sponsorsPayload) ? sponsorsPayload : [];
+
+    const preferredSponsorCompanyId = parseCookieNumber(cookieHeader, "driverSponsorCompanyId");
+    const selectedSponsorCompanyId =
+      Number.isInteger(preferredSponsorCompanyId) &&
+      sponsors.some((row: any) => Number(row?.SponsorCompanyID) === preferredSponsorCompanyId)
+        ? preferredSponsorCompanyId
+        : Number(sponsors[0]?.SponsorCompanyID) || null;
+
+    const pointsRes = Number.isInteger(selectedSponsorCompanyId)
+      ? await fetch(
+          `${API_URL}/api/drivers/my-points/${effectiveUserId}?sponsorCompanyId=${selectedSponsorCompanyId}`,
+          requestInit
+        )
+      : null;
+
+    const pointsPayload = pointsRes && pointsRes.ok ? await pointsRes.json() : null;
 
     const history = Array.isArray(pointsPayload?.history) ? pointsPayload.history : [];
-    const sponsors = Array.isArray(sponsorsPayload) ? sponsorsPayload : [];
     const pointBalance = Number(pointsPayload?.balance ?? 0);
 
     const driver = {
@@ -80,6 +101,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       sponsors,
       session,
       effectiveUserId,
+      selectedSponsorCompanyId,
     };
   } catch (error) {
     console.error("driver/dashboard loader error:", error);
@@ -96,14 +118,62 @@ export async function loader({ request }: Route.LoaderArgs) {
       sponsors: [],
       session,
       effectiveUserId,
+      selectedSponsorCompanyId: null,
     };
+  }
+}
+
+export async function action({ request }: Route.ActionArgs) {
+  const session = await requireAuth(request, ["driver", "admin"]);
+  const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "");
+
+  if (intent !== "leave-sponsor") {
+    return { success: false, error: "Unsupported action." };
+  }
+
+  const effectiveUserId = String(session.UserID);
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+
+  const sponsorCompanyId = Number(formData.get("sponsorCompanyId"));
+  if (!Number.isInteger(sponsorCompanyId) || sponsorCompanyId <= 0) {
+    return { success: false, error: "sponsorCompanyId is required." };
+  }
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/drivers/${effectiveUserId}/company?sponsorCompanyId=${sponsorCompanyId}`,
+      {
+        method: "DELETE",
+        headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
+      }
+    );
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        success: false,
+        error: String((payload as any).error ?? "Failed to leave sponsor company."),
+      };
+    }
+
+    return {
+      success: true,
+      message: String((payload as any).message ?? "You left your sponsor company."),
+    };
+  } catch (error: any) {
+    return { success: false, error: String(error?.message ?? "Failed to leave sponsor company.") };
   }
 }
 
 
 export default function DriverDashboard() {
-  const { driver, history, sponsors, effectiveUserId } = useLoaderData<typeof loader>();
+  const { driver, history, sponsors } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   const navigate = useNavigate();
+  const isLeavingSponsor =
+    navigation.state === "submitting" && navigation.formData?.get("intent") === "leave-sponsor";
 
   // Performance status logic
   const statusConfig = {
@@ -158,21 +228,15 @@ export default function DriverDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* --- HEADER --- */}
-        <div className="mb-8 border-b pb-6 dark:border-gray-800 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-          <div className="text-left">
-            <Link to="/" className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-2 block">
-              ← Home
-            </Link>
-            <div className="flex items-center gap-4">
-              <div>
-                <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white uppercase">
-                  Driver Dashboard
-                </h1>
-                <p className="text-gray-500 text-sm mt-1 font-medium italic">
-                  ID: <span className="font-mono text-indigo-500">{effectiveUserId}</span>
-                </p>
-              </div>
-              
+        <div className="mb-8 border-b pb-6 dark:border-gray-800">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+            <div className="text-left">
+              <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white uppercase">
+                Driver Dashboard
+              </h1>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
                 <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">
                   {(driver?.PointBalance ?? 0).toLocaleString()}
@@ -193,30 +257,20 @@ export default function DriverDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 self-end pb-1">
-            <Form method="post" action="/logout">
-              <Button variant="secondary" size="sm" type="submit">Sign out</Button>
-            </Form>
-            <button
-              type="button"
-              onClick={() => navigate(`/driver/profile/${effectiveUserId}/edit`)}
-              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow"
-              aria-label="Open account information"
-              title="Open account information"
+          {actionData && (
+            <div
+              className={`mt-4 rounded-md border px-4 py-3 text-sm ${
+                actionData.success
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : "border-red-200 bg-red-50 text-red-700"
+              }`}
             >
-              <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase">
-                {driver?.FirstName?.[0]}{driver?.LastName?.[0]}
-              </div>
-              <div className="block text-left">
-                <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{driver?.FirstName} {driver?.LastName}</p>
-                <p className="text-[10px] text-gray-400 font-mono mt-0.5">@{driver?.Username}</p>
-              </div>
-            </button>
-          </div>
+              {actionData.success ? actionData.message : actionData.error}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
           <aside className="lg:col-span-4 space-y-6">
             <div className="space-y-4">
               <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1 text-left">My Sponsors</h2>
@@ -235,10 +289,42 @@ export default function DriverDashboard() {
                       variant="secondary" 
                       size="sm" 
                       className="w-full text-[10px] uppercase font-bold tracking-widest py-2"
-                      onClick={() => navigate('/driver/catalogs')}
+                      onClick={() => {
+                        const sponsorCompanyId = Number(s.SponsorCompanyID);
+                        if (Number.isInteger(sponsorCompanyId) && sponsorCompanyId > 0 && typeof document !== "undefined") {
+                          const maxAgeSeconds = 60 * 60 * 24 * 365;
+                          const secureSuffix = typeof window !== "undefined" && window.location?.protocol === "https:" ? "; Secure" : "";
+                          document.cookie = `driverSponsorCompanyId=${encodeURIComponent(String(sponsorCompanyId))}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureSuffix}`;
+                        }
+                        navigate('/driver/catalogs');
+                      }}
                     >
                       View Catalog
                     </Button>
+                    <Form
+                      method="post"
+                      className="mt-2"
+                      onSubmit={(event) => {
+                        const confirmed = window.confirm(
+                          `Leave ${s.CompanyName}? This will remove you from this sponsor company.`
+                        );
+                        if (!confirmed) {
+                          event.preventDefault();
+                        }
+                      }}
+                    >
+                      <input type="hidden" name="intent" value="leave-sponsor" />
+                      <input type="hidden" name="sponsorCompanyId" value={String(s.SponsorCompanyID)} />
+                      <Button
+                        type="submit"
+                        variant="danger"
+                        size="sm"
+                        className="w-full text-[10px] uppercase font-bold tracking-widest py-2"
+                        disabled={isLeavingSponsor}
+                      >
+                        {isLeavingSponsor ? "Leaving..." : "Leave Sponsor"}
+                      </Button>
+                    </Form>
                   </div>
                 )) : (
                   <div className="p-6 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl text-center space-y-4">
@@ -267,9 +353,9 @@ export default function DriverDashboard() {
           <main className="lg:col-span-8 space-y-6">
             <div className="bg-white dark:bg-gray-900 p-6 shadow-md rounded-xl border dark:border-gray-800 text-left">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Point Progress</h2>
-              <div className="h-72 w-full">
+              <div className="h-72 w-full" style={{ minHeight: '300px', minWidth: '100%' }}>
                 {chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <ComposedChart data={chartData}>
                         <defs>
                             <linearGradient id="colorPoints" x1="0" y1="0" x2="0" y2="1">
@@ -351,10 +437,10 @@ export default function DriverDashboard() {
                     render: (t: any) => {
                       const pointChange = normalizePointChange(t.PointChange);
                       return (
-                      <span className={`font-bold ${pointChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                        {pointChange >= 0 ? `+${pointChange}` : pointChange}
-                      </span>
-                    );
+                        <span className={`font-bold ${pointChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {pointChange >= 0 ? `+${pointChange}` : pointChange}
+                        </span>
+                      );
                     },
                   },
                 ]} 

@@ -1,0 +1,48 @@
+driverCompanyMembership:
+  parameters:
+    - name: userId
+      in: path
+      description: Sponsor user ID for scoped driver management.
+      required: true
+      schema:
+        type: integer
+    - name: driverId
+      in: path
+      description: Driver user ID.
+      required: true
+      schema:
+        type: integer
+  delete:
+    tags:
+      - accounts
+    summary: Remove driver from sponsor company
+    description: Removes a driver from the authenticated sponsor's company and emits company/driver notifications.
+    responses:
+      '200':
+        description: Driver removed from company.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+                driverId:
+                  type: string
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Permission denied or out-of-scope operation.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'

@@ -1,0 +1,78 @@
+bulkLoad:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the sponsor uploading the file
+      required: true
+      schema:
+        type: integer
+  post:
+    tags:
+      - accounts
+    summary: Sponsor bulk load users
+    description: Process a pipe-delimited upload payload for sponsor users. Sponsors may upload only driver and sponsor records scoped to their own organization.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - content
+            properties:
+              content:
+                type: string
+                description: Raw text content from a pipe-delimited upload file.
+                example: "D||Joe|Driver|joe@example.com|50|Welcome points"
+    responses:
+      '200':
+        description: Bulk upload processed.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  enum:
+                    - sponsor
+                summary:
+                  type: object
+                  properties:
+                    processed:
+                      type: integer
+                    succeeded:
+                      type: integer
+                    failed:
+                      type: integer
+                    createdUsers:
+                      type: integer
+                    createdDrivers:
+                      type: integer
+                    createdSponsors:
+                      type: integer
+                    updatedUsers:
+                      type: integer
+                    createdOrganizations:
+                      type: integer
+                    pointsApplied:
+                      type: integer
+                errors:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      lineNumber:
+                        type: integer
+                      line:
+                        type: string
+                      message:
+                        type: string
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'

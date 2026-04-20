@@ -34,6 +34,10 @@ router.get('/products/:productId', async (request, response) => {
   try {
     const { productId } = request.params;
     const product = await store.getProductById(productId);
+
+    if (!product || typeof product !== 'object' || product.id == null) {
+      return response.status(404).json({ error: 'Product not found' });
+    }
     
     response.json({
       id: product.id,

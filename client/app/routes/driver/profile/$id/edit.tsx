@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
-import { Form, Link, useLoaderData } from "react-router";
-import { Table, Input, Button, Badge, Alert, Modal } from "~/components";
+import { useLoaderData } from "react-router";
+import {
+  Table,
+  Input,
+  Button,
+  Badge,
+  Modal,
+  ProfileEditLayout,
+  getProfileEditFieldClass,
+} from "~/components";
 import { requireAuth } from "~/utils/session.server";
 import { getApiBaseUrl } from "~/utils/api-url";
 
@@ -29,6 +37,11 @@ type ProfileUser = {
   active_status: boolean;
   created_at: string;
   last_password_change: string;
+  alert_points: boolean;
+  alert_orders: boolean;
+  alert_application_status_change: boolean;
+  alert_application_entry: boolean;
+  alert_profile_changes_by_admin: boolean;
 };
 
 export async function loader({ request, params }: { request: Request; params: { id?: string } }) {
@@ -84,13 +97,18 @@ export async function loader({ request, params }: { request: Request; params: { 
     created_at: user.LastLogin || new Date().toISOString(),
     last_password_change:
       user.LastPasswordChange || user.LastLogin || new Date().toISOString(),
+    alert_points: Boolean(user.AlertPoints ?? true),
+    alert_orders: Boolean(user.AlertOrders ?? true),
+    alert_application_status_change: Boolean(user.AlertApplicationStatusChange ?? true),
+    alert_application_entry: Boolean(user.AlertApplicationEntry ?? true),
+    alert_profile_changes_by_admin: Boolean(user.AlertProfileChangesByAdmin ?? true),
   };
 
   return { user: profile, performanceStatus, session };
 }
 
 export default function DriverProfileEditPage() {
-  const { user, performanceStatus, session } = useLoaderData<typeof loader>();
+  const { user, performanceStatus } = useLoaderData<typeof loader>();
   const normalizedPerformanceStatus = (performanceStatus ?? "").toLowerCase();
   const performanceBadgeVariant =
     normalizedPerformanceStatus === "excellent"
@@ -107,8 +125,8 @@ export default function DriverProfileEditPage() {
   const [isEditingPassword, setIsEditingPassword] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  const [successMessage, setSuccessMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [username, setUsername] = useState(user.username || "");
   const [firstName, setFirstName] = useState(user.first_name || "");
@@ -117,17 +135,32 @@ export default function DriverProfileEditPage() {
   const [pronouns, setPronouns] = useState(user.pronouns || "");
   const [email, setEmail] = useState(user.email);
   const [phone, setPhone] = useState(user.phone_number || "");
-  const [profilePictureUrl, setProfilePictureUrl] = useState(
+  const [profilePicture, setProfilePicture] = useState(
     user.profile_picture_url || ""
   );
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [bio, setBio] = useState(user.bio || "");
   const [licenseNumber, setLicenseNumber] = useState(user.license_number || "");
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [deactivationPassword, setDeactivationPassword] = useState("");
+  const [showDeactivationPassword, setShowDeactivationPassword] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
+  const [alertPoints, setAlertPoints] = useState(Boolean(user.alert_points));
+  const [alertOrders, setAlertOrders] = useState(Boolean(user.alert_orders));
+  const [alertApplicationStatusChange, setAlertApplicationStatusChange] = useState(
+    Boolean(user.alert_application_status_change)
+  );
+  const [alertApplicationEntry, setAlertApplicationEntry] = useState(
+    Boolean(user.alert_application_entry)
+  );
+  const [alertProfileChangesByAdmin, setAlertProfileChangesByAdmin] = useState(
+    Boolean(user.alert_profile_changes_by_admin)
+  );
 
   useEffect(() => {
     setUsername(user.username || "");
@@ -137,14 +170,20 @@ export default function DriverProfileEditPage() {
     setPronouns(user.pronouns || "");
     setEmail(user.email || "");
     setPhone(user.phone_number || "");
-    setProfilePictureUrl(user.profile_picture_url || "");
+    setProfilePicture(user.profile_picture_url || "");
+    setProfileImageFile(null);
     setBio(user.bio || "");
     setLicenseNumber(user.license_number || "");
-  }, [user.id, user.license_number]);
+    setAlertPoints(Boolean(user.alert_points));
+    setAlertOrders(Boolean(user.alert_orders));
+    setAlertApplicationStatusChange(Boolean(user.alert_application_status_change));
+    setAlertApplicationEntry(Boolean(user.alert_application_entry));
+    setAlertProfileChangesByAdmin(Boolean(user.alert_profile_changes_by_admin));
+  }, [user]);
 
   const handleSaveProfile = async () => {
-    setSuccessMessage("");
-    setErrorMessage("");
+    setSuccessMessage(null);
+    setErrorMessage(null);
 
     const trimmedUsername = username.trim();
     const trimmedFirstName = firstName.trim();
@@ -157,24 +196,34 @@ export default function DriverProfileEditPage() {
 
     try {
       setIsSavingProfile(true);
+      const payload = new FormData();
+      payload.set("username", trimmedUsername);
+      payload.set("firstName", trimmedFirstName);
+      payload.set("middleName", middleName.trim());
+      payload.set("lastName", trimmedLastName);
+      payload.set("pronouns", pronouns.trim());
+      payload.set("email", email.trim());
+      payload.set("phone", phone.trim());
+      payload.set("bio", bio.trim());
+      payload.set("licenseNumber", licenseNumber.trim());
+      payload.set("alertPoints", String(alertPoints));
+      payload.set("alertOrders", String(alertOrders));
+      payload.set("alertApplicationStatusChange", String(alertApplicationStatusChange));
+      payload.set("alertApplicationEntry", String(alertApplicationEntry));
+      payload.set("alertProfileChangesByAdmin", String(alertProfileChangesByAdmin));
+
+      if (profileImageFile) {
+        payload.set("profileImage", profileImageFile);
+      }
+
       const response = await fetch(`${API_URL}/api/user/profile/${user.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: trimmedUsername,
-          firstName: trimmedFirstName,
-          middleName: middleName.trim(),
-          lastName: trimmedLastName,
-          pronouns: pronouns.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
-          profilePicture: profilePictureUrl.trim(),
-          bio: bio.trim(),
-          licenseNumber: licenseNumber.trim(),
-        }),
+        body: payload,
       });
 
-      const result = await response.json().catch(() => ({} as Record<string, string>));
+      const result = await response
+        .json()
+        .catch(() => ({} as Record<string, string | undefined>));
 
       if (!response.ok) {
         setErrorMessage(result.error || "Failed to update profile");
@@ -187,9 +236,15 @@ export default function DriverProfileEditPage() {
         setLicenseNumber(licenseNumber.trim());
       }
 
-      setSuccessMessage("✅ Profile updated successfully.");
+      if (typeof result.ProfilePicture === "string") {
+        setProfilePicture(result.ProfilePicture);
+      }
+
+      setProfileImageFile(null);
+
+      setSuccessMessage("Profile updated successfully.");
       setIsEditingProfile(false);
-      setTimeout(() => setSuccessMessage(""), 5000);
+      window.setTimeout(() => setSuccessMessage(null), 5000);
     } catch (_err) {
       setErrorMessage("Connection error. Please try again.");
     } finally {
@@ -198,8 +253,8 @@ export default function DriverProfileEditPage() {
   };
 
   const handlePasswordChange = async () => {
-    setSuccessMessage("");
-    setErrorMessage("");
+    setSuccessMessage(null);
+    setErrorMessage(null);
 
     try {
       const response = await fetch("/change-password", {
@@ -215,11 +270,11 @@ export default function DriverProfileEditPage() {
       const result = await response.json();
 
       if (response.ok) {
-        setSuccessMessage("✅ Password updated successfully!");
+        setSuccessMessage("Password updated successfully.");
         setCurrentPassword("");
         setNewPassword("");
         setIsEditingPassword(false);
-        setTimeout(() => setSuccessMessage(""), 5000);
+        window.setTimeout(() => setSuccessMessage(null), 5000);
       } else {
         setErrorMessage(result.error || "Failed to update password");
       }
@@ -228,13 +283,9 @@ export default function DriverProfileEditPage() {
     }
   };
 
-  const personalFieldClass = isEditingProfile
-    ? "!rounded-lg !border-2 !border-gray-300 !bg-white !text-gray-900 !shadow-md !ring-2 !ring-gray-100 transition-all duration-200"
-    : "!rounded-lg !border-2 !border-transparent !bg-gray-100/70 !text-gray-600 !cursor-not-allowed !shadow-none transition-all duration-200";
-
   const openDeactivateModal = () => {
     setDeactivationPassword("");
-    setErrorMessage("");
+    setErrorMessage(null);
     setIsDeactivateModalOpen(true);
   };
 
@@ -245,8 +296,8 @@ export default function DriverProfileEditPage() {
     }
 
     setIsDeactivating(true);
-    setSuccessMessage("");
-    setErrorMessage("");
+    setSuccessMessage(null);
+    setErrorMessage(null);
 
     try {
       const response = await fetch(`${API_URL}/api/drivers/deactivate`, {
@@ -274,197 +325,101 @@ export default function DriverProfileEditPage() {
     }
   };
 
+  const handleEditSaveClick = () => {
+    if (!isEditingProfile) {
+      setIsEditingProfile(true);
+      return;
+    }
+
+    const form = document.getElementById("driver-edit-form") as HTMLFormElement | null;
+    form?.requestSubmit();
+  };
+
+  const lastPasswordChange = user.last_password_change
+    ? new Date(user.last_password_change).toLocaleString()
+    : "Unknown";
+
+  const profileMeta = performanceStatus
+    ? `Performance: ${performanceStatus} • Last Password Change: ${lastPasswordChange}`
+    : `Last Password Change: ${lastPasswordChange}`;
+
   return (
-    <div className="min-h-screen w-full bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f]">
-      <div className="p-8 max-w-6xl mx-auto">
-      <Link
-        to="/driver/dashboard"
-        className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-6"
-      >
-        ← Dashboard
-      </Link>
-
-      {session?.OriginalUser && (
-        <Form method="post" action="/exit-assumption" className="mb-4">
-          <Button type="submit" variant="primary" size="sm">
-            Exit Assumed View
-          </Button>
-        </Form>
-      )}
-
-      <h1 className="text-3xl font-bold mb-8 text-gray-800 dark:text-white">
-        My Profile & Settings
-      </h1>
-
-      {successMessage && (
-        <Alert
-          variant="success"
-          message={successMessage}
-          onDismiss={() => setSuccessMessage("")}
-          className="mb-6"
-        />
-      )}
-
-      {errorMessage && (
-        <Alert
-          message={errorMessage}
-          onDismiss={() => setErrorMessage("")}
-          className="mb-6"
-        />
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 space-y-6">
-          <div className="card p-6 flex flex-col items-center text-center">
-            <img
-              src={profilePictureUrl || "https://via.placeholder.com/150"}
-              alt="Profile"
-              className="w-32 h-32 rounded-full mb-4 border-4 border-blue-500"
-            />
-            <h2 className="text-2xl font-bold">
-              {`${firstName} ${lastName}`.trim() || username || "User"}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">@{username || "unknown"}</p>
-            <p className="text-xs text-gray-500 mt-1">UserID: {user.id}</p>
-            {(bio || pronouns) && (
-              <p className="text-sm text-gray-500 mt-1">
-                {bio || ""}
-                {bio && pronouns ? " | " : ""}
-                {pronouns || ""}
-              </p>
+    <>
+      <ProfileEditLayout
+        apiBaseUrl={API_URL}
+        title={`${firstName} ${lastName}`.trim() || username || "Driver"}
+        subtitle={`@${username || "unknown"}`}
+        profilePicture={profilePicture}
+        initials={buildInitials(firstName, lastName)}
+        profileMeta={profileMeta}
+        successMessage={successMessage}
+        errorMessage={errorMessage}
+        onDismissSuccess={() => setSuccessMessage(null)}
+        onDismissError={() => setErrorMessage(null)}
+        actions={
+          <>
+            {isEditingProfile && (
+              <Button type="button" variant="secondary" onClick={() => setIsEditingProfile(false)}>
+                Cancel
+              </Button>
             )}
-            <Badge variant="info" className="mt-2">
-              {user.account_type}
-            </Badge>
-          </div>
-
-          <div className="card p-6">
-            <h3 className="font-bold mb-4 border-b pb-2">Account Statistics</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Last Password Change:</span>
-                <span className="font-medium">
-                  {new Date(user.last_password_change).toLocaleString()}
-                </span>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleEditSaveClick}
+              isLoading={isSavingProfile}
+              disabled={isSavingProfile}
+            >
+              {isEditingProfile ? "Save" : "Edit"}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="driver-edit-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSaveProfile();
+          }}
+          className="space-y-8"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+            <div className="space-y-4">
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-left">
+                Personal Info
+              </h2>
+              <div className="flex gap-2">
+                <Input
+                  label="First Name"
+                  value={firstName}
+                  disabled={!isEditingProfile}
+                  className={getProfileEditFieldClass(isEditingProfile)}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+                <Input
+                  label="Middle Name"
+                  value={middleName}
+                  disabled={!isEditingProfile}
+                  className={getProfileEditFieldClass(isEditingProfile)}
+                  onChange={(e) => setMiddleName(e.target.value)}
+                />
               </div>
-              {performanceStatus && (
-                <div className="flex justify-between items-center gap-3">
-                  <span className="text-gray-500 text-sm">Performance Status:</span>
-                  <Badge variant={performanceBadgeVariant} size="md" className="capitalize">
-                    {performanceStatus}
-                  </Badge>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:col-span-2 space-y-8">
-          <div
-            className={`card p-6 transition-all duration-300 ${
-              isEditingProfile ? "ring-2 ring-gray-200 bg-gray-50/10" : ""
-            }`}
-          >
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold">Personal Information</h3>
-              {!isEditingProfile ? (
-                <Button type="button" size="sm" onClick={() => setIsEditingProfile(true)}>
-                  Edit Details
-                </Button>
-              ) : (
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsEditingProfile(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    onClick={handleSaveProfile}
-                    isLoading={isSavingProfile}
-                  >
-                    Save Changes
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Input
-                label="First Name"
-                value={firstName}
-                disabled={!isEditingProfile}
-                className={personalFieldClass}
-                onChange={(e) => setFirstName(e.target.value)}
-              />
-              <Input
-                label="Middle Name"
-                value={middleName}
-                disabled={!isEditingProfile}
-                className={personalFieldClass}
-                onChange={(e) => setMiddleName(e.target.value)}
-              />
               <Input
                 label="Last Name"
                 value={lastName}
                 disabled={!isEditingProfile}
-                className={personalFieldClass}
+                className={getProfileEditFieldClass(isEditingProfile)}
                 onChange={(e) => setLastName(e.target.value)}
               />
-
-              <Input
-                label="Username"
-                value={username}
-                disabled={!isEditingProfile}
-                className={personalFieldClass}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-              <Input
-                label="Email Address"
-                value={email}
-                disabled={!isEditingProfile}
-                className={personalFieldClass}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <Input
-                label="Phone Number"
-                value={phone}
-                disabled={!isEditingProfile}
-                className={personalFieldClass}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-
               <Input
                 label="Pronouns"
                 value={pronouns}
                 disabled={!isEditingProfile}
-                className={personalFieldClass}
+                className={getProfileEditFieldClass(isEditingProfile)}
                 onChange={(e) => setPronouns(e.target.value)}
               />
-
-              <Input
-                label="License Number"
-                value={licenseNumber}
-                disabled={!isEditingProfile}
-                className={personalFieldClass}
-                onChange={(e) => setLicenseNumber(e.target.value)}
-              />
-
-              <Input
-                label="Profile Picture URL"
-                value={profilePictureUrl}
-                disabled={!isEditingProfile}
-                className={personalFieldClass}
-                onChange={(e) => setProfilePictureUrl(e.target.value)}
-              />
-
-              <div className="md:col-span-3">
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Bio
                 </label>
                 <textarea
@@ -472,14 +427,77 @@ export default function DriverProfileEditPage() {
                   disabled={!isEditingProfile}
                   onChange={(e) => setBio(e.target.value)}
                   rows={4}
-                  className={`w-full p-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all ${personalFieldClass}`}
+                  className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${getProfileEditFieldClass(
+                    isEditingProfile
+                  )}`}
                   placeholder="Tell sponsors a bit about yourself"
                 />
               </div>
             </div>
+
+            <div className="space-y-4">
+              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-left">
+                Account & Profile
+              </h2>
+              <Input
+                label="Username"
+                value={username}
+                disabled={!isEditingProfile}
+                className={getProfileEditFieldClass(isEditingProfile)}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <Input
+                label="Email Address"
+                value={email}
+                disabled={!isEditingProfile}
+                className={getProfileEditFieldClass(isEditingProfile)}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <Input
+                label="Phone Number"
+                value={phone}
+                disabled={!isEditingProfile}
+                className={getProfileEditFieldClass(isEditingProfile)}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+              <Input
+                label="License Number"
+                value={licenseNumber}
+                disabled={!isEditingProfile}
+                className={getProfileEditFieldClass(isEditingProfile)}
+                onChange={(e) => setLicenseNumber(e.target.value)}
+              />
+              <Input
+                label="Profile Picture Upload"
+                name="profileImage"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                disabled={!isEditingProfile}
+                className={getProfileEditFieldClass(isEditingProfile)}
+                onChange={(e) => setProfileImageFile(e.target.files?.[0] ?? null)}
+                helperText="Upload PNG, JPG, WEBP, or GIF (max 5MB)."
+              />
+
+              <div className="pt-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-gray-600 dark:text-gray-300">Account Type</span>
+                  <Badge variant="info">{user.account_type}</Badge>
+                </div>
+                {performanceStatus && (
+                  <div className="flex items-center justify-between text-sm mt-2">
+                    <span className="font-medium text-gray-600 dark:text-gray-300">
+                      Performance
+                    </span>
+                    <Badge variant={performanceBadgeVariant} size="md" className="capitalize">
+                      {performanceStatus}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="card p-6 border-l-4 border-yellow-500">
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">Security</h3>
               {!isEditingPassword ? (
@@ -514,26 +532,104 @@ export default function DriverProfileEditPage() {
             </div>
 
             {isEditingPassword && (
-              <div className="space-y-4 mt-4 bg-gray-50 p-4 rounded-lg">
-                <Input
-                  type="password"
-                  label="Current Password"
-                  placeholder="••••••••"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                />
-                <Input
-                  type="password"
-                  label="New Password"
-                  placeholder="••••••••"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
+              <div className="space-y-4 mt-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+                <div className="space-y-1">
+                  <div className="relative flex flex-col">
+                    <Input
+                      type={showCurrentPassword ? "text" : "password"}
+                      label="Current Password"
+                      placeholder="••••••••"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                    />
+                    <div className="absolute top-0 bottom-0 right-3 flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-6"
+                        aria-label={
+                          showCurrentPassword
+                            ? "Hide current password"
+                            : "Show current password"
+                        }
+                      >
+                        {showCurrentPassword ? (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.5}
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                          </svg>
+                        ) : (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.5}
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="relative flex flex-col">
+                    <Input
+                      type={showNewPassword ? "text" : "password"}
+                      label="New Password"
+                      placeholder="••••••••"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                    <div className="absolute top-0 bottom-0 right-3 flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-6"
+                        aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                      >
+                        {showNewPassword ? (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.5}
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                          </svg>
+                        ) : (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.5}
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
-          <div className="card p-6 border-l-4 border-red-500">
+          <div className="rounded-2xl border border-red-200 dark:border-red-900 p-6 bg-red-50/40 dark:bg-red-950/20">
             <h3 className="text-xl font-bold text-red-600 dark:text-red-400">
               Danger Zone
             </h3>
@@ -543,6 +639,32 @@ export default function DriverProfileEditPage() {
             <Button type="button" variant="danger" onClick={openDeactivateModal}>
               Deactivate Account
             </Button>
+          </div>
+
+          <div className="card p-6">
+            <h3 className="text-xl font-bold mb-4">Notification Preferences</h3>
+            <div className="space-y-3">
+              <ToggleRow label="Points" checked={alertPoints} disabled={!isEditingProfile} onChange={setAlertPoints} />
+              <ToggleRow label="Orders" checked={alertOrders} disabled={!isEditingProfile} onChange={setAlertOrders} />
+              <ToggleRow
+                label="Change In Application Status"
+                checked={alertApplicationStatusChange}
+                disabled={!isEditingProfile}
+                onChange={setAlertApplicationStatusChange}
+              />
+              <ToggleRow
+                label="Application Entry"
+                checked={alertApplicationEntry}
+                disabled={!isEditingProfile}
+                onChange={setAlertApplicationEntry}
+              />
+              <ToggleRow
+                label="Changes To Profile By Admin"
+                checked={alertProfileChangesByAdmin}
+                disabled={!isEditingProfile}
+                onChange={setAlertProfileChangesByAdmin}
+              />
+            </div>
           </div>
 
           <div className="card p-6">
@@ -557,10 +679,8 @@ export default function DriverProfileEditPage() {
               emptyMessage="No recent activity to display"
             />
           </div>
-        </div>
-      </div>
-
-      </div>
+        </form>
+      </ProfileEditLayout>
 
       <Modal
         isOpen={isDeactivateModalOpen}
@@ -571,13 +691,48 @@ export default function DriverProfileEditPage() {
           <p className="text-sm text-gray-600 dark:text-gray-300">
             Enter your current password to confirm account deactivation.
           </p>
-          <Input
-            type="password"
-            label="Current Password"
-            placeholder="••••••••"
-            value={deactivationPassword}
-            onChange={(e) => setDeactivationPassword(e.target.value)}
-          />
+          <div className="relative flex flex-col">
+            <Input
+              type={showDeactivationPassword ? "text" : "password"}
+              label="Current Password"
+              placeholder="••••••••"
+              value={deactivationPassword}
+              onChange={(e) => setDeactivationPassword(e.target.value)}
+            />
+            <div className="absolute top-0 bottom-0 right-3 flex items-center">
+              <button
+                type="button"
+                onClick={() => setShowDeactivationPassword(!showDeactivationPassword)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-6"
+                aria-label={showDeactivationPassword ? "Hide password" : "Show password"}
+              >
+                {showDeactivationPassword ? (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-5 h-5"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                  </svg>
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-5 h-5"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
@@ -598,6 +753,47 @@ export default function DriverProfileEditPage() {
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   );
+}
+
+function ToggleRow({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2">
+      <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+          checked ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-700"
+        } disabled:opacity-50`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+            checked ? "translate-x-6" : "translate-x-1"
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function buildInitials(firstName: string, lastName: string) {
+  const first = firstName.trim().charAt(0);
+  const last = lastName.trim().charAt(0);
+  const initials = `${first}${last}`.toUpperCase();
+  return initials || "DR";
 }

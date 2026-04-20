@@ -192,6 +192,77 @@ users:
       '503':
         $ref: '../../schemas/common.yaml#/Responses/503Error'
 
+usersBulkLoad:
+  post:
+    tags:
+      - accounts
+    summary: Bulk load organizations and users
+    description: Process a pipe-delimited upload payload and create/update organizations, drivers, and sponsors line-by-line. Invalid lines are reported and skipped while remaining lines continue processing.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - content
+            properties:
+              content:
+                type: string
+                description: Raw text content from a pipe-delimited upload file.
+                example: "O|Acme Logistics\nD|Acme Logistics|Joe|Driver|joe@example.com|50|Welcome points"
+              requesterUserId:
+                type: integer
+                description: Optional explicit actor user ID for audit attribution.
+    responses:
+      '200':
+        description: Bulk upload processed.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  enum:
+                    - admin
+                summary:
+                  type: object
+                  properties:
+                    processed:
+                      type: integer
+                    succeeded:
+                      type: integer
+                    failed:
+                      type: integer
+                    createdUsers:
+                      type: integer
+                    createdDrivers:
+                      type: integer
+                    createdSponsors:
+                      type: integer
+                    updatedUsers:
+                      type: integer
+                    createdOrganizations:
+                      type: integer
+                    pointsApplied:
+                      type: integer
+                errors:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      lineNumber:
+                        type: integer
+                      line:
+                        type: string
+                      message:
+                        type: string
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
 usersById:
   parameters:
     - name: id

@@ -30,6 +30,24 @@ Notification:
           type: string
           description: The content of the notification.
           readOnly: true
+        category:
+          type: string
+          description: Notification category identifier for client filtering.
+          readOnly: true
+        actorUserId:
+          type: integer
+          description: The user who triggered the notification.
+          readOnly: true
+        readAt:
+          type: string
+          format: date-time
+          description: Timestamp when the recipient marked the notification as read.
+          readOnly: true
+        readByAction:
+          type: string
+          enum: [single, all]
+          description: Indicates whether the notification was marked by single-item or mark-all action.
+          readOnly: true
 
 PointTransaction:
   allOf:
@@ -141,3 +159,64 @@ ApplicationStatusUpdate:
           type: integer
         driverId:
           type: string
+
+ReviewComment:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      required:
+        - reviewId
+        - sponsorCompanyId
+        - text
+      properties:
+        reviewId:
+          type: integer
+        sponsorCompanyId:
+          type: integer
+        authorUserId:
+          type: integer
+        parentCommentId:
+          type: integer
+          nullable: true
+        text:
+          type: string
+          maxLength: 1000
+        hiddenAt:
+          type: string
+          format: date-time
+          nullable: true
+
+ReviewDraft:
+  allOf:
+    - $ref: '#/Event'
+    - type: object
+      required:
+        - itemId
+        - sponsorCompanyId
+        - rating
+        - body
+      properties:
+        itemId:
+          type: integer
+        sponsorCompanyId:
+          type: integer
+        authorUserId:
+          type: integer
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        body:
+          type: string
+          maxLength: 1000
+        updatedAt:
+          type: string
+          format: date-time
+        finalizedAt:
+          type: string
+          format: date-time
+          nullable: true
+        clearedAt:
+          type: string
+          format: date-time
+          nullable: true

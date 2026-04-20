@@ -101,6 +101,7 @@ export class ApiClient {
     const url = `${API_BASE_URL}${this.rolePrefix}${path}`;
     return fetch(url, {
       ...init,
+      credentials: init.credentials ?? 'include',
       headers: {
         ...getAuthHeaders(this.user),
         ...init.headers,
@@ -145,6 +146,7 @@ export class ApiClient {
     const url = `${API_BASE_URL}/api${path}`;
     return fetch(url, {
       ...init,
+      credentials: init.credentials ?? 'include',
       headers: {
         ...getAuthHeaders(this.user),
         ...init.headers,

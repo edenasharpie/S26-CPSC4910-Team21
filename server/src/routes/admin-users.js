@@ -9,11 +9,72 @@ import {
   updatePointTransaction,
   getAllPointTransactions,
 } from '../db.js';
-import { hashPassword, hasBooleanPermission } from '../utils/auth.js';
+import {
+  hashPassword,
+  hasBooleanPermission,
+  validatePasswordComplexity,
+  verifyPassword,
+} from '../utils/auth.js';
+import { processBulkLoadFile } from '../services/bulk-load-service.js';
+import {
+  getDriverNotificationContextByLicense,
+  getDriverNotificationContextByUserId,
+  insertNotificationEvent,
+  normalizeNotificationPreferences,
+  notifyDriver,
+  notifySponsorCompany,
+} from '../services/notification-service.js';
+import {
+  handleProfileImageUpload,
+  normalizeProfilePictureValue,
+} from '../utils/profile-image-upload.js';
 
 const router = Router();
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
+
+async function sendAdminPointChangeNotification({
+  driverUserId,
+  adminUserId,
+  pointChange,
+  reason,
+  isUpdate = false,
+  transactionId = null,
+}) {
+  const parsedDriverUserId = Number(driverUserId);
+  if (!Number.isInteger(parsedDriverUserId)) {
+    return;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    const driverContext = await getDriverNotificationContextByUserId(connection, parsedDriverUserId);
+    if (!driverContext) {
+      return;
+    }
+
+    const message = isUpdate
+      ? `An admin updated a point transaction to ${pointChange} points.`
+      : pointChange >= 0
+      ? `An admin added ${pointChange} points to your account.`
+      : `An admin deducted ${Math.abs(pointChange)} points from your account.`;
+
+    await notifyDriver(connection, {
+      driverContext,
+      actorUserId: adminUserId,
+      content: message,
+      category: isUpdate ? 'driver_point_transaction_update' : 'driver_point_transaction',
+      preference: 'points',
+      metadata: {
+        pointChange,
+        reason,
+        ...(transactionId !== null ? { transactionId: Number(transactionId) } : {}),
+      },
+    });
+  } finally {
+    connection.release();
+  }
+}
 
 function parseLimit(rawLimit) {
   const parsed = Number.parseInt(String(rawLimit ?? ''), 10);
@@ -29,6 +90,14 @@ function parseOffset(rawOffset) {
     return 0;
   }
   return parsed;
+}
+
+function normalizeBooleanPreferenceInput(value) {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return null;
 }
 
 function normalizeUserType(rawUserType) {
@@ -70,9 +139,11 @@ async function getUserForAssume(connection, userId) {
       u.LastName,
       u.ActiveStatus,
       u.Permissions,
-      s.SponsorCompanyID
+      s.SponsorCompanyID AS SponsorCompanyID,
+      CASE WHEN u.UserType = 'sponsor' THEN sc2.PointDollarValue ELSE NULL END AS SponsorPointDollarValue
      FROM USERS u
      LEFT JOIN SPONSORS s ON s.UserID = u.UserID
+      LEFT JOIN SPONSOR_COMPANIES sc2 ON s.SponsorCompanyID = sc2.SponsorCompanyID
      WHERE u.UserID = ?
      LIMIT 1`,
     [userId]
@@ -112,7 +183,9 @@ router.get('/users', async (request, response) => {
         u.ActiveStatus,
         DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
         DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange,
+        s.SponsorCompanyID AS SponsorCompanyID,
         COALESCE(d.PointBalance, 0) AS PointBalance,
+        CASE WHEN u.UserType = 'sponsor' THEN sc2.PointDollarValue ELSE NULL END AS SponsorPointDollarValue,
         CASE
           WHEN u.UserType = 'driver'  THEN COALESCE(sc.CompanyName, 'Unassigned')
           WHEN u.UserType = 'sponsor' THEN COALESCE(sc2.CompanyName, 'N/A')
@@ -216,6 +289,7 @@ router.get('/users/:id', async (request, response) => {
         u.Permissions,
         DATE_FORMAT(u.LastLogin, '%Y-%m-%d %H:%i:%s') AS LastLogin,
         DATE_FORMAT(u.LastPasswordChange, '%Y-%m-%d %H:%i:%s') AS LastPasswordChange,
+        sp.SponsorCompanyID AS SponsorCompanyID,
         CASE WHEN u.UserType = 'driver'  THEN d.PointBalance  ELSE NULL END AS PointBalance,
         CASE
           WHEN u.UserType = 'driver'  THEN sc.CompanyName
@@ -273,8 +347,28 @@ router.post('/users', async (request, response) => {
       sponsorCompanyId,
       performanceStatus,
       alertPoints,   // Boolean flag: enable point transaction notifications
-      alertOrders    // Boolean flag: enable order notifications
+      alertOrders,   // Boolean flag: enable order notifications
+      alertApplicationStatusChange,
+      alertApplicationEntry,
+      alertProfileChangesByAdmin,
     } = request.body;
+
+    const normalizedAlertPoints = normalizeBooleanPreferenceInput(alertPoints);
+    const normalizedAlertOrders = normalizeBooleanPreferenceInput(alertOrders);
+    const normalizedAlertApplicationStatusChange = normalizeBooleanPreferenceInput(alertApplicationStatusChange);
+    const normalizedAlertApplicationEntry = normalizeBooleanPreferenceInput(alertApplicationEntry);
+    const normalizedAlertProfileChangesByAdmin = normalizeBooleanPreferenceInput(alertProfileChangesByAdmin);
+
+    if (
+      normalizedAlertPoints === null ||
+      normalizedAlertOrders === null ||
+      normalizedAlertApplicationStatusChange === null ||
+      normalizedAlertApplicationEntry === null ||
+      normalizedAlertProfileChangesByAdmin === null
+    ) {
+      await connection.rollback();
+      return response.status(400).json({ error: 'Notification preferences must be boolean values.' });
+    }
 
     // Validate required fields
     if (!username || !email || !firstName || !lastName || !userType) {
@@ -423,18 +517,56 @@ router.post('/users', async (request, response) => {
   }
 });
 
+// POST /api/admin/users/bulk-load — process pipe-delimited user uploads
+router.post('/users/bulk-load', async (request, response) => {
+  try {
+    const payload = request.body && typeof request.body === 'object' ? request.body : {};
+    const content =
+      typeof payload.content === 'string'
+        ? payload.content
+        : typeof request.body === 'string'
+        ? request.body
+        : '';
+
+    if (!content.trim()) {
+      return response.status(400).json({
+        error: 'Upload content is required.',
+      });
+    }
+
+    const requesterUserIdRaw =
+      payload.requesterUserId ?? request.sessionContext?.effectiveUser?.UserID ?? null;
+    const requesterUserId = Number(requesterUserIdRaw);
+
+    const report = await processBulkLoadFile({
+      content,
+      mode: 'admin',
+      actorUserId: Number.isInteger(requesterUserId) ? requesterUserId : null,
+    });
+
+    return response.status(200).json(report);
+  } catch (error) {
+    console.error('Bulk load admin error:', error);
+    return response.status(500).json({ error: 'Failed to process bulk upload.' });
+  }
+});
+
 // PATCH /api/admin/users/:id — partial update
-router.patch('/users/:id', async (request, response) => {
+router.patch('/users/:id', handleProfileImageUpload, async (request, response) => {
   let connection;
   try {
     connection = await pool.getConnection();
     await connection.beginTransaction();
+
+    const actorUserIdRaw = request.sessionContext?.effectiveUser?.UserID;
+    const actorUserId = Number.isInteger(Number(actorUserIdRaw)) ? Number(actorUserIdRaw) : null;
 
     const { id } = request.params;
     const {
       username,
       email,
       phone,
+      password,
       firstName,
       middleName,
       lastName,
@@ -447,8 +579,45 @@ router.patch('/users/:id', async (request, response) => {
       sponsorCompanyId,
       performanceStatus,
       alertPoints,   // Boolean flag: enable point transaction notifications
-      alertOrders    // Boolean flag: enable order notifications
+      alertOrders,   // Boolean flag: enable order notifications
+      alertApplicationStatusChange,
+      alertApplicationEntry,
+      alertProfileChangesByAdmin,
     } = request.body;
+    const normalizedProfilePicture = normalizeProfilePictureValue(profilePicture, request.file);
+
+    const normalizedAlertPoints = normalizeBooleanPreferenceInput(alertPoints);
+    const normalizedAlertOrders = normalizeBooleanPreferenceInput(alertOrders);
+    const normalizedAlertApplicationStatusChange =
+      normalizeBooleanPreferenceInput(alertApplicationStatusChange);
+    const normalizedAlertApplicationEntry =
+      normalizeBooleanPreferenceInput(alertApplicationEntry);
+    const normalizedAlertProfileChangesByAdmin =
+      normalizeBooleanPreferenceInput(alertProfileChangesByAdmin);
+
+    if (
+      normalizedAlertPoints === null ||
+      normalizedAlertOrders === null ||
+      normalizedAlertApplicationStatusChange === null ||
+      normalizedAlertApplicationEntry === null ||
+      normalizedAlertProfileChangesByAdmin === null
+    ) {
+      await connection.rollback();
+      return response.status(400).json({
+        error: 'Notification preferences must be boolean values.',
+      });
+    }
+
+    const normalizedPassword =
+      typeof password === 'string' ? password.trim() : undefined;
+
+    if (normalizedPassword !== undefined && normalizedPassword.length > 0) {
+      const complexity = validatePasswordComplexity(normalizedPassword);
+      if (!complexity.valid) {
+        await connection.rollback();
+        return response.status(400).json({ error: complexity.error });
+      }
+    }
 
     // Build dynamic update query
     const updates = [];
@@ -482,9 +651,9 @@ router.patch('/users/:id', async (request, response) => {
       updates.push('Pronouns = ?');
       values.push(pronouns);
     }
-    if (profilePicture !== undefined) {
+    if (normalizedProfilePicture !== undefined) {
       updates.push('ProfilePicture = ?');
-      values.push(profilePicture);
+      values.push(normalizedProfilePicture);
     }
     if (bio !== undefined) {
       updates.push('Bio = ?');
@@ -497,11 +666,38 @@ router.patch('/users/:id', async (request, response) => {
 
     // Check if there are any user table updates or role-specific updates
     const hasUserUpdates = updates.length > 0;
+    const hasPasswordUpdate = normalizedPassword !== undefined && normalizedPassword.length > 0;
     const hasDriverUpdates = licenseNumber !== undefined || sponsorCompanyId !== undefined || 
-                              performanceStatus !== undefined || alertPoints !== undefined || 
-                              alertOrders !== undefined;
+                              performanceStatus !== undefined || normalizedAlertPoints !== undefined || 
+                              normalizedAlertOrders !== undefined;
+    const hasNotificationPreferenceUpdates =
+      normalizedAlertPoints !== undefined ||
+      normalizedAlertOrders !== undefined ||
+      normalizedAlertApplicationStatusChange !== undefined ||
+      normalizedAlertApplicationEntry !== undefined ||
+      normalizedAlertProfileChangesByAdmin !== undefined;
+    const profileFieldChanges = [
+      username,
+      email,
+      phone,
+      firstName,
+      middleName,
+      lastName,
+      pronouns,
+      normalizedProfilePicture,
+      bio,
+      activeStatus,
+      licenseNumber,
+      sponsorCompanyId,
+      performanceStatus,
+      normalizedAlertPoints,
+      normalizedAlertOrders,
+      normalizedAlertApplicationStatusChange,
+      normalizedAlertApplicationEntry,
+      normalizedAlertProfileChangesByAdmin,
+    ].some((value) => value !== undefined);
 
-    if (!hasUserUpdates && !hasDriverUpdates) {
+    if (!hasUserUpdates && !hasDriverUpdates && !hasNotificationPreferenceUpdates && !hasPasswordUpdate) {
       return response.status(400).json({ error: 'No valid fields to update' });
     }
 
@@ -513,7 +709,7 @@ router.patch('/users/:id', async (request, response) => {
     }
 
     // Get user type to determine which role-specific table to update
-    const userTypeQuery = 'SELECT UserType FROM USERS WHERE UserID = ?';
+    const userTypeQuery = 'SELECT UserType, Permissions FROM USERS WHERE UserID = ?';
     const userTypeResult = await connection.query(userTypeQuery, [id]);
     
     if (userTypeResult[0].length === 0) {
@@ -522,9 +718,107 @@ router.patch('/users/:id', async (request, response) => {
     }
 
     const userType = userTypeResult[0][0].UserType;
+    const currentPermissions = userTypeResult[0][0].Permissions;
+
+    if (hasNotificationPreferenceUpdates) {
+      const nextPermissions = normalizeNotificationPreferences(currentPermissions, {
+        ...(normalizedAlertPoints !== undefined ? { alertPoints: normalizedAlertPoints } : {}),
+        ...(normalizedAlertOrders !== undefined ? { alertOrders: normalizedAlertOrders } : {}),
+        ...(normalizedAlertApplicationStatusChange !== undefined
+          ? { alertApplicationStatusChange: normalizedAlertApplicationStatusChange }
+          : {}),
+        ...(normalizedAlertApplicationEntry !== undefined
+          ? { alertApplicationEntry: normalizedAlertApplicationEntry }
+          : {}),
+        ...(normalizedAlertProfileChangesByAdmin !== undefined
+          ? { alertProfileChangesByAdmin: normalizedAlertProfileChangesByAdmin }
+          : {}),
+      });
+
+      await connection.query(
+        'UPDATE USERS SET Permissions = ? WHERE UserID = ?',
+        [JSON.stringify(nextPermissions), id]
+      );
+    }
+
+    if (normalizedPassword !== undefined && normalizedPassword.length > 0) {
+      const [historyRows] = await connection.query(
+        `SELECT JSON_UNQUOTE(JSON_EXTRACT(Properties, '$.oldHash')) AS PassHash
+         FROM EVENTS
+         WHERE UserID = ? AND EventType = 'PasswordChange'
+           AND JSON_EXTRACT(Properties, '$.oldHash') IS NOT NULL
+         ORDER BY Timestamp DESC
+         LIMIT 5`,
+        [id]
+      );
+
+      const [currentHashRows] = await connection.query(
+        'SELECT PassHash FROM USERS WHERE UserID = ? LIMIT 1',
+        [id]
+      );
+
+      const allHashes = [
+        ...currentHashRows.map((row) => row.PassHash),
+        ...historyRows.map((row) => row.PassHash),
+      ].filter(Boolean);
+
+      for (const historicalHash of allHashes) {
+        const isMatch = await verifyPassword(normalizedPassword, historicalHash);
+        if (isMatch) {
+          await connection.rollback();
+          return response.status(400).json({ error: 'Cannot reuse one of the last 5 passwords.' });
+        }
+      }
+
+      const oldHash = currentHashRows[0]?.PassHash ?? null;
+      const newHash = await hashPassword(normalizedPassword);
+
+      await connection.query(
+        'UPDATE USERS SET PassHash = ?, LastPasswordChange = NOW() WHERE UserID = ?',
+        [newHash, id]
+      );
+
+      await connection.query(
+        'INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties) VALUES (?, NOW(), ?, ?)',
+        [
+          Number(id),
+          'PasswordChange',
+          JSON.stringify({
+            success: true,
+            changeMethod: 'admin_initiated',
+            oldHash,
+            actorUserId,
+          }),
+        ]
+      );
+    }
 
     // Update role-specific tables
+    let previousSponsorCompanyId = null;
+    let nextSponsorCompanyId = null;
+    let driverLicenseNumber = null;
+    let driverFullName = null;
+
     if (userType.toLowerCase() === 'driver' && hasDriverUpdates) {
+      if (sponsorCompanyId !== undefined) {
+        const [driverBeforeRows] = await connection.query(
+          `SELECT d.SponsorCompanyID, d.LicenseNumber, u.FirstName, u.LastName
+           FROM DRIVERS d
+           JOIN USERS u ON u.UserID = d.UserID
+           WHERE d.UserID = ?
+           LIMIT 1`,
+          [id]
+        );
+
+        if (driverBeforeRows.length > 0) {
+          const previousCompanyRaw = driverBeforeRows[0].SponsorCompanyID;
+          previousSponsorCompanyId =
+            previousCompanyRaw === null ? null : Number(previousCompanyRaw);
+          driverLicenseNumber = driverBeforeRows[0].LicenseNumber;
+          driverFullName = `${driverBeforeRows[0].FirstName ?? ''} ${driverBeforeRows[0].LastName ?? ''}`.trim();
+        }
+      }
+
       const driverUpdates = [];
       const driverValues = [];
 
@@ -540,19 +834,104 @@ router.patch('/users/:id', async (request, response) => {
         driverUpdates.push('PerformanceStatus = ?');
         driverValues.push(performanceStatus);
       }
-      if (alertPoints !== undefined) {
+      if (normalizedAlertPoints !== undefined) {
         driverUpdates.push('AlertPoints = ?');
-        driverValues.push(alertPoints);
+        driverValues.push(normalizedAlertPoints ? 1 : 0);
       }
-      if (alertOrders !== undefined) {
+      if (normalizedAlertOrders !== undefined) {
         driverUpdates.push('AlertOrders = ?');
-        driverValues.push(alertOrders);
+        driverValues.push(normalizedAlertOrders ? 1 : 0);
       }
 
       if (driverUpdates.length > 0) {
         driverValues.push(id);
         const driverUpdateQuery = `UPDATE DRIVERS SET ${driverUpdates.join(', ')} WHERE UserID = ?`;
         await connection.query(driverUpdateQuery, driverValues);
+      }
+
+      if (sponsorCompanyId !== undefined) {
+        const [driverAfterRows] = await connection.query(
+          'SELECT SponsorCompanyID FROM DRIVERS WHERE UserID = ? LIMIT 1',
+          [id]
+        );
+
+        if (driverAfterRows.length > 0) {
+          const nextCompanyRaw = driverAfterRows[0].SponsorCompanyID;
+          nextSponsorCompanyId = nextCompanyRaw === null ? null : Number(nextCompanyRaw);
+        }
+
+        const companyChanged = previousSponsorCompanyId !== nextSponsorCompanyId;
+        if (companyChanged && driverLicenseNumber) {
+          try {
+            if (Number.isInteger(previousSponsorCompanyId)) {
+              await connection.query(
+                `UPDATE DRIVER_COMPANY_ENROLLMENT
+                 SET EnrollmentStatus = 'inactive', LeftAt = NOW()
+                 WHERE DriverID = ? AND SponsorCompanyID = ? AND EnrollmentStatus = 'active'`,
+                [driverLicenseNumber, previousSponsorCompanyId]
+              );
+            }
+
+            if (Number.isInteger(nextSponsorCompanyId)) {
+              await connection.query(
+                `INSERT INTO DRIVER_COMPANY_ENROLLMENT
+                  (DriverID, SponsorCompanyID, PointBalance, EnrollmentStatus, JoinedAt, LeftAt)
+                 VALUES (?, ?, 0, 'active', NOW(), NULL)
+                 ON DUPLICATE KEY UPDATE
+                  EnrollmentStatus = 'active',
+                  LeftAt = NULL`,
+                [driverLicenseNumber, nextSponsorCompanyId]
+              );
+            }
+          } catch (error) {
+            if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+              throw error;
+            }
+          }
+        }
+
+        if (companyChanged && Number.isInteger(previousSponsorCompanyId)) {
+          await connection.query(
+            `INSERT INTO EVENTS (UserID, Timestamp, EventType, Properties)
+             VALUES (?, NOW(), 'AccountUpdate', JSON_OBJECT('updatedFields', JSON_ARRAY('SponsorCompanyID'), 'isSelfUpdate', false, 'success', true))`,
+            [actorUserId ?? Number(id)]
+          );
+
+          await notifySponsorCompany(connection, {
+            sponsorCompanyId: previousSponsorCompanyId,
+            actorUserId,
+            content: `Driver ${driverFullName || id} left the company.`,
+            category: 'driver_left_company',
+            metadata: {
+              driverUserId: Number(id),
+              driverId: driverLicenseNumber,
+              previousSponsorCompanyId,
+              nextSponsorCompanyId,
+              trigger: 'admin_driver_company_change',
+            },
+          });
+
+          const driverNotificationContext = await getDriverNotificationContextByUserId(
+            connection,
+            Number(id)
+          );
+
+          await notifyDriver(connection, {
+            driverContext: driverNotificationContext,
+            actorUserId,
+            content: 'You were removed from your sponsor company.',
+            category: 'driver_removed_from_company',
+            force: true,
+            preference: 'none',
+            metadata: {
+              driverUserId: Number(id),
+              driverId: driverLicenseNumber,
+              previousSponsorCompanyId,
+              nextSponsorCompanyId,
+              trigger: 'admin_driver_company_change',
+            },
+          });
+        }
       }
     } else if (userType.toLowerCase() === 'sponsor' && sponsorCompanyId !== undefined) {
       // Update SPONSORS table
@@ -574,6 +953,29 @@ router.patch('/users/:id', async (request, response) => {
     `;
 
     const result = await connection.query(userQuery, [id]);
+
+    if (profileFieldChanges && Number.isInteger(actorUserId) && actorUserId !== Number(id)) {
+      const [targetRows] = await connection.query(
+        'SELECT Username, Permissions FROM USERS WHERE UserID = ? LIMIT 1',
+        [id]
+      );
+
+      if (targetRows.length > 0) {
+        const targetPreferences = normalizeNotificationPreferences(targetRows[0].Permissions);
+        if (targetPreferences.alertProfileChangesByAdmin) {
+          await insertNotificationEvent(connection, {
+            recipientUserId: Number(id),
+            actorUserId,
+            content: 'Your profile was updated by an admin.',
+            category: 'profile_changed_by_admin',
+            metadata: {
+              targetUserId: Number(id),
+              targetUsername: targetRows[0].Username,
+            },
+          });
+        }
+      }
+    }
 
     await connection.commit();
     response.json(result[0][0]);
@@ -792,6 +1194,21 @@ router.put('/point-transactions/:transactionId', async (req, res) => {
   const { newPoints, newReason, adminUserId } = req.body ?? {};
   try {
     await updatePointTransaction(Number(req.params.transactionId), newPoints, newReason, adminUserId);
+    const history = await getAllPointTransactions();
+    const updatedTransaction = history.find(
+      (row) => Number(row.TransactionID) === Number(req.params.transactionId)
+    );
+
+    if (updatedTransaction && Number.isInteger(Number(updatedTransaction.DriverUserID))) {
+      await sendAdminPointChangeNotification({
+        driverUserId: Number(updatedTransaction.DriverUserID),
+        adminUserId: adminUserId ?? null,
+        pointChange: Number(newPoints),
+        reason: String(newReason ?? ''),
+        isUpdate: true,
+        transactionId: Number(req.params.transactionId),
+      });
+    }
     return res.json({ success: true });
   } catch (err) {
     console.error('PUT /admin/point-transactions/:transactionId error:', err);
@@ -853,6 +1270,13 @@ router.post('/users/:userId/points', async (req, res) => {
     }
 
     await addPointTransaction(userId, adminUserId ?? null, pointChange, reason);
+    await sendAdminPointChangeNotification({
+      driverUserId: userId,
+      adminUserId: adminUserId ?? null,
+      pointChange,
+      reason: String(reason),
+      isUpdate: false,
+    });
 
     const driver = await getDriverPoints(userId);
     const history = await getPointHistory(userId);
@@ -899,6 +1323,14 @@ router.patch('/users/:userId/points/:transactionId', async (req, res) => {
     }
 
     await updatePointTransaction(transactionId, pointChange, reason, adminUserId ?? null);
+    await sendAdminPointChangeNotification({
+      driverUserId: userId,
+      adminUserId: adminUserId ?? null,
+      pointChange,
+      reason: String(reason),
+      isUpdate: true,
+      transactionId,
+    });
 
     const driver = await getDriverPoints(userId);
     const history = await getPointHistory(userId);
@@ -942,7 +1374,15 @@ router.get('/drivers/:driverUserId/point-history', async (req, res) => {
 router.post('/drivers/:driverUserId/point-transactions', async (req, res) => {
   const { pointChange, reason, adminUserId } = req.body ?? {};
   try {
-    await addPointTransaction(Number(req.params.driverUserId), adminUserId, pointChange, reason);
+    const driverUserId = Number(req.params.driverUserId);
+    await addPointTransaction(driverUserId, adminUserId, pointChange, reason);
+    await sendAdminPointChangeNotification({
+      driverUserId,
+      adminUserId: adminUserId ?? null,
+      pointChange: Number(pointChange),
+      reason: String(reason ?? ''),
+      isUpdate: false,
+    });
     return res.json({ success: true });
   } catch (err) {
     console.error('POST /admin/drivers/:driverUserId/point-transactions error:', err);
@@ -974,6 +1414,22 @@ router.post('/add-points/:licenseNumber', async (req, res) => {
        VALUES (?, ?, ?, ?, NOW())`,
       [licenseNumber, adminId, amount, reason]
     );
+
+    const driverNotificationContext = await getDriverNotificationContextByLicense(connection, licenseNumber);
+    await notifyDriver(connection, {
+      driverContext: driverNotificationContext,
+      actorUserId: adminId ?? null,
+      content:
+        Number(amount) >= 0
+          ? `An admin added ${Number(amount)} points to your account.`
+          : `An admin deducted ${Math.abs(Number(amount))} points from your account.`,
+      category: 'driver_point_transaction',
+      preference: 'points',
+      metadata: {
+        pointChange: Number(amount),
+        reason: String(reason ?? ''),
+      },
+    });
 
     await connection.commit();
     res.json({ success: true });

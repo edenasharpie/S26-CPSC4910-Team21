@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLoaderData, Form } from 'react-router';
+import { Link, useLoaderData } from 'react-router';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Table } from '../../components/Table';
@@ -41,6 +41,17 @@ interface StoreProduct {
   image: string;
 }
 
+const DESCRIPTION_PREVIEW_LENGTH = 40;
+const DESCRIPTION_ELLIPSIS = '...';
+
+function getDescriptionPreview(text: string): string {
+  if (!text) return '';
+  if (text.length <= DESCRIPTION_PREVIEW_LENGTH) return text;
+  return `${text
+    .slice(0, DESCRIPTION_PREVIEW_LENGTH - DESCRIPTION_ELLIPSIS.length)
+    .trimEnd()}${DESCRIPTION_ELLIPSIS}`;
+}
+
 export default function SponsorCatalogs() {
   const { user } = useLoaderData<typeof loader>();
   const api = useMemo(() => createApiClient({ id: user.UserID, role: 'sponsor' }), [user.UserID]);
@@ -53,6 +64,7 @@ export default function SponsorCatalogs() {
   const [isEditItemOpen, setIsEditItemOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isCreatingCatalog, setIsCreatingCatalog] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Store search states
@@ -90,7 +102,7 @@ export default function SponsorCatalogs() {
     }
   }, [selectedCatalog]);
 
-  const getCatalogFetchErrorMessage = async (response: Response) => {
+  const getCatalogErrorMessage = async (response: Response, fallback: string) => {
     if (response.status >= 500) {
       return 'Failed to fetch catalogs. Please check your catalog connection.';
     }
@@ -104,7 +116,7 @@ export default function SponsorCatalogs() {
       // Ignore non-JSON responses and fall back to generic copy.
     }
 
-    return 'Unable to load catalogs right now.';
+    return fallback;
   };
 
   const fetchCatalogs = async () => {
@@ -113,7 +125,7 @@ export default function SponsorCatalogs() {
       const response = await api.get('/catalogs');
       if (!response.ok) {
         setCatalogs([]);
-        setError(await getCatalogFetchErrorMessage(response));
+        setError(await getCatalogErrorMessage(response, 'Unable to load catalogs right now.'));
         return;
       }
       const data = await response.json();
@@ -128,11 +140,18 @@ export default function SponsorCatalogs() {
   const fetchCatalogItems = async (catalogId: number) => {
     try {
       setLoading(true);
+      setError(null);
       const response = await api.get(`/catalogs/${catalogId}`);
+      if (!response.ok) {
+        setCatalogItems([]);
+        setError(await getCatalogErrorMessage(response, 'Unable to load catalog items right now.'));
+        return;
+      }
       const data = await response.json();
       setCatalogItems(data.items || []);
     } catch (error) {
       console.error('Error fetching catalog items:', error);
+      setError('Unable to load catalog items right now. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -141,29 +160,45 @@ export default function SponsorCatalogs() {
   const handleCreateCatalog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setError(null);
+      setIsCreatingCatalog(true);
       const response = await api.post('/catalogs', {
         externalProductIds: [],
         pointCost: 0
       });
 
-      if (response.ok) {
-        setIsCreateCatalogOpen(false);
-        fetchCatalogs();
+      if (!response.ok) {
+        setError(await getCatalogErrorMessage(response, 'Unable to create catalog right now.'));
+        return;
       }
+
+      setIsCreateCatalogOpen(false);
+      fetchCatalogs();
     } catch (error) {
       console.error('Error creating catalog:', error);
-      setError('Failed to create catalog.');
+      setError('Unable to create catalog right now. Please try again.');
+    } finally {
+      setIsCreatingCatalog(false);
     }
   };
 
   const handleSearchStore = async () => {
     try {
+      setError(null);
       setSearchLoading(true);
       const response = await api.fetchApi(`/admin/store/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
+
+      if (!response.ok) {
+        setSearchResults([]);
+        setError(await getCatalogErrorMessage(response, 'Failed to search store.'));
+        return;
+      }
+
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
       console.error('Error searching store:', error);
+      setSearchResults([]);
       setError('Failed to search store.');
     } finally {
       setSearchLoading(false);
@@ -326,7 +361,16 @@ export default function SponsorCatalogs() {
       )
     },
     { key: 'name', header: 'Name' },
-    { key: 'description', header: 'Description' },
+    {
+      key: 'description',
+      header: 'Description',
+      className: 'max-w-2xl whitespace-normal',
+      render: (item: CatalogItem) => (
+        <div className="break-words" title={item.description}>
+          {getDescriptionPreview(item.description)}
+        </div>
+      )
+    },
     { key: 'pointCost', header: 'Point Cost' },
     { key: 'originalSource', header: 'Source' },
     {
@@ -346,16 +390,10 @@ export default function SponsorCatalogs() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">← Home</Link>
+    <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">My Catalogs</h1>
         <div className="flex items-center gap-2">
-          {user.OriginalUser && (
-            <Form method="post" action="/exit-assumption">
-              <Button variant="primary" size="sm" type="submit">Exit Assumed View</Button>
-            </Form>
-          )}
           <Button variant="primary" onClick={() => setIsCreateCatalogOpen(true)}>
             Create Catalog
           </Button>
@@ -408,11 +446,11 @@ export default function SponsorCatalogs() {
             Create a new catalog for your company. You can add items after creation.
           </p>
           <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setIsCreateCatalogOpen(false)}>
+            <Button variant="secondary" onClick={() => setIsCreateCatalogOpen(false)} disabled={isCreatingCatalog}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              Create
+            <Button variant="primary" type="submit" disabled={isCreatingCatalog}>
+              {isCreatingCatalog ? 'Creating...' : 'Create'}
             </Button>
           </div>
         </form>

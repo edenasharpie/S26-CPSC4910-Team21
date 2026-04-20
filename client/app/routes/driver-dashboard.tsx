@@ -1,4 +1,4 @@
-import { Link, useLoaderData, Form } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { Badge, Card, Table, Button } from "~/components";
 import { requireAuth } from "~/utils/session.server";
@@ -28,23 +28,51 @@ function isDisplayableDate(value: unknown): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000;
 }
 
+function parseCookieNumber(cookieHeader: string, name: string): number | null {
+  const pattern = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`);
+  const match = cookieHeader.match(pattern);
+  if (!match) return null;
+  const parsed = Number(decodeURIComponent(match[1]));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const session = await requireAuth(request, ["driver"]);
   const userId = params.id ?? session.UserID;
 
-  try {
-    const [pointsRes, statusRes] = await Promise.all([
-      fetch(`${API_URL}/api/drivers/my-points/${userId}`),
-      fetch(`${API_URL}/api/drivers/performance/${userId}`),
-    ]);
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+  const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
 
-    const pointsData: PointData = pointsRes.ok
-      ? await pointsRes.json()
-      : { balance: 0, history: [] };
+  try {
+    const [statusRes, sponsorsRes] = await Promise.all([
+      fetch(`${API_URL}/api/drivers/performance/${userId}`, requestInit),
+      fetch(`${API_URL}/api/drivers/sponsors/${userId}`, requestInit),
+    ]);
 
     const statusData: PerformanceData = statusRes.ok
       ? await statusRes.json()
       : { performanceStatus: undefined };
+
+    const sponsorsPayload = sponsorsRes.ok ? await sponsorsRes.json() : [];
+    const sponsors = Array.isArray(sponsorsPayload) ? sponsorsPayload : [];
+
+    const preferredSponsorCompanyId = parseCookieNumber(cookieHeader, "driverSponsorCompanyId");
+    const selectedSponsorCompanyId =
+      Number.isInteger(preferredSponsorCompanyId) &&
+      sponsors.some((row: any) => Number(row?.SponsorCompanyID) === preferredSponsorCompanyId)
+        ? preferredSponsorCompanyId
+        : Number(sponsors[0]?.SponsorCompanyID) || null;
+
+    const pointsRes = Number.isInteger(selectedSponsorCompanyId)
+      ? await fetch(
+          `${API_URL}/api/drivers/my-points/${userId}?sponsorCompanyId=${selectedSponsorCompanyId}`,
+          requestInit
+        )
+      : null;
+
+    const pointsData: PointData = pointsRes && pointsRes.ok
+      ? await pointsRes.json()
+      : { balance: 0, history: [] };
 
     return {
       session,
@@ -62,7 +90,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function DriverDashboard() {
   const data = useLoaderData<typeof loader>();
   
-  const { session, balance = 0, history = [], performanceStatus } = data || {};
+  const { balance = 0, history = [], performanceStatus } = data || {};
   const displayHistory = history.filter((row: PointTransaction) => isDisplayableDate(row.TimeChanged));
   const normalizedPerformanceStatus = (performanceStatus ?? "").toLowerCase();
   const performanceBadgeVariant =
@@ -104,13 +132,6 @@ export default function DriverDashboard() {
           >
             &larr; Home
           </Link>
-          {session?.OriginalUser && (
-            <Form method="post" action="/exit-assumption" className="mt-3">
-              <Button type="submit" variant="primary" size="sm">
-                Exit Assumed View
-              </Button>
-            </Form>
-          )}
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Driver Rewards</h1>
         </header>
 

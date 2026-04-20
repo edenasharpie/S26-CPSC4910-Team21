@@ -1,4 +1,4 @@
-const LOCAL_API_FALLBACK = "http://localhost:5001";
+const LOCAL_API_FALLBACK = "http://localhost:5000";
 
 function getEnvApiUrl(): string | undefined {
   if (typeof process !== "undefined" && process.env?.API_URL) {
@@ -20,6 +20,11 @@ export function getApiBaseUrl(): string {
   }
 
   if (typeof window !== "undefined") {
+    const isDevFrontendPort = ["5173", "4173", "3000"].includes(window.location.port);
+    if (isDevFrontendPort) {
+      return `${window.location.protocol}//${window.location.hostname}:5000`;
+    }
+
     const isLocalBrowser =
       window.location.hostname === "localhost" ||
       window.location.hostname === "127.0.0.1";

@@ -1,7 +1,7 @@
 import type { Route } from "./+types/dashboard";
 import { useEffect, useState } from "react";
 import { Table, Input, Button, Badge, Modal } from "~/components";
-import { useNavigate, useLoaderData, Form, useActionData, Link, redirect } from "react-router";
+import { useNavigate, useLoaderData, Form, useActionData, redirect } from "react-router";
 import {
   requireAuth,
   signToken,
@@ -13,6 +13,15 @@ import { getApiBaseUrl } from "~/utils/api-url";
 
 const API_URL = getApiBaseUrl();
 const ADMIN_USERS_PAGE_SIZE = 25;
+const DEFAULT_AUDIT_EVENT_FILTERS: string[] = [
+  "LoginAttempt",
+  "PasswordChange",
+  "AccountUpdate",
+  "AccountStatusChange",
+  "ApplicationStatusUpdate",
+  "PointTransaction",
+  "ReviewModerationEvent",
+];
 
 function normalizeFilterValue(value: string | null, allowed: string[], fallback: string): string {
   const normalized = (value ?? fallback).trim().toLowerCase();
@@ -163,6 +172,7 @@ export async function action({ request }: Route.ActionArgs) {
   const payload: Record<string, any> = {
     username:   fd.get("username"),
     email:      fd.get("email"),
+    password:   fd.get("password"),
     firstName:  fd.get("firstName"),
     lastName:   fd.get("lastName"),
     userType,
@@ -212,9 +222,20 @@ export default function AdminPortal() {
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [auditUserType, setAuditUserType] = useState("all");
   const [auditTargetUserId, setAuditTargetUserId] = useState("");
-  const [auditEventFilters, setAuditEventFilters] = useState<string[]>([]);
+  const [auditEventFilters, setAuditEventFilters] = useState<string[]>([...DEFAULT_AUDIT_EVENT_FILTERS]);
   const [auditLoginOutcome, setAuditLoginOutcome] = useState<"" | "success" | "failure">("");
   const [auditPointUserScope, setAuditPointUserScope] = useState<"any" | "changedBy" | "affected">("any");
+  const [showAddUserPassword, setShowAddUserPassword] = useState(false);
+  const [tableUsers, setTableUsers] = useState<any[]>(users);
+  const [isSponsorRatioModalOpen, setIsSponsorRatioModalOpen] = useState(false);
+  const [selectedSponsorForRatio, setSelectedSponsorForRatio] = useState<any | null>(null);
+  const [sponsorRatioInput, setSponsorRatioInput] = useState("");
+  const [isSavingSponsorRatio, setIsSavingSponsorRatio] = useState(false);
+  const [sponsorRatioError, setSponsorRatioError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTableUsers(users);
+  }, [users]);
 
   const isLoginAttemptsSelected = auditEventFilters.includes("LoginAttempt");
   const isPointTransactionsSelected = auditEventFilters.includes("PointTransaction");
@@ -223,7 +244,7 @@ export default function AdminPortal() {
   const hasPrevPage = page > 1;
   const hasNextPage = page < totalPages;
   const pageStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
-  const pageEnd = totalCount === 0 ? 0 : pageStart + users.length - 1;
+  const pageEnd = totalCount === 0 ? 0 : pageStart + tableUsers.length - 1;
 
   const navigateToPage = (nextPage: number) => {
     if (nextPage < 1 || nextPage > totalPages) return;
@@ -248,18 +269,13 @@ export default function AdminPortal() {
 
   // Count stats
   const totalUsers   = totalCount;
-  const driverCount  = users.filter((u: any) => u.UserType?.toLowerCase() === "driver"  && u.ActiveStatus !== 0).length;
-  const sponsorCount = users.filter((u: any) => u.UserType?.toLowerCase() === "sponsor" && u.ActiveStatus !== 0).length;
-  const adminCount   = users.filter((u: any) => u.UserType?.toLowerCase() === "admin"   && u.ActiveStatus !== 0).length;
-  const inactiveCount = users.filter((u: any) => u.ActiveStatus === 0).length;
-  const totalPoints = users.filter((u: any) => u.UserType?.toLowerCase() === "driver").reduce((sum: number, u: any) => sum + (u.PointBalance ?? 0), 0);
-  const currentAdmin = users.find((u: any) => u.UserID === session?.UserID);
-  const adminFirstName = session?.FirstName ?? currentAdmin?.FirstName ?? "Admin";
-  const adminLastName = session?.LastName ?? currentAdmin?.LastName ?? "User";
-  const adminUsername = session?.Username ?? currentAdmin?.Username ?? "admin";
-  const adminProfilePicture = currentAdmin?.ProfilePicture ?? "";
+  const driverCount  = tableUsers.filter((u: any) => u.UserType?.toLowerCase() === "driver"  && u.ActiveStatus !== 0).length;
+  const sponsorCount = tableUsers.filter((u: any) => u.UserType?.toLowerCase() === "sponsor" && u.ActiveStatus !== 0).length;
+  const adminCount   = tableUsers.filter((u: any) => u.UserType?.toLowerCase() === "admin"   && u.ActiveStatus !== 0).length;
+  const inactiveCount = tableUsers.filter((u: any) => u.ActiveStatus === 0).length;
+  const totalPoints = tableUsers.filter((u: any) => u.UserType?.toLowerCase() === "driver").reduce((sum: number, u: any) => sum + (u.PointBalance ?? 0), 0);
 
-  const auditUsersByType = users
+  const auditUsersByType = tableUsers
     .filter((u: any) => {
       const type = String(u.UserType ?? "").toLowerCase();
       return auditUserType === "all" || type === auditUserType;
@@ -272,6 +288,72 @@ export default function AdminPortal() {
 
   // Close add-user modal on successful action
   const addUserSuccess = (actionData as any)?.success === true;
+
+  const openSponsorRatioModal = (user: any) => {
+    setSponsorRatioError(null);
+    setIsSponsorRatioModalOpen(true);
+
+    const sponsorCompanyId = Number(user.SponsorCompanyID ?? user.sponsorCompanyId ?? 0);
+    const currentRatio = Number(user.SponsorPointDollarValue ?? user.PointDollarValue ?? 0.01);
+
+    setSelectedSponsorForRatio({
+      ...user,
+      SponsorCompanyID: Number.isInteger(sponsorCompanyId) ? sponsorCompanyId : null,
+      SponsorPointDollarValue: Number.isFinite(currentRatio) ? currentRatio : 0.01,
+    });
+    setSponsorRatioInput(Number.isFinite(currentRatio) ? currentRatio.toFixed(2) : "0.01");
+  };
+
+  const handleSaveSponsorRatio = async () => {
+    if (!selectedSponsorForRatio) {
+      return;
+    }
+
+    const parsedRatio = Number.parseFloat(sponsorRatioInput);
+    if (!Number.isFinite(parsedRatio) || parsedRatio <= 0) {
+      setSponsorRatioError("Point-to-dollar ratio must be a positive number.");
+      return;
+    }
+
+    const sponsorCompanyId = Number(selectedSponsorForRatio.SponsorCompanyID ?? selectedSponsorForRatio.sponsorCompanyId);
+    if (!Number.isInteger(sponsorCompanyId)) {
+      setSponsorRatioError("This sponsor is not linked to a valid company.");
+      return;
+    }
+
+    try {
+      setIsSavingSponsorRatio(true);
+      setSponsorRatioError(null);
+
+      const response = await fetch(`${API_URL}/api/sponsors/${sponsorCompanyId}/point-dollar-value`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pointDollarValue: parsedRatio }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSponsorRatioError((payload as { error?: string }).error || "Failed to update point-to-dollar ratio.");
+        return;
+      }
+
+      const updatedRatio = Number((payload as { pointDollarValue?: number }).pointDollarValue ?? parsedRatio);
+      setTableUsers((previous) =>
+        previous.map((u) =>
+          Number(u.UserID) === Number(selectedSponsorForRatio.UserID)
+            ? { ...u, SponsorPointDollarValue: updatedRatio }
+            : u
+        )
+      );
+
+      setIsSponsorRatioModalOpen(false);
+      setSelectedSponsorForRatio(null);
+    } catch {
+      setSponsorRatioError("Failed to update point-to-dollar ratio.");
+    } finally {
+      setIsSavingSponsorRatio(false);
+    }
+  };
 
   const columns = [
     {
@@ -329,8 +411,27 @@ export default function AdminPortal() {
       key: "Points",
       header: "Points",
       render: (user: any) => {
-        if (user.UserType?.toLowerCase() !== "driver")
+        const userType = String(user.UserType ?? "").toLowerCase();
+
+        if (userType === "sponsor") {
+          return (
+            <button
+              type="button"
+              onClick={() => openSponsorRatioModal(user)}
+              className="group flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 hover:border-blue-400 transition-all"
+            >
+              <span className="text-sm font-bold text-blue-700 dark:text-blue-300">Edit</span>
+              <span className="text-[10px] uppercase tracking-tighter text-blue-400 font-bold">
+                Ratio
+              </span>
+            </button>
+          );
+        }
+
+        if (userType !== "driver") {
           return <span className="text-gray-300 pl-4">—</span>;
+        }
+
         return (
           <button
             onClick={() => navigate(`/admin/profile/${user.UserID}/points`)}
@@ -348,7 +449,7 @@ export default function AdminPortal() {
     },
     {
       key: "assume",
-      header: "Assume",
+      header: "",
       render: (user: any) => {
         const role = String(user.UserType ?? "").toLowerCase();
         const canAssume = user.ActiveStatus !== 0 && ["driver", "sponsor"].includes(role);
@@ -393,12 +494,6 @@ export default function AdminPortal() {
         {/* Header */}
         <div className="mb-8 border-b pb-6 dark:border-gray-800 flex justify-between items-end">
           <div className="text-left">
-            <Link
-              to="/"
-              className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mb-2 block"
-            >
-              ← Home
-            </Link>
             <div className="flex items-center gap-4">
               <div>
                 <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">
@@ -408,20 +503,13 @@ export default function AdminPortal() {
                   System administration and user oversight.
                 </p>
               </div>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
-                <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
-                <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
-              </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {isAssumedMode && (
-              <Form method="post" action="/exit-assumption">
-                <Button variant="primary" size="sm" type="submit">
-                  Exit Assumed View
-                </Button>
-              </Form>
-            )}
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
+              <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{totalPoints.toLocaleString()}</span>
+              <span className="text-xs uppercase tracking-tight text-indigo-600 dark:text-indigo-400 font-semibold">Total<br/>Points</span>
+            </div>
             <button
               onClick={() => navigate(`/admin/settings/${session?.UserID || 1}`)}
               className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
@@ -431,34 +519,6 @@ export default function AdminPortal() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-            </button>
-            <Form method="post" action="/logout">
-              <Button variant="secondary" size="sm" type="submit">
-                Sign out
-              </Button>
-            </Form>
-            <button 
-              onClick={() => {
-                if (session?.UserID) {
-                  window.location.href = `/admin/profile/${session.UserID}/edit`;
-                }
-              }}
-              className="flex items-center gap-3 p-1.5 pr-5 rounded-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-indigo-400 transition-all group shadow-sm cursor-pointer"
-            >
-            <div className="relative">
-              <AvatarOrInitials
-                profilePicture={adminProfilePicture}
-                firstName={adminFirstName}
-                lastName={adminLastName}
-                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800"
-                initialsClassName="text-xs"
-              />
-              <span className="absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white dark:ring-gray-900 bg-green-500"></span>
-            </div>
-            <div className="block text-left">
-              <p className="text-xs font-bold text-gray-900 dark:text-white leading-none">{adminFirstName} {adminLastName}</p>
-              <p className="text-[10px] text-gray-400 font-mono mt-0.5">{adminUsername}</p>
-            </div>
             </button>
           </div>
         </div>
@@ -498,7 +558,10 @@ export default function AdminPortal() {
               </h2>
               <Button
                 variant="secondary"
-                onClick={() => setIsAuditOpen(true)}
+                onClick={() => {
+                  setAuditEventFilters([...DEFAULT_AUDIT_EVENT_FILTERS]);
+                  setIsAuditOpen(true);
+                }}
                 className="w-full py-6 text-lg font-bold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all shadow-sm"
               >
                 Audit Reports
@@ -544,7 +607,7 @@ export default function AdminPortal() {
                   <option value="admin">Admins</option>
                 </select>
               </div>
-              <div className="md:col-span-3">
+              <div className="md:col-span-2">
                 <select
                   name="activeStatus"
                   defaultValue={filters.activeStatus}
@@ -564,11 +627,11 @@ export default function AdminPortal() {
                   Apply
                 </Button>
               </div>
-              <div className="md:col-span-1">
+              <div className="md:col-span-2">
                 <Button
                   type="button"
                   variant="primary"
-                  className="w-full h-10"
+                  className="w-full h-10 whitespace-nowrap text-sm"
                   onClick={() => setIsAddUserOpen(true)}
                 >
                   Add User
@@ -578,8 +641,8 @@ export default function AdminPortal() {
 
             {/* Users table */}
             <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl border dark:border-gray-800 overflow-hidden text-left">
-              <Table data={users} columns={columns} />
-              {users.length === 0 && (
+              <Table data={tableUsers} columns={columns} />
+              {tableUsers.length === 0 && (
                 <div className="p-8 text-center text-gray-500 italic">
                   No users found matching your criteria.
                 </div>
@@ -871,6 +934,65 @@ export default function AdminPortal() {
         </Form>
       </Modal>
 
+      <Modal
+        isOpen={isSponsorRatioModalOpen}
+        onClose={() => {
+          if (isSavingSponsorRatio) {
+            return;
+          }
+          setIsSponsorRatioModalOpen(false);
+          setSelectedSponsorForRatio(null);
+          setSponsorRatioError(null);
+        }}
+        title="Edit Sponsor Point-to-Dollar Ratio"
+      >
+        <div className="space-y-4 text-left">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            {selectedSponsorForRatio
+              ? `Update ratio for ${selectedSponsorForRatio.FirstName} ${selectedSponsorForRatio.LastName} (${selectedSponsorForRatio.Username}).`
+              : "Update sponsor point-to-dollar ratio."}
+          </p>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Point to Dollar Ratio</label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={sponsorRatioInput}
+              onChange={(e) => setSponsorRatioInput(e.target.value)}
+              className="w-full rounded-md border border-gray-200 dark:border-gray-700 p-2 text-sm bg-white dark:bg-gray-800"
+              disabled={isSavingSponsorRatio}
+            />
+          </div>
+
+          {sponsorRatioError && <p className="text-sm text-red-600">{sponsorRatioError}</p>}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setIsSponsorRatioModalOpen(false);
+                setSelectedSponsorForRatio(null);
+                setSponsorRatioError(null);
+              }}
+              disabled={isSavingSponsorRatio}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleSaveSponsorRatio}
+              isLoading={isSavingSponsorRatio}
+            >
+              Save Ratio
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Add User Modal */}
       <Modal
         isOpen={isAddUserOpen && !addUserSuccess}
@@ -880,6 +1002,36 @@ export default function AdminPortal() {
         <Form method="post" className="space-y-4">
           <Input label="Username" name="username" required />
           <Input label="Email" name="email" type="email" required />
+          <div className="space-y-1">
+            <div className="relative flex flex-col">
+              <Input
+                label="Password"
+                name="password"
+                type={showAddUserPassword ? "text" : "password"}
+                required
+                placeholder="At least 10 chars with upper/lower/special"
+              />
+              <div className="absolute top-0 bottom-0 right-3 flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserPassword(!showAddUserPassword)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors mt-6"
+                  aria-label={showAddUserPassword ? "Hide password" : "Show password"}
+                >
+                  {showAddUserPassword ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="First Name" name="firstName" required />
             <Input label="Last Name"  name="lastName"  required />
@@ -1045,7 +1197,14 @@ function toRenderableImageUrl(profilePicture?: string) {
   const resolved = resolveProfileImageUrl(profilePicture);
   if (!resolved) return null;
   if (resolved.startsWith('data:image')) return resolved;
+  if (resolved.startsWith('/api/images/u/')) return `${API_URL}${resolved}`;
+  if (resolved.startsWith('api/images/u/')) return `${API_URL}/${resolved}`;
+  if (resolved.startsWith(`${API_URL}/api/images/u/`)) return resolved;
+  if (resolved.startsWith('/')) return `${API_URL}${resolved}`;
   if (resolved.startsWith(`${API_URL}/api/images/proxy?url=`)) return resolved;
+  if (resolved.startsWith('http://') || resolved.startsWith('https://')) {
+    return `${API_URL}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
+  }
   return `${API_URL}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
 }
 

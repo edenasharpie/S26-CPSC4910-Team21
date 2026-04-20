@@ -5,7 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test:api": "cd tests/api && for test in *.js; do if [ -f \"$test\" ]; then echo \"Running $test...\"; node \"$test\"; fi; done",
+    "test:api:priority": "node tests/api/auth-password-policy-2fa.js && node tests/api/bulk-load.js && node tests/api/driver-applications.js"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +18,7 @@
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
     "mysql2": "^3.17.2",
     "otplib": "^13.4.0",
     "pdfkit": "^0.17.2",

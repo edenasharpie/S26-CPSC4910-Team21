@@ -27,6 +27,11 @@ type NormalizedUser = {
   accountType: string;
   activeStatus: number;
   lastLogin: string | null;
+  alertPoints: boolean;
+  alertOrders: boolean;
+  alertApplicationStatusChange: boolean;
+  alertApplicationEntry: boolean;
+  alertProfileChangesByAdmin: boolean;
 };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -51,11 +56,34 @@ export default function EditUserProfile() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [alertPoints, setAlertPoints] = useState(Boolean(user?.alertPoints));
+  const [alertOrders, setAlertOrders] = useState(Boolean(user?.alertOrders));
+  const [alertApplicationStatusChange, setAlertApplicationStatusChange] = useState(
+    Boolean(user?.alertApplicationStatusChange)
+  );
+  const [alertApplicationEntry, setAlertApplicationEntry] = useState(
+    Boolean(user?.alertApplicationEntry)
+  );
+  const [alertProfileChangesByAdmin, setAlertProfileChangesByAdmin] = useState(
+    Boolean(user?.alertProfileChangesByAdmin)
+  );
 
   useEffect(() => {
-    setUser(normalizeUser(loaderUser));
+    const normalized = normalizeUser(loaderUser);
+    setUser(normalized);
     setLoading(false);
     setError(null);
+    setNewPassword("");
+    setShowNewPassword(false);
+    if (normalized) {
+      setAlertPoints(Boolean(normalized.alertPoints));
+      setAlertOrders(Boolean(normalized.alertOrders));
+      setAlertApplicationStatusChange(Boolean(normalized.alertApplicationStatusChange));
+      setAlertApplicationEntry(Boolean(normalized.alertApplicationEntry));
+      setAlertProfileChangesByAdmin(Boolean(normalized.alertProfileChangesByAdmin));
+    }
   }, [loaderUser]);
 
   const fetchUser = async () => {
@@ -94,23 +122,34 @@ export default function EditUserProfile() {
       setSuccessMessage(null);
 
       const formData = new FormData(event.currentTarget);
-      const updates = {
-        username: String(formData.get("Username") ?? ""),
-        email: String(formData.get("Email") ?? ""),
-        phone: String(formData.get("Phone") ?? ""),
-        firstName: String(formData.get("FirstName") ?? ""),
-        middleName: String(formData.get("MiddleName") ?? ""),
-        lastName: String(formData.get("LastName") ?? ""),
-        pronouns: String(formData.get("Pronouns") ?? ""),
-        profilePicture: String(formData.get("ProfilePicture") ?? ""),
-        bio: String(formData.get("Bio") ?? ""),
-        activeStatus: formData.get("ActiveStatus") === "1" ? 1 : 0,
-      };
+      const updates = new FormData();
+      updates.set("username", String(formData.get("Username") ?? ""));
+      updates.set("email", String(formData.get("Email") ?? ""));
+      updates.set("phone", String(formData.get("Phone") ?? ""));
+      updates.set("firstName", String(formData.get("FirstName") ?? ""));
+      updates.set("middleName", String(formData.get("MiddleName") ?? ""));
+      updates.set("lastName", String(formData.get("LastName") ?? ""));
+      updates.set("pronouns", String(formData.get("Pronouns") ?? ""));
+      updates.set("bio", String(formData.get("Bio") ?? ""));
+      updates.set("activeStatus", formData.get("ActiveStatus") === "1" ? "1" : "0");
+      updates.set("alertPoints", String(alertPoints));
+      updates.set("alertOrders", String(alertOrders));
+      updates.set("alertApplicationStatusChange", String(alertApplicationStatusChange));
+      updates.set("alertApplicationEntry", String(alertApplicationEntry));
+      updates.set("alertProfileChangesByAdmin", String(alertProfileChangesByAdmin));
+
+      const profileImage = formData.get("profileImage");
+      if (profileImage instanceof File && profileImage.size > 0) {
+        updates.set("profileImage", profileImage);
+      }
+
+      if (newPassword.trim()) {
+        updates.set("password", newPassword.trim());
+      }
 
       const response = await fetch(`${BASE_URL}/api/admin/users/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
+        body: updates,
       });
 
       if (!response.ok) {
@@ -121,6 +160,8 @@ export default function EditUserProfile() {
 
       setSuccessMessage("Profile updated successfully");
       setIsEditing(false);
+      setNewPassword("");
+      setShowNewPassword(false);
       await fetchUser();
     } catch {
       setError("Failed to update user. Please try again.");
@@ -219,8 +260,6 @@ export default function EditUserProfile() {
   return (
     <ProfileEditLayout
       apiBaseUrl={BASE_URL}
-      backTo="/admin/dashboard"
-      backLabel="Back to Dashboard"
       title={`${user.firstName} ${user.lastName}`.trim() || user.username}
       subtitle={`@${user.username}`}
       profilePicture={user.profilePicture}
@@ -294,11 +333,13 @@ export default function EditUserProfile() {
               className={getProfileEditFieldClass(isEditing)}
             />
             <Input
-              label="Profile Picture URL"
-              name="ProfilePicture"
-              defaultValue={user.profilePicture}
+              label="Profile Picture Upload"
+              name="profileImage"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
               disabled={!isEditing}
               className={getProfileEditFieldClass(isEditing)}
+              helperText="Upload PNG, JPG, WEBP, or GIF (max 5MB)."
             />
           </div>
 
@@ -325,6 +366,44 @@ export default function EditUserProfile() {
               disabled={!isEditing}
               className={getProfileEditFieldClass(isEditing)}
             />
+            {['driver', 'sponsor'].includes(String(user.userType ?? '').toLowerCase()) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    disabled={!isEditing}
+                    placeholder="Leave blank to keep current password"
+                    className={`w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${getProfileEditFieldClass(isEditing)}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((previous) => !previous)}
+                    disabled={!isEditing}
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                    className="absolute inset-y-0 right-0 px-3 text-gray-500 disabled:opacity-50"
+                  >
+                    {showNewPassword ? (
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 3l18 18" />
+                        <path d="M10.58 10.58a2 2 0 102.83 2.83" />
+                        <path d="M9.88 5.09A10.94 10.94 0 0112 5c7 0 10 7 10 7a17.17 17.17 0 01-4.43 5.94" />
+                        <path d="M6.61 6.61A17.34 17.34 0 002 12s3 7 10 7a10.78 10.78 0 005.39-1.39" />
+                      </svg>
+                    ) : (
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -372,6 +451,32 @@ export default function EditUserProfile() {
             )}
           </div>
         </div>
+
+        {isOwnProfile && String(user.userType).toLowerCase() === 'admin' && (
+          <div id="notification-preferences" className="pt-6 border-t border-gray-100 dark:border-gray-800 text-left space-y-4">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Notification Preferences</h2>
+            <ToggleRow label="Points" checked={alertPoints} disabled={!isEditing} onChange={setAlertPoints} />
+            <ToggleRow label="Orders" checked={alertOrders} disabled={!isEditing} onChange={setAlertOrders} />
+            <ToggleRow
+              label="Change In Application Status"
+              checked={alertApplicationStatusChange}
+              disabled={!isEditing}
+              onChange={setAlertApplicationStatusChange}
+            />
+            <ToggleRow
+              label="Application Entry"
+              checked={alertApplicationEntry}
+              disabled={!isEditing}
+              onChange={setAlertApplicationEntry}
+            />
+            <ToggleRow
+              label="Changes To Profile By Admin"
+              checked={alertProfileChangesByAdmin}
+              disabled={!isEditing}
+              onChange={setAlertProfileChangesByAdmin}
+            />
+          </div>
+        )}
       </form>
     </ProfileEditLayout>
   );
@@ -381,6 +486,7 @@ function normalizeUser(raw: unknown): NormalizedUser | null {
   if (!raw || typeof raw !== "object") return null;
 
   const user = raw as Record<string, unknown>;
+  const permissions = parsePermissionsObject(user.Permissions ?? user.permissions);
 
   return {
     userId: Number(user.userId ?? user.UserID ?? 0),
@@ -396,11 +502,99 @@ function normalizeUser(raw: unknown): NormalizedUser | null {
     userType: String(user.userType ?? user.UserType ?? ""),
     accountType: String(user.accountType ?? user.userType ?? user.UserType ?? ""),
     activeStatus: Number(user.activeStatus ?? user.ActiveStatus ?? 1),
+    alertPoints: resolveNotificationPref(user, permissions, 'AlertPoints', 'alertPoints', true),
+    alertOrders: resolveNotificationPref(user, permissions, 'AlertOrders', 'alertOrders', true),
+    alertApplicationStatusChange: resolveNotificationPref(
+      user,
+      permissions,
+      'AlertApplicationStatusChange',
+      'alertApplicationStatusChange',
+      true
+    ),
+    alertApplicationEntry: resolveNotificationPref(
+      user,
+      permissions,
+      'AlertApplicationEntry',
+      'alertApplicationEntry',
+      true
+    ),
+    alertProfileChangesByAdmin: resolveNotificationPref(
+      user,
+      permissions,
+      'AlertProfileChangesByAdmin',
+      'alertProfileChangesByAdmin',
+      true
+    ),
     lastLogin:
       user.lastLogin === null || user.LastLogin === null
         ? null
         : String(user.lastLogin ?? user.LastLogin ?? ""),
   };
+}
+
+function parsePermissionsObject(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw as Record<string, unknown>;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function resolveNotificationPref(
+  user: Record<string, unknown>,
+  permissions: Record<string, unknown>,
+  explicitKey: string,
+  permissionKey: string,
+  fallback: boolean
+): boolean {
+  const explicit = user[explicitKey] ?? user[permissionKey];
+  if (typeof explicit === 'boolean') return explicit;
+  if (explicit === 1 || explicit === '1' || explicit === 'true') return true;
+  if (explicit === 0 || explicit === '0' || explicit === 'false') return false;
+
+  const fromPermissions = permissions[permissionKey];
+  if (typeof fromPermissions === 'boolean') return fromPermissions;
+  return fallback;
+}
+
+function ToggleRow({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2">
+      <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+          checked ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-700'
+        } disabled:opacity-50`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+            checked ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
 }
 
 function buildInitials(firstName: string, lastName: string) {

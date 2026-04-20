@@ -1,8 +1,17 @@
 import axios from 'axios';
-import { BASE_URL, log, createTestSponsor, cleanupSponsorCompanies, closePool } from '../setup.js';
+import jwt from 'jsonwebtoken';
+import {
+  BASE_URL,
+  log,
+  createTestSponsor,
+  cleanupSponsorCompanies,
+  closePool,
+  getEventsByUserId,
+} from '../setup.js';
 import { pool } from '../../src/db.js';
 
 const API_BASE_URL = `${BASE_URL}/api`;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production-fleetscore';
 
 const createdSponsorIds = [];
 const createdUserIds = [];
@@ -31,6 +40,18 @@ async function createTestUser(userType = 'driver') {
   }
 }
 
+async function createTestSponsorProfile(userId, sponsorCompanyId) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.query(
+      'INSERT INTO SPONSORS (UserID, SponsorCompanyID) VALUES (?, ?)',
+      [userId, sponsorCompanyId]
+    );
+  } finally {
+    connection.release();
+  }
+}
+
 async function createTestDriver(userId, sponsorCompanyId, pointBalance = 1000) {
   const connection = await pool.getConnection();
   try {
@@ -40,6 +61,17 @@ async function createTestDriver(userId, sponsorCompanyId, pointBalance = 1000) {
        (LicenseNumber, UserID, SponsorCompanyID, PointBalance, PerformanceStatus, AlertPoints, AlertOrders)
        VALUES (?, ?, ?, ?, 'good', 1, 1)`,
       [licenseNumber, userId, sponsorCompanyId, pointBalance]
+    );
+
+    await connection.query(
+      `INSERT INTO DRIVER_COMPANY_ENROLLMENT
+        (DriverID, SponsorCompanyID, PointBalance, EnrollmentStatus, JoinedAt, LeftAt)
+       VALUES (?, ?, ?, 'active', NOW(), NULL)
+       ON DUPLICATE KEY UPDATE
+         EnrollmentStatus = 'active',
+         LeftAt = NULL,
+         PointBalance = VALUES(PointBalance)`,
+      [licenseNumber, sponsorCompanyId, pointBalance]
     );
 
     return licenseNumber;
@@ -101,13 +133,79 @@ async function createLegacyOrder(driverLicense, sponsorCompanyId, itemId) {
   }
 }
 
-async function getDriverPointBalance(userId) {
+async function getDriverPointBalance(userId, sponsorCompanyId) {
   const connection = await pool.getConnection();
   try {
-    const [rows] = await connection.query('SELECT PointBalance FROM DRIVERS WHERE UserID = ?', [userId]);
+    const [rows] = await connection.query(
+      `SELECT
+         COALESCE(e.PointBalance, d.PointBalance) AS PointBalance
+       FROM DRIVERS d
+       LEFT JOIN DRIVER_COMPANY_ENROLLMENT e
+         ON e.DriverID = d.LicenseNumber
+        AND e.SponsorCompanyID = ?
+        AND e.EnrollmentStatus = 'active'
+       WHERE d.UserID = ?
+       LIMIT 1`,
+      [sponsorCompanyId, userId]
+    );
     return rows[0]?.PointBalance ?? null;
   } finally {
     connection.release();
+  }
+}
+
+async function setDriverAlertOrders(userId, enabled) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.query('UPDATE DRIVERS SET AlertOrders = ? WHERE UserID = ?', [enabled ? 1 : 0, userId]);
+  } finally {
+    connection.release();
+  }
+}
+
+async function getLatestOrderPointTransaction(orderId, expectedReason) {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.query(
+      `SELECT TransactionID, UserChanged, PointChange, ReasonForChange
+       FROM POINT_TRANSACTIONS
+       WHERE ReasonForChange = ?
+       ORDER BY TransactionID DESC
+       LIMIT 1`,
+      [expectedReason ?? `Order #${orderId} updated`]
+    );
+    return rows[0] ?? null;
+  } finally {
+    connection.release();
+  }
+}
+
+function buildSessionCookie(user, originalUser = null) {
+  const payload = {
+    UserID: user.userId,
+    UserType: user.userType,
+    Username: user.username,
+  };
+
+  if (originalUser) {
+    payload.OriginalUser = {
+      UserID: originalUser.userId,
+      UserType: originalUser.userType,
+      Username: originalUser.username,
+    };
+  }
+
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: 60 * 60 * 24 });
+  return `sessionId=${token}`;
+}
+
+function parseEventProperties(rawProperties) {
+  if (!rawProperties) return {};
+  if (typeof rawProperties === 'object') return rawProperties;
+  try {
+    return JSON.parse(rawProperties);
+  } catch {
+    return {};
   }
 }
 
@@ -132,8 +230,20 @@ async function cleanupTestData() {
     }
 
     for (const userId of createdUserIds) {
+      await connection.query('DELETE FROM EVENTS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM POINT_TRANSACTIONS WHERE UserChanged = ?', [userId]);
+      try {
+        await connection.query(
+          'DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE DriverID IN (SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?)',
+          [userId]
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
       await connection.query('DELETE FROM DRIVERS WHERE UserID = ?', [userId]);
+      await connection.query('DELETE FROM SPONSORS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM USERS WHERE UserID = ?', [userId]);
       console.log(`Deleted user ${userId}`);
     }
@@ -166,8 +276,17 @@ async function runTests() {
 
     const driverUserId = await createTestUser('driver');
     createdUserIds.push(driverUserId);
+
+    const sponsorUserId = await createTestUser('sponsor');
+    createdUserIds.push(sponsorUserId);
+    await createTestSponsorProfile(sponsorUserId, sponsorCompanyId);
+
     const license = await createTestDriver(driverUserId, sponsorCompanyId, 1000);
     createdDriverLicenses.push(license);
+
+    const driverIdentity = { userId: driverUserId, userType: 'driver', username: `drv_${driverUserId}` };
+    const sponsorIdentity = { userId: sponsorUserId, userType: 'sponsor', username: `sps_${sponsorUserId}` };
+    const assumedSponsorCookie = buildSessionCookie(driverIdentity, sponsorIdentity);
 
     const catalogId = await createTestCatalog(sponsorCompanyId);
     createdCatalogIds.push(catalogId);
@@ -184,9 +303,13 @@ async function runTests() {
     const legacyOrderId = await createLegacyOrder(license, sponsorCompanyId, itemA);
     createdOrderIds.push(legacyOrderId);
 
+    const scopeParams = { sponsorCompanyId };
+
     // Test 1: list orders initially empty
     log('TEST 1: Listing orders before creation...', `GET /api/driver/${driverUserId}/orders`);
-    const emptyListResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/orders`);
+    const emptyListResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
+      params: scopeParams,
+    });
     log('Initial orders response:', emptyListResponse.data);
     if (!Array.isArray(emptyListResponse.data) || emptyListResponse.data.length !== 0) {
       throw new Error('Expected initial orders list to be empty');
@@ -194,12 +317,16 @@ async function runTests() {
 
     // Test 2: create order successfully
     log('TEST 2: Creating driver order...', `POST /api/driver/${driverUserId}/orders`);
-    const createOrderResponse = await axios.post(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
-      items: [
-        { itemId: itemA, quantity: 2 },
-        { itemId: itemB, quantity: 1 },
-      ],
-    });
+    const createOrderResponse = await axios.post(
+      `${API_BASE_URL}/driver/${driverUserId}/orders`,
+      {
+        items: [
+          { itemId: itemA, quantity: 2 },
+          { itemId: itemB, quantity: 1 },
+        ],
+      },
+      { params: scopeParams }
+    );
     log('Created order response:', createOrderResponse.data);
 
     if (createOrderResponse.status !== 201 || createOrderResponse.data.orderStatus !== 'confirmed') {
@@ -209,14 +336,16 @@ async function runTests() {
     const orderId = createOrderResponse.data.orderId;
     createdOrderIds.push(orderId);
 
-    const balanceAfterCreate = await getDriverPointBalance(driverUserId);
+    const balanceAfterCreate = await getDriverPointBalance(driverUserId, sponsorCompanyId);
     if (balanceAfterCreate !== 500) {
       throw new Error(`Expected point balance 500 after creation, got ${balanceAfterCreate}`);
     }
 
     // Test 3: list returns created order + items
     log('TEST 3: Listing orders after creation...', `GET /api/driver/${driverUserId}/orders`);
-    const listResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/orders`);
+    const listResponse = await axios.get(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
+      params: scopeParams,
+    });
     log('Orders after create:', listResponse.data);
 
     if (!Array.isArray(listResponse.data) || listResponse.data.length < 1) {
@@ -239,15 +368,19 @@ async function runTests() {
 
     // Test 4: update confirmed order
     log('TEST 4: Updating confirmed order...', `PATCH /api/driver/${driverUserId}/orders/${orderId}`);
-    const updateResponse = await axios.patch(`${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`, {
-      items: [
-        { itemId: itemA, quantity: 1 },
-        { itemId: itemB, quantity: 1 },
-      ],
-    });
+    const updateResponse = await axios.patch(
+      `${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`,
+      {
+        items: [
+          { itemId: itemA, quantity: 1 },
+          { itemId: itemB, quantity: 1 },
+        ],
+      },
+      { params: scopeParams }
+    );
     log('Order update response:', updateResponse.data);
 
-    const balanceAfterUpdate = await getDriverPointBalance(driverUserId);
+    const balanceAfterUpdate = await getDriverPointBalance(driverUserId, sponsorCompanyId);
     if (balanceAfterUpdate !== 600) {
       throw new Error(`Expected point balance 600 after update, got ${balanceAfterUpdate}`);
     }
@@ -255,9 +388,11 @@ async function runTests() {
     // Test 5: reject foreign sponsor item
     log('TEST 5: Rejecting foreign sponsor item...', `POST /api/driver/${driverUserId}/orders`);
     try {
-      await axios.post(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
-        items: [{ itemId: forbiddenItem, quantity: 1 }],
-      });
+      await axios.post(
+        `${API_BASE_URL}/driver/${driverUserId}/orders`,
+        { items: [{ itemId: forbiddenItem, quantity: 1 }] },
+        { params: scopeParams }
+      );
       throw new Error('Expected request to fail for foreign sponsor item');
     } catch (error) {
       if (!error.response || error.response.status !== 400) {
@@ -269,9 +404,11 @@ async function runTests() {
     // Test 6: reject insufficient points
     log('TEST 6: Rejecting order for insufficient points...', `POST /api/driver/${driverUserId}/orders`);
     try {
-      await axios.post(`${API_BASE_URL}/driver/${driverUserId}/orders`, {
-        items: [{ itemId: itemB, quantity: 10 }],
-      });
+      await axios.post(
+        `${API_BASE_URL}/driver/${driverUserId}/orders`,
+        { items: [{ itemId: itemB, quantity: 10 }] },
+        { params: scopeParams }
+      );
       throw new Error('Expected insufficient points failure');
     } catch (error) {
       if (!error.response || error.response.status !== 400) {
@@ -282,10 +419,12 @@ async function runTests() {
 
     // Test 7: cancel confirmed order
     log('TEST 7: Cancelling confirmed order...', `DELETE /api/driver/${driverUserId}/orders/${orderId}`);
-    const cancelResponse = await axios.delete(`${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`);
+    const cancelResponse = await axios.delete(`${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`, {
+      params: scopeParams,
+    });
     log('Order cancel response:', cancelResponse.data);
 
-    const balanceAfterCancel = await getDriverPointBalance(driverUserId);
+    const balanceAfterCancel = await getDriverPointBalance(driverUserId, sponsorCompanyId);
     if (balanceAfterCancel !== 1000) {
       throw new Error(`Expected point balance 1000 after cancellation, got ${balanceAfterCancel}`);
     }
@@ -293,9 +432,11 @@ async function runTests() {
     // Test 8: update cancelled order should fail
     log('TEST 8: Updating cancelled order should fail...', `PATCH /api/driver/${driverUserId}/orders/${orderId}`);
     try {
-      await axios.patch(`${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`, {
-        items: [{ itemId: itemA, quantity: 1 }],
-      });
+      await axios.patch(
+        `${API_BASE_URL}/driver/${driverUserId}/orders/${orderId}`,
+        { items: [{ itemId: itemA, quantity: 1 }] },
+        { params: scopeParams }
+      );
       throw new Error('Expected update on cancelled order to fail');
     } catch (error) {
       if (!error.response || error.response.status !== 409) {
@@ -304,8 +445,115 @@ async function runTests() {
       log('Expected cancelled order update rejection:', error.response.data);
     }
 
-    // Test 9: invalid user id
-    log('TEST 9: Invalid user id should fail...', 'GET /api/driver/abc/orders');
+    // Test 9: sponsor-assumed update attributes UserChanged and notifies driver
+    log('TEST 9: Sponsor assumed-view update records actor and notifies driver', `PATCH /api/driver/${driverUserId}/orders/:orderId`);
+    const sponsorManagedOrderResponse = await axios.post(
+      `${API_BASE_URL}/driver/${driverUserId}/orders`,
+      { items: [{ itemId: itemA, quantity: 1 }] },
+      { params: scopeParams }
+    );
+
+    const sponsorManagedOrderId = sponsorManagedOrderResponse.data.orderId;
+    createdOrderIds.push(sponsorManagedOrderId);
+
+    const sponsorUpdateResponse = await axios.patch(
+      `${API_BASE_URL}/driver/${driverUserId}/orders/${sponsorManagedOrderId}`,
+      {
+        items: [
+          { itemId: itemA, quantity: 1 },
+          { itemId: itemB, quantity: 1 },
+        ],
+      },
+      {
+        params: scopeParams,
+        headers: { Cookie: assumedSponsorCookie },
+      }
+    );
+
+    if (sponsorUpdateResponse.status !== 200) {
+      throw new Error('Expected sponsor-assumed order update to succeed');
+    }
+
+    const updatedOrderTransaction = await getLatestOrderPointTransaction(
+      sponsorManagedOrderId,
+      `Order #${sponsorManagedOrderId} updated`
+    );
+    if (!updatedOrderTransaction) {
+      throw new Error('Expected point transaction for sponsor-assumed order update');
+    }
+
+    if (Number(updatedOrderTransaction.UserChanged) !== Number(sponsorUserId)) {
+      throw new Error('Expected UserChanged to be sponsor user for assumed sponsor order update');
+    }
+
+    const driverNotificationsAfterSponsorUpdate = await getEventsByUserId(driverUserId, 'Notification', 50);
+    const sponsorUpdateNotification = driverNotificationsAfterSponsorUpdate.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return (
+        properties.category === 'driver_order_changed_by_sponsor' &&
+        Number(properties.orderId) === Number(sponsorManagedOrderId) &&
+        properties.changeType === 'updated_by_sponsor'
+      );
+    });
+
+    if (!sponsorUpdateNotification) {
+      throw new Error('Expected driver notification for sponsor-assumed order update');
+    }
+
+    // Test 10: sponsor-assumed order status update notifies driver
+    log('TEST 10: Sponsor assumed-view status update notifies driver', `PATCH /api/driver/${driverUserId}/orders/:orderId/status`);
+    const beforeStatusNotifications = await getEventsByUserId(driverUserId, 'Notification', 80);
+    const beforeStatusCount = beforeStatusNotifications.length;
+
+    const statusResponse = await axios.patch(
+      `${API_BASE_URL}/driver/${driverUserId}/orders/${sponsorManagedOrderId}/status`,
+      { orderStatus: 'shipped' },
+      {
+        params: scopeParams,
+        headers: { Cookie: assumedSponsorCookie },
+      }
+    );
+
+    if (statusResponse.status !== 200 || statusResponse.data.orderStatus !== 'shipped') {
+      throw new Error('Expected sponsor-assumed order status update to shipped');
+    }
+
+    const afterStatusNotifications = await getEventsByUserId(driverUserId, 'Notification', 90);
+    const statusNotification = afterStatusNotifications.find((event) => {
+      const properties = parseEventProperties(event.Properties);
+      return (
+        properties.category === 'driver_order_status_changed' &&
+        Number(properties.orderId) === Number(sponsorManagedOrderId) &&
+        properties.newStatus === 'shipped'
+      );
+    });
+
+    if (!statusNotification) {
+      throw new Error('Expected driver notification for sponsor-assumed order status change');
+    }
+
+    // Test 11: alertOrders disables status notifications
+    log('TEST 11: Driver AlertOrders disables status notifications', `PATCH /api/driver/${driverUserId}/orders/:orderId/status`);
+    await setDriverAlertOrders(driverUserId, false);
+
+    await axios.patch(
+      `${API_BASE_URL}/driver/${driverUserId}/orders/${sponsorManagedOrderId}/status`,
+      { orderStatus: 'delivered' },
+      {
+        params: scopeParams,
+        headers: { Cookie: assumedSponsorCookie },
+      }
+    );
+
+    const afterSuppressedStatusNotifications = await getEventsByUserId(driverUserId, 'Notification', 100);
+    if (afterSuppressedStatusNotifications.length !== beforeStatusCount + 1) {
+      throw new Error('Expected no additional status notification when AlertOrders is disabled');
+    }
+
+    await setDriverAlertOrders(driverUserId, true);
+
+    // Test 12: invalid user id
+    log('TEST 12: Invalid user id should fail...', 'GET /api/driver/abc/orders');
     try {
       await axios.get(`${API_BASE_URL}/driver/abc/orders`);
       throw new Error('Expected invalid user id to fail');
@@ -319,6 +567,7 @@ async function runTests() {
     console.log('\nAll driver orders tests completed successfully!');
   } catch (error) {
     console.error('\nDriver orders tests failed:');
+    process.exitCode = 1;
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Data:', error.response.data);
@@ -329,7 +578,7 @@ async function runTests() {
     console.log('\nCleaning up test data...');
     await cleanupTestData();
     await closePool();
-    process.exit(0);
+    process.exit(process.exitCode ?? 0);
   }
 }
 

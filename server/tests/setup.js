@@ -72,6 +72,14 @@ export async function cleanupSponsorCompanies(sponsorIds) {
   
   try {
     for (const id of sponsorIds) {
+      try {
+        await connection.query('DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE SponsorCompanyID = ?', [id]);
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
+
       await connection.query('DELETE FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?', [id]);
       console.log(`Deleted sponsor company ${id}`);
     }
@@ -180,6 +188,25 @@ export async function createTestDriverProfile(options) {
        VALUES (?, ?, ?, ?, ?, 1, 1)`,
       [licenseNumber, userId, sponsorCompanyId, pointBalance, performanceStatus]
     );
+
+    if (Number.isInteger(sponsorCompanyId) && sponsorCompanyId > 0) {
+      try {
+        await connection.query(
+          `INSERT INTO DRIVER_COMPANY_ENROLLMENT
+            (DriverID, SponsorCompanyID, PointBalance, EnrollmentStatus, JoinedAt, LeftAt)
+           VALUES (?, ?, ?, 'active', NOW(), NULL)
+           ON DUPLICATE KEY UPDATE
+             EnrollmentStatus = 'active',
+             LeftAt = NULL,
+             PointBalance = VALUES(PointBalance)`,
+          [licenseNumber, sponsorCompanyId, pointBalance]
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
+    }
 
     return { userId, licenseNumber, sponsorCompanyId };
   } finally {

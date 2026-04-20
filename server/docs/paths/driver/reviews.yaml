@@ -1,0 +1,344 @@
+reviews:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver.
+      required: true
+      schema:
+        type: integer
+    - name: sponsorCompanyId
+      in: query
+      description: Sponsor company context for driver-scoped access.
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - reviews
+    summary: List sponsor-scoped visible reviews for a driver
+    description: Returns visible reviews for the selected sponsor company scope.
+    parameters:
+      - name: itemId
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+    responses:
+      '200':
+        description: Reviews fetched successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                reviews:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      reviewId:
+                        type: integer
+                      itemId:
+                        type: integer
+                      userId:
+                        type: integer
+                      rating:
+                        type: integer
+                      body:
+                        type: string
+                      itemName:
+                        type: string
+                      username:
+                        type: string
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                      timestamp:
+                        type: string
+                        format: date-time
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+  post:
+    tags:
+      - reviews
+    summary: Create a driver product review
+    description: Allows a driver to review a catalog item after placing an eligible order for that item.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - itemId
+              - rating
+              - body
+            properties:
+              itemId:
+                type: integer
+              rating:
+                type: integer
+                minimum: 1
+                maximum: 5
+              body:
+                type: string
+                minLength: 1
+                maxLength: 1000
+    responses:
+      '201':
+        description: Review created successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: Review submitted successfully!
+                reviewId:
+                  type: integer
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        description: Driver is not eligible to review this item in the requested sponsor context.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+reviewComments:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver.
+      required: true
+      schema:
+        type: integer
+    - name: reviewId
+      in: path
+      description: Target review ID.
+      required: true
+      schema:
+        type: integer
+    - name: sponsorCompanyId
+      in: query
+      description: Sponsor company context for driver-scoped access.
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - reviews
+    summary: List comments for a sponsor-scoped review
+    responses:
+      '200':
+        description: Comments fetched successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                comments:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      commentId:
+                        type: integer
+                      reviewId:
+                        type: integer
+                      sponsorCompanyId:
+                        type: integer
+                      userId:
+                        type: integer
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                      parentCommentId:
+                        type: integer
+                        nullable: true
+                      text:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+  post:
+    tags:
+      - reviews
+    summary: Create a comment for a sponsor-scoped review
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - text
+            properties:
+              text:
+                type: string
+                minLength: 1
+                maxLength: 1000
+              parentCommentId:
+                type: integer
+                nullable: true
+    responses:
+      '201':
+        description: Comment created successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                comment:
+                  type: object
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '404':
+        $ref: '../../schemas/common.yaml#/Responses/404Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+
+reviewDraftByItem:
+  parameters:
+    - name: userId
+      in: path
+      description: The user ID of the driver.
+      required: true
+      schema:
+        type: integer
+    - name: itemId
+      in: path
+      description: Catalog item ID for the draft.
+      required: true
+      schema:
+        type: integer
+    - name: sponsorCompanyId
+      in: query
+      description: Sponsor company context for driver-scoped access.
+      required: true
+      schema:
+        type: integer
+  get:
+    tags:
+      - reviews
+    summary: Load active review draft for an item
+    responses:
+      '200':
+        description: Draft lookup succeeded.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                draft:
+                  type: object
+                  nullable: true
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+  put:
+    tags:
+      - reviews
+    summary: Create or update active review draft for an item
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - rating
+              - body
+            properties:
+              rating:
+                type: integer
+                minimum: 1
+                maximum: 5
+              body:
+                type: string
+                minLength: 1
+                maxLength: 1000
+    responses:
+      '200':
+        description: Draft saved successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+                draft:
+                  type: object
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'
+  delete:
+    tags:
+      - reviews
+    summary: Clear active review draft for an item
+    responses:
+      '200':
+        description: Draft clear attempt completed.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                message:
+                  type: string
+      '400':
+        $ref: '../../schemas/common.yaml#/Responses/400Error'
+      '403':
+        $ref: '../../schemas/common.yaml#/Responses/403Error'
+      '500':
+        $ref: '../../schemas/common.yaml#/Responses/500Error'

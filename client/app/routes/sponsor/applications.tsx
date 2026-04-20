@@ -1,6 +1,6 @@
 import type { Route } from "./+types/applications";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 import { Alert } from "~/components/Alert";
 import { Modal } from "~/components/Modal";
 import { StatusBadge } from "~/components/status-badge";
@@ -263,15 +263,6 @@ export default function DriverApplications() {
   return (
     <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-4">
-          <Link
-            to="/sponsor/dashboard"
-            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline block mb-2"
-          >
-            ← Return to Sponsor Dashboard
-          </Link>
-        </div>
-
         <div className="mb-8 text-left border-b pb-6 dark:border-gray-800">
           <h1 className="text-3xl font-bold mb-1 text-gray-900 dark:text-gray-100">Review Driver Applications</h1>
           <p className="text-gray-500">Review pending applications and update prior decisions when needed.</p>
@@ -324,7 +315,7 @@ export default function DriverApplications() {
                   <th className="w-[24%] p-4 text-xs font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Driver</th>
                   <th className="w-[18%] p-4 text-xs font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Submitted</th>
                   <th className="w-[12%] p-4 text-xs font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Status</th>
-                  <th className="w-[20%] p-4 text-xs font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Actions</th>
+                  <th className="w-[20%] p-4 text-xs font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest text-center">Actions</th>
                   <th className="w-[26%] min-w-[320px] p-4 text-xs font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">Notes</th>
                 </tr>
               </thead>
@@ -348,7 +339,7 @@ export default function DriverApplications() {
                     </td>
 
                     <td className="p-4">
-                      <div className="flex justify-end gap-3">
+                      <div className="flex flex-col items-center gap-3 text-center">
                         {app.ApplicationStatus === "pending" ? (
                           <>
                             {permissions.canAcceptDriverApplications && (

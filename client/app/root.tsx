@@ -1,5 +1,6 @@
 import {
   Form,
+  Link,
   isRouteErrorResponse,
   Links,
   Meta,
@@ -15,9 +16,33 @@ import "./app.css";
 import { Badge } from "~/components/Badge";
 import { Button } from "~/components/Button";
 import { TopNav } from "~/components";
-import { getSession, isAssumedSession, ROLE_HOME } from "~/utils/session.server";
+import { getSession, isAssumedSession } from "~/utils/session.server";
+import { toApiUrl } from "~/utils/api-url";
+
+const ROLE_HOME_PATHS = {
+  driver: "/driver/dashboard",
+  sponsor: "/sponsor/dashboard",
+  admin: "/admin/dashboard",
+} as const;
 
 export const links: Route.LinksFunction = () => [
+  {
+    rel: "icon",
+    type: "image/svg+xml",
+    href: "/favicon.svg",
+    media: "(prefers-color-scheme: light)",
+  },
+  {
+    rel: "icon",
+    type: "image/svg+xml",
+    href: "/favicon-dark.svg",
+    media: "(prefers-color-scheme: dark)",
+  },
+  {
+    rel: "icon",
+    href: "/favicon.ico",
+    sizes: "any",
+  },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",
@@ -30,14 +55,101 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-export function loader({ request }: Route.LoaderArgs) {
+function parseCookieNumber(cookieHeader: string, name: string): number | null {
+  const pattern = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`);
+  const match = cookieHeader.match(pattern);
+  if (!match) return null;
+  const parsed = Number(decodeURIComponent(match[1]));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function loadTopNavNotifications(request: Request, session: ReturnType<typeof getSession>) {
+  if (!session) {
+    return { items: [], unreadCount: 0 };
+  }
+
+  const role = String(session.UserType).toLowerCase();
+  if (role !== "driver" && role !== "sponsor" && role !== "admin") {
+    return { items: [], unreadCount: 0 };
+  }
+
+  const basePath =
+    role === "driver"
+      ? `/api/driver/${session.UserID}/notifications`
+      : role === "sponsor"
+      ? `/api/sponsors/${session.UserID}/notifications`
+      : `/api/admin/${session.UserID}/notifications`;
+
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+  const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
+
+  try {
+    const res = await fetch(toApiUrl(`${basePath}?limit=20&offset=0`), requestInit);
+    if (!res.ok) {
+      return { items: [], unreadCount: 0 };
+    }
+
+    const payload = await res.json();
+    const items = Array.isArray(payload?.notifications) ? payload.notifications : [];
+    const unreadCount = Number(payload?.unreadCount ?? 0);
+
+    return {
+      items,
+      unreadCount: Number.isFinite(unreadCount) ? unreadCount : 0,
+    };
+  } catch {
+    return { items: [], unreadCount: 0 };
+  }
+}
+
+async function loadDriverSponsorCompanies(request: Request, session: ReturnType<typeof getSession>) {
+  if (!session || String(session.UserType).toLowerCase() !== "driver") {
+    return [] as Array<{ sponsorCompanyId: number; companyName: string }>;
+  }
+
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+  const requestInit = cookieHeader ? { headers: { Cookie: cookieHeader } } : undefined;
+
+  try {
+    const res = await fetch(toApiUrl(`/api/drivers/sponsors/${session.UserID}`), requestInit);
+    if (!res.ok) return [];
+
+    const payload = await res.json();
+    if (!Array.isArray(payload)) return [];
+
+    return payload
+      .map((row: any) => ({
+        sponsorCompanyId: Number(row?.SponsorCompanyID),
+        companyName: String(row?.CompanyName ?? ""),
+      }))
+      .filter((row) => Number.isInteger(row.sponsorCompanyId) && row.sponsorCompanyId > 0 && row.companyName);
+  } catch {
+    return [];
+  }
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
   const session = getSession(request);
   const assumed = isAssumedSession(session);
+  const topNavNotifications = await loadTopNavNotifications(request, session);
+
+  const cookieHeader = request.headers.get("Cookie") ?? "";
+  const driverSponsorCompanies = await loadDriverSponsorCompanies(request, session);
+
+  const preferredSponsorCompanyId = parseCookieNumber(cookieHeader, "driverSponsorCompanyId");
+  const selectedSponsorCompanyId =
+    Number.isInteger(preferredSponsorCompanyId) &&
+    driverSponsorCompanies.some((row) => row.sponsorCompanyId === preferredSponsorCompanyId)
+      ? preferredSponsorCompanyId
+      : driverSponsorCompanies[0]?.sponsorCompanyId ?? null;
 
   return {
     session,
     assumed,
     originalRole: session?.OriginalUser?.UserType ?? null,
+    topNavNotifications,
+    driverSponsorCompanies,
+    selectedSponsorCompanyId,
   };
 }
 
@@ -109,9 +221,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { session, assumed, originalRole } = useLoaderData<typeof loader>();
+  const {
+    session,
+    assumed,
+    originalRole,
+    topNavNotifications,
+    driverSponsorCompanies,
+    selectedSponsorCompanyId,
+  } = useLoaderData<typeof loader>();
   const autoExitTriggeredRef = useRef(false);
-  const dashboardHref = session ? ROLE_HOME[session.UserType] ?? "/" : undefined;
+  const dashboardHref = session
+    ? ROLE_HOME_PATHS[session.UserType as keyof typeof ROLE_HOME_PATHS] ?? "/"
+    : undefined;
 
   useEffect(() => {
     if (!assumed || typeof window === "undefined") {
@@ -163,12 +284,35 @@ export default function App() {
             ? {
                 username: session.Username,
                 role: session.UserType,
+                firstName: session.FirstName,
+                lastName: session.LastName,
+                userId: session.UserID,
               }
             : null
         }
         dashboardHref={dashboardHref}
+        notifications={topNavNotifications?.items ?? []}
+        unreadNotificationCount={Number(topNavNotifications?.unreadCount ?? 0)}
+        driverSponsorCompanies={driverSponsorCompanies}
+        selectedSponsorCompanyId={selectedSponsorCompanyId}
+        isSponsorAssumedDriver={Boolean(assumed && originalRole === "sponsor")}
       />
       <Outlet />
+      <footer className="border-t border-gray-200 bg-white/90 py-6 dark:border-gray-800 dark:bg-gray-950/90">
+        <div className="container-padding">
+          <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 text-sm">
+            <p className="text-gray-600 dark:text-gray-300">© 2026 FleetScore</p>
+            <div className="flex items-center gap-3">
+              <Link to="/features" className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">
+                Features
+              </Link>
+              <Link to="/about" className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">
+                About
+              </Link>
+            </div>
+          </div>
+        </div>
+      </footer>
     </>
   );
 }

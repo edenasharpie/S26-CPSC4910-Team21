@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router";
 import { Alert } from "./Alert";
 
 interface ProfileEditLayoutProps {
   apiBaseUrl: string;
-  backTo: string;
-  backLabel: string;
   title: string;
   subtitle?: string;
   profilePicture?: string | null;
@@ -67,14 +64,19 @@ function toRenderableImageUrl(apiBaseUrl: string, profilePicture?: string | null
   const resolved = resolveProfileImageUrl(profilePicture);
   if (!resolved) return null;
   if (resolved.startsWith("data:image")) return resolved;
+  if (resolved.startsWith('/api/images/u/')) return `${apiBaseUrl}${resolved}`;
+  if (resolved.startsWith('api/images/u/')) return `${apiBaseUrl}/${resolved}`;
+  if (resolved.startsWith(`${apiBaseUrl}/api/images/u/`)) return resolved;
+  if (resolved.startsWith('/')) return `${apiBaseUrl}${resolved}`;
   if (resolved.startsWith(`${apiBaseUrl}/api/images/proxy?url=`)) return resolved;
+  if (resolved.startsWith('http://') || resolved.startsWith('https://')) {
+    return `${apiBaseUrl}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
+  }
   return `${apiBaseUrl}/api/images/proxy?url=${encodeURIComponent(resolved)}`;
 }
 
 export function ProfileEditLayout({
   apiBaseUrl,
-  backTo,
-  backLabel,
   title,
   subtitle,
   profilePicture,
@@ -107,23 +109,8 @@ export function ProfileEditLayout({
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 dark:from-blue-950 dark:via-gray-950 dark:to-blue-900">
       <div className="p-8 max-w-5xl mx-auto space-y-10">
-        <div className="flex items-center gap-4">
-          <Link
-            to={backTo}
-            className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
-          >
-            {`\u2190 ${backLabel}`}
-          </Link>
-          <Link
-            to="/"
-            className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            Home
-          </Link>
-        </div>
-
         {successMessage && (
           <Alert
             variant="success"

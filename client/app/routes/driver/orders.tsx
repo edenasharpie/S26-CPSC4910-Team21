@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLoaderData, Form } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
-import { Button, Card, Table, Modal, Alert } from "~/components";
+import { Button, Card, Table, Modal, Alert, CreateReview } from "~/components";
 import { createApiClient } from "~/utils/api";
 import { requireAuth } from "~/utils/session.server";
 
@@ -52,22 +52,84 @@ export default function DriverOrders() {
   const { user } = useLoaderData<typeof loader>();
   const api = useMemo(() => createApiClient({ id: user.UserID, role: "driver" }), [user.UserID]);
 
+  const [sponsorCompanyId, setSponsorCompanyId] = useState<number | null>(null);
   const [orders, setOrders] = useState<DriverOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<DriverOrder | null>(null);
   const [editItems, setEditItems] = useState<OrderItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<{ orderId: number; item: OrderItem } | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const readSponsorCompanyIdFromCookie = () => {
+    if (typeof document === "undefined") return null;
+    const match = document.cookie.match(/(?:^|;\s*)driverSponsorCompanyId=([^;]+)/);
+    if (!match) return null;
+    const parsed = Number(decodeURIComponent(match[1]));
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  const persistSponsorCompanyId = (nextSponsorCompanyId: number) => {
+    if (typeof document === "undefined") return;
+    const maxAgeSeconds = 60 * 60 * 24 * 365;
+    const secureSuffix = typeof window !== "undefined" && window.location?.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `driverSponsorCompanyId=${encodeURIComponent(String(nextSponsorCompanyId))}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureSuffix}`;
+  };
+
+  const ensureSponsorCompanyId = async () => {
+    const fromCookie = readSponsorCompanyIdFromCookie();
+    if (fromCookie) {
+      setSponsorCompanyId(fromCookie);
+      return;
+    }
+
+    try {
+      const response = await api.getApi(`/drivers/sponsors/${user.UserID}`);
+      if (!response.ok) {
+        setError("Select a sponsor company before viewing orders.");
+        return;
+      }
+
+      const payload = await response.json();
+      const sponsors = Array.isArray(payload) ? payload : [];
+      const firstSponsorCompanyId = Number(sponsors[0]?.SponsorCompanyID);
+
+      if (Number.isInteger(firstSponsorCompanyId) && firstSponsorCompanyId > 0) {
+        persistSponsorCompanyId(firstSponsorCompanyId);
+        setSponsorCompanyId(firstSponsorCompanyId);
+        return;
+      }
+
+      setError("No active sponsor companies found.");
+    } catch (err) {
+      console.error("Error resolving sponsor company:", err);
+      setError("Select a sponsor company before viewing orders.");
+    }
+  };
 
   useEffect(() => {
-    fetchOrders();
+    void ensureSponsorCompanyId();
   }, []);
+
+  useEffect(() => {
+    if (!sponsorCompanyId) {
+      setOrders([]);
+      return;
+    }
+
+    fetchOrders();
+  }, [sponsorCompanyId]);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get("/orders");
+      if (!sponsorCompanyId) {
+        throw new Error("Select a sponsor company before viewing orders");
+      }
+
+      const response = await api.get(`/orders?sponsorCompanyId=${sponsorCompanyId}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -87,7 +149,11 @@ export default function DriverOrders() {
   const handleCancelOrder = async (orderId: number) => {
     try {
       setError(null);
-      const response = await api.delete(`/orders/${orderId}`);
+      if (!sponsorCompanyId) {
+        throw new Error("Select a sponsor company before cancelling an order");
+      }
+
+      const response = await api.delete(`/orders/${orderId}?sponsorCompanyId=${sponsorCompanyId}`);
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || "Failed to cancel order");
@@ -100,9 +166,19 @@ export default function DriverOrders() {
   };
 
   const handleEditOrder = (order: DriverOrder) => {
+    setSuccessMessage(null);
     setEditingOrder(order);
     setEditItems(order.items.map((item) => ({ ...item })));
   };
+
+  const handleOpenReview = (order: DriverOrder, item: OrderItem) => {
+    setError(null);
+    setSuccessMessage(null);
+    setReviewTarget({ orderId: order.orderId, item });
+  };
+
+  const isReviewableOrderStatus = (orderStatus: string) =>
+    ["confirmed", "shipped", "delivered"].includes(String(orderStatus).toLowerCase());
 
   const handleEditQuantity = (itemId: number, quantity: number) => {
     setEditItems((prev) =>
@@ -124,7 +200,11 @@ export default function DriverOrders() {
     try {
       setSaving(true);
       setError(null);
-      const response = await api.patch(`/orders/${editingOrder.orderId}`, { items: payload });
+      if (!sponsorCompanyId) {
+        throw new Error("Select a sponsor company before updating an order");
+      }
+
+      const response = await api.patch(`/orders/${editingOrder.orderId}?sponsorCompanyId=${sponsorCompanyId}`, { items: payload });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || "Failed to update order");
@@ -140,7 +220,7 @@ export default function DriverOrders() {
     }
   };
 
-  const itemColumns = [
+  const buildItemColumns = (order: DriverOrder) => [
     {
       key: "name",
       header: "Item",
@@ -170,45 +250,50 @@ export default function DriverOrders() {
       header: "Total Price",
       render: (item: OrderItem) => (item.unitDollarCost * item.quantity).toFixed(2),
     },
+    {
+      key: "review",
+      header: "Review",
+      render: (item: OrderItem) =>
+        isReviewableOrderStatus(order.orderStatus) ? (
+          <Button variant="secondary" size="sm" onClick={() => handleOpenReview(order, item)}>
+            Write Review
+          </Button>
+        ) : (
+          <span className="text-xs text-gray-500">Not available</span>
+        ),
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 dark:bg-gray-950">
+    <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-8">
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <Link
-              to="/"
-              className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              &larr; Home
-            </Link>
-            <Link
-              to="/driver/catalogs"
-              className="mt-2 inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              &larr; Browse Catalogs
-            </Link>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-3">Your Orders</h1>
             <p className="text-gray-600 dark:text-gray-400">Track recent purchases and update confirmed orders.</p>
           </div>
           <div className="flex items-center gap-2">
-            {user.OriginalUser && (
-              <Form method="post" action="/exit-assumption">
-                <Button variant="primary" size="sm" type="submit">
-                  Exit Assumed View
-                </Button>
-              </Form>
-            )}
-            <Form method="post" action="/logout">
-              <Button variant="secondary" size="sm" type="submit">
-                Sign out
+            <Link to="/driver/reviews">
+              <Button variant="secondary" size="sm">
+                Review Discussions
               </Button>
-            </Form>
+            </Link>
+            <Link to="/driver/catalogs">
+              <Button variant="ghost" size="sm">
+                Back to Catalog
+              </Button>
+            </Link>
           </div>
         </div>
 
         {error && <Alert message={error} onDismiss={() => setError(null)} />}
+        {successMessage && (
+          <Alert
+            message={successMessage}
+            variant="success"
+            onDismiss={() => setSuccessMessage(null)}
+          />
+        )}
 
         {loading ? (
           <Card>
@@ -236,15 +321,15 @@ export default function DriverOrders() {
                   </div>
                 </div>
 
-                <Table data={order.items} columns={itemColumns} />
+                <Table data={order.items} columns={buildItemColumns(order)} />
 
-                <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-gray-700">
                   <div className="text-sm text-gray-600 dark:text-gray-300">
                     <span className="font-semibold">Total Points:</span> {order.orderPointsSpent} -
                     <span className="font-semibold"> Total $:</span> {order.orderDollarsSpent.toFixed(2)}
                   </div>
                   {order.orderStatus === "confirmed" && (
-                    <div className="flex gap-2">
+                    <div className="mt-1 flex gap-2 rounded-lg border border-gray-200 bg-white/70 p-2 dark:border-gray-700 dark:bg-gray-900/60">
                       <Button variant="secondary" size="sm" onClick={() => handleEditOrder(order)}>
                         Edit
                       </Button>
@@ -296,6 +381,26 @@ export default function DriverOrders() {
               </Button>
             </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(reviewTarget)}
+        onClose={() => setReviewTarget(null)}
+        title={reviewTarget ? `Review ${reviewTarget.item.name}` : "Write Review"}
+      >
+        {reviewTarget && sponsorCompanyId && (
+          <CreateReview
+            itemId={reviewTarget.item.itemId}
+            itemName={reviewTarget.item.name}
+            userId={user.UserID}
+            sponsorCompanyId={sponsorCompanyId}
+            onCancel={() => setReviewTarget(null)}
+            onSuccess={() => {
+              setReviewTarget(null);
+              setSuccessMessage(`Review for ${reviewTarget.item.name} submitted successfully.`);
+            }}
+          />
         )}
       </Modal>
     </div>

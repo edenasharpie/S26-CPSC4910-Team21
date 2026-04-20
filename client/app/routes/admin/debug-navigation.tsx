@@ -24,7 +24,6 @@ export function loader({ request }: Route.LoaderArgs) {
         { to: "/sponsor/reviews", label: "Manage Driver Reviews" },
         { to: "/sponsor/invoices", label: "Invoices" },
         { to: "/sponsor/reports", label: "Reports" },
-        { to: "/sponsor/manage-users", label: "Manage Users" },
         { to: "/sponsor/driver-purchases", label: "Driver Purchases" },
         { to: "/sponsor/applications", label: "Applications" },
         { to: `/sponsor/settings/${session.UserID}`, label: "My Settings" },

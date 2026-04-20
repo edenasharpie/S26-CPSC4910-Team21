@@ -15,6 +15,10 @@ import {
 import { pool } from '../../src/db.js';
 
 const API_BASE_URL = `${BASE_URL}/api`;
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wn0jL0AAAAASUVORK5CYII=',
+  'base64'
+);
 
 const createdUserIds = [];
 const createdSponsorIds = [];
@@ -36,6 +40,16 @@ async function cleanupUsers(userIds) {
   try {
     for (const userId of userIds) {
       await connection.query('DELETE FROM EVENTS WHERE UserID = ?', [userId]);
+      try {
+        await connection.query(
+          'DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE DriverID IN (SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?)',
+          [userId]
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
       await connection.query('DELETE FROM DRIVERS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM SPONSORS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM ADMINS WHERE UserID = ?', [userId]);
@@ -90,7 +104,9 @@ async function runTests() {
     // Test 1b: Admin-assumed driver can load dashboard points widgets
     log('TEST 1b: Assumed driver dashboard points data loads', 'GET /api/drivers/my-points/:userId, /api/drivers/performance/:userId');
     const assumedDriverUserId = assumeDriverRes.data.assumedUser.UserID;
-    const pointsWidgetRes = await axios.get(`${API_BASE_URL}/drivers/my-points/${assumedDriverUserId}`);
+    const pointsWidgetRes = await axios.get(`${API_BASE_URL}/drivers/my-points/${assumedDriverUserId}`, {
+      params: { sponsorCompanyId },
+    });
     if (
       pointsWidgetRes.status !== 200 ||
       typeof pointsWidgetRes.data?.balance !== 'number' ||
@@ -143,19 +159,22 @@ async function runTests() {
     log('TEST 3b: Assumed sponsor can update driver profile', 'PATCH /api/sponsors/:userId/drivers/:driverId');
     const sponsorDriverEmail = `sd${Date.now()}@e.co`;
     const sponsorDriverPhone = '5551002000';
+    const sponsorDriverFormData = new FormData();
+    sponsorDriverFormData.append('firstName', 'AssumedSponsor');
+    sponsorDriverFormData.append('lastName', 'DriverEdit');
+    sponsorDriverFormData.append('email', sponsorDriverEmail);
+    sponsorDriverFormData.append('phone', sponsorDriverPhone);
+    sponsorDriverFormData.append('profileImage', new Blob([ONE_PIXEL_PNG], { type: 'image/png' }), 'assume-driver.png');
+
     const sponsorPatchRes = await axios.patch(
       `${API_BASE_URL}/sponsors/${assumedSponsorUserId}/drivers/${driver.userId}`,
-      {
-        firstName: 'AssumedSponsor',
-        lastName: 'DriverEdit',
-        email: sponsorDriverEmail,
-        phone: sponsorDriverPhone,
-      }
+      sponsorDriverFormData
     );
 
     const sponsorPatchUserId = Number(sponsorPatchRes.data?.UserID ?? sponsorPatchRes.data?.userId);
     const sponsorPatchEmail = sponsorPatchRes.data?.Email ?? sponsorPatchRes.data?.email;
     const sponsorPatchPhone = sponsorPatchRes.data?.Phone ?? sponsorPatchRes.data?.phone;
+    const sponsorPatchProfilePicture = sponsorPatchRes.data?.ProfilePicture ?? sponsorPatchRes.data?.profilePicture;
 
     if (
       sponsorPatchRes.status !== 200 ||
@@ -163,7 +182,9 @@ async function runTests() {
       sponsorPatchRes.data?.FirstName !== 'AssumedSponsor' ||
       sponsorPatchRes.data?.LastName !== 'DriverEdit' ||
       String(sponsorPatchEmail ?? '') !== sponsorDriverEmail ||
-      String(sponsorPatchPhone ?? '') !== sponsorDriverPhone
+      String(sponsorPatchPhone ?? '') !== sponsorDriverPhone ||
+      typeof sponsorPatchProfilePicture !== 'string' ||
+      !String(sponsorPatchProfilePicture).startsWith('/api/images/u/')
     ) {
       throw new Error(`Expected assumed sponsor to update sponsor-owned driver profile fields. Received: ${JSON.stringify(sponsorPatchRes.data)}`);
     }

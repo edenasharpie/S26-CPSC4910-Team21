@@ -10,6 +10,7 @@ export default [
   route("forgot-password", "routes/forgot-password.tsx"),
   route("exit-assumption", "routes/exit-assumption.tsx"),
   route("about", "routes/about.tsx"),
+  route("features", "routes/features.tsx"),
   route("change-password", "routes/change-password.tsx"),
   /* demo purposes only */
   route("components-demo", "routes/components-demo.tsx"),
@@ -51,17 +52,18 @@ export default [
   route("admin/catalogs", "routes/admin/catalogs.tsx"),
   route("driver/catalogs", "routes/driver/catalogs.tsx"),
   route("driver/orders", "routes/driver/orders.tsx"),
+  route("driver/reviews", "routes/driver/reviews.tsx"),
   route("sponsor/catalogs", "routes/sponsor/catalogs.tsx"),
 
   //ADMIN USER MANAGEMENT (quick-add forms)
   route("admin/add-driver", "routes/admin/add-driver.tsx"),
   route("admin/add-sponsor", "routes/admin/add-sponsor.tsx"),
+  route("admin/bulk-upload", "routes/admin/bulk-upload.tsx"),
 
   //SPONSOR FLEET MANAGEMENT
   route("sponsor/driver-purchases", "routes/sponsor/driver-purchases.tsx"),
   route("sponsor/applications", "routes/sponsor/applications.tsx"),
-  route("sponsor/manage-users", "routes/sponsor/manage-users.tsx"),
-  route("sponsor/manage-users/:userId", "routes/sponsor/manage-users.$userId.tsx"),
+  route("sponsor/bulk-upload", "routes/sponsor/bulk-upload.tsx"),
 
   // Legacy driver dashboard (accessed by URL param)
   route("driver-dashboard/:id", "routes/driver-dashboard.tsx"),

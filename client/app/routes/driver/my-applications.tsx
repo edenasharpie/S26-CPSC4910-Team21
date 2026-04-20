@@ -30,9 +30,6 @@ export default function MyApplications() {
   return (
     <div className="p-8 max-w-5xl mx-auto min-h-screen">
       <header className="mb-10">
-        <Link to="/" className="inline-flex items-center text-sm font-medium text-blue-600 hover:underline mb-3">
-          &larr; Home
-        </Link>
         <h1 className="text-3xl font-bold text-slate-900">Your Applications</h1>
         <p className="text-slate-500">Track your status with sponsor companies.</p>
       </header>

@@ -1,6 +1,6 @@
 import type { Route } from "./+types/apply";
 import { useState } from "react";
-import { Link, useLoaderData, useRevalidator } from "react-router";
+import { useLoaderData, useRevalidator } from "react-router";
 import { toApiUrl } from "~/utils/api-url";
 import { requireAuth } from "~/utils/session.server";
 import { StatusBadge } from "~/components/status-badge";
@@ -253,15 +253,6 @@ export default function ApplyPage() {
   
   return (
     <div className="min-h-screen bg-linear-to-b from-blue-50 to-blue-100/50 dark:from-[#1e4b8f] dark:to-[#163a6f] p-4 md:p-6">
-      <div className="max-w-7xl mx-auto pt-2">
-        <Link
-          to="/driver/dashboard"
-          className="inline-flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          &larr; Back to Dashboard
-        </Link>
-      </div>
-
       <div className="max-w-7xl mx-auto mt-6 grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         <div className="xl:col-span-5">
           <DriverApplicationForm

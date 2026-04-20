@@ -19,6 +19,16 @@ async function cleanupUsers(userIds) {
   try {
     for (const id of userIds) {
       // Delete role-specific records first (foreign key constraints)
+      try {
+        await connection.query(
+          'DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE DriverID IN (SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?)',
+          [id]
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
       await connection.query('DELETE FROM DRIVERS WHERE UserID = ?', [id]);
       await connection.query('DELETE FROM SPONSORS WHERE UserID = ?', [id]);
       await connection.query('DELETE FROM ADMINS WHERE UserID = ?', [id]);

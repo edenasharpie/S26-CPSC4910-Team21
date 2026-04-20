@@ -28,6 +28,11 @@ type NormalizedProfile = {
   profilePicture: string;
   bio: string;
   lastLogin: string | null;
+  alertPoints: boolean;
+  alertOrders: boolean;
+  alertApplicationStatusChange: boolean;
+  alertApplicationEntry: boolean;
+  alertProfileChangesByAdmin: boolean;
 };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -88,12 +93,35 @@ export default function SponsorProfileEdit() {
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [alertPoints, setAlertPoints] = useState(Boolean(profile?.alertPoints));
+  const [alertOrders, setAlertOrders] = useState(Boolean(profile?.alertOrders));
+  const [alertApplicationStatusChange, setAlertApplicationStatusChange] = useState(
+    Boolean(profile?.alertApplicationStatusChange)
+  );
+  const [alertApplicationEntry, setAlertApplicationEntry] = useState(
+    Boolean(profile?.alertApplicationEntry)
+  );
+  const [alertProfileChangesByAdmin, setAlertProfileChangesByAdmin] = useState(
+    Boolean(profile?.alertProfileChangesByAdmin)
+  );
 
   useEffect(() => {
     setProfile(normalizeProfile(data.profile));
     setIsEditing(false);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setNewPassword("");
+    setShowNewPassword(false);
+    const normalized = normalizeProfile(data.profile);
+    if (normalized) {
+      setAlertPoints(Boolean(normalized.alertPoints));
+      setAlertOrders(Boolean(normalized.alertOrders));
+      setAlertApplicationStatusChange(Boolean(normalized.alertApplicationStatusChange));
+      setAlertApplicationEntry(Boolean(normalized.alertApplicationEntry));
+      setAlertProfileChangesByAdmin(Boolean(normalized.alertProfileChangesByAdmin));
+    }
   }, [data]);
 
   useEffect(() => {
@@ -128,12 +156,21 @@ export default function SponsorProfileEdit() {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    const payload = {
-      firstName: String(formData.get("FirstName") ?? "").trim(),
-      lastName: String(formData.get("LastName") ?? "").trim(),
-      email: String(formData.get("Email") ?? "").trim(),
-      phone: String(formData.get("Phone") ?? "").trim(),
-    };
+    const payload = new FormData();
+    payload.set("firstName", String(formData.get("FirstName") ?? "").trim());
+    payload.set("lastName", String(formData.get("LastName") ?? "").trim());
+    payload.set("email", String(formData.get("Email") ?? "").trim());
+    payload.set("phone", String(formData.get("Phone") ?? "").trim());
+    payload.set("alertPoints", String(alertPoints));
+    payload.set("alertOrders", String(alertOrders));
+    payload.set("alertApplicationStatusChange", String(alertApplicationStatusChange));
+    payload.set("alertApplicationEntry", String(alertApplicationEntry));
+    payload.set("alertProfileChangesByAdmin", String(alertProfileChangesByAdmin));
+
+    const profileImage = formData.get("profileImage");
+    if (profileImage instanceof File && profileImage.size > 0) {
+      payload.set("profileImage", profileImage);
+    }
 
     try {
       setErrorMessage(null);
@@ -146,8 +183,7 @@ export default function SponsorProfileEdit() {
 
       const response = await fetch(endpoint, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: payload,
       });
 
       const body = await response.json().catch(() => ({}));
@@ -159,10 +195,37 @@ export default function SponsorProfileEdit() {
         return;
       }
 
+      const nextPassword = newPassword.trim();
+      if (nextPassword) {
+        const passwordResponse = await fetch(`${API_URL}/api/user/change-password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: data.targetId, newPassword: nextPassword }),
+        });
+
+        const passwordResult = await passwordResponse.json().catch(() => ({}));
+        if (!passwordResponse.ok) {
+          setErrorMessage(
+            (passwordResult as { message?: string; error?: string }).message ||
+              (passwordResult as { message?: string; error?: string }).error ||
+              "Failed to update password"
+          );
+          return;
+        }
+      }
+
       setProfile(normalizeProfile(body));
       setIsEditing(false);
+      setNewPassword("");
+      setShowNewPassword(false);
       setSuccessMessage(
-        data.mode === "self" ? "Sponsor profile updated successfully" : "Driver profile updated successfully"
+        nextPassword
+          ? data.mode === "self"
+            ? "Sponsor profile and password updated successfully"
+            : "Driver profile and password updated successfully"
+          : data.mode === "self"
+          ? "Sponsor profile updated successfully"
+          : "Driver profile updated successfully"
       );
     } catch {
       setErrorMessage("Connection error. Please try again.");
@@ -217,8 +280,6 @@ export default function SponsorProfileEdit() {
   return (
     <ProfileEditLayout
       apiBaseUrl={API_URL}
-      backTo="/sponsor/dashboard"
-      backLabel="Back to Dashboard"
       title={title}
       subtitle={subtitle}
       profilePicture={profile.profilePicture}
@@ -272,11 +333,13 @@ export default function SponsorProfileEdit() {
               className={getProfileEditFieldClass(isEditing)}
             />
             <Input
-              label="Profile Picture URL"
-              name="ProfilePicture"
-              defaultValue={profile.profilePicture}
-              disabled
-              className={getProfileEditFieldClass(false)}
+              label="Profile Picture Upload"
+              name="profileImage"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={!isEditing}
+              className={getProfileEditFieldClass(isEditing)}
+              helperText="Upload PNG, JPG, WEBP, or GIF (max 5MB)."
             />
           </div>
 
@@ -304,6 +367,42 @@ export default function SponsorProfileEdit() {
               disabled={!isEditing}
               className={getProfileEditFieldClass(isEditing)}
             />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  disabled={!isEditing}
+                  placeholder="Leave blank to keep current password"
+                  className={`w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${getProfileEditFieldClass(isEditing)}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((previous) => !previous)}
+                  disabled={!isEditing}
+                  aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  className="absolute inset-y-0 right-0 px-3 text-gray-500 disabled:opacity-50"
+                >
+                  {showNewPassword ? (
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 3l18 18" />
+                      <path d="M10.58 10.58a2 2 0 102.83 2.83" />
+                      <path d="M9.88 5.09A10.94 10.94 0 0112 5c7 0 10 7 10 7a17.17 17.17 0 01-4.43 5.94" />
+                      <path d="M6.61 6.61A17.34 17.34 0 002 12s3 7 10 7a10.78 10.78 0 005.39-1.39" />
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -353,6 +452,42 @@ export default function SponsorProfileEdit() {
             </div>
           )}
         </div>
+
+        {data.mode === "self" && (
+          <div className="pt-6 border-t border-gray-100 dark:border-gray-800 text-left space-y-4">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Notification Preferences</h2>
+            <ToggleRow
+              label="Points"
+              checked={alertPoints}
+              disabled={!isEditing}
+              onChange={setAlertPoints}
+            />
+            <ToggleRow
+              label="Orders"
+              checked={alertOrders}
+              disabled={!isEditing}
+              onChange={setAlertOrders}
+            />
+            <ToggleRow
+              label="Change In Application Status"
+              checked={alertApplicationStatusChange}
+              disabled={!isEditing}
+              onChange={setAlertApplicationStatusChange}
+            />
+            <ToggleRow
+              label="Application Entry"
+              checked={alertApplicationEntry}
+              disabled={!isEditing}
+              onChange={setAlertApplicationEntry}
+            />
+            <ToggleRow
+              label="Changes To Profile By Admin"
+              checked={alertProfileChangesByAdmin}
+              disabled={!isEditing}
+              onChange={setAlertProfileChangesByAdmin}
+            />
+          </div>
+        )}
       </form>
     </ProfileEditLayout>
   );
@@ -375,11 +510,54 @@ function normalizeProfile(raw: unknown): NormalizedProfile | null {
     pointBalance: Number(value.pointBalance ?? value.PointBalance ?? 0),
     profilePicture: String(value.profilePicture ?? value.ProfilePicture ?? ""),
     bio: String(value.bio ?? value.Bio ?? ""),
+    alertPoints: Boolean(value.alertPoints ?? value.AlertPoints ?? true),
+    alertOrders: Boolean(value.alertOrders ?? value.AlertOrders ?? true),
+    alertApplicationStatusChange: Boolean(
+      value.alertApplicationStatusChange ?? value.AlertApplicationStatusChange ?? true
+    ),
+    alertApplicationEntry: Boolean(value.alertApplicationEntry ?? value.AlertApplicationEntry ?? true),
+    alertProfileChangesByAdmin: Boolean(
+      value.alertProfileChangesByAdmin ?? value.AlertProfileChangesByAdmin ?? true
+    ),
     lastLogin:
       value.lastLogin === null || value.LastLogin === null
         ? null
         : String(value.lastLogin ?? value.LastLogin ?? ""),
   };
+}
+
+function ToggleRow({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 rounded-md border border-gray-200 dark:border-gray-800 px-3 py-2">
+      <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+          checked ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-700'
+        } disabled:opacity-50`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+            checked ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
 }
 
 function buildInitials(firstName: string, lastName: string) {

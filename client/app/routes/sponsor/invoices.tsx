@@ -1,4 +1,4 @@
-import { useLoaderData, useNavigate, Link } from "react-router";
+import { useLoaderData } from "react-router";
 import type { Route } from "./+types/invoices";
 import { Table, Button, Badge } from "~/components";
 import { requireAuth } from "~/utils/session.server";
@@ -29,11 +29,37 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function InvoicesPage() {
   const { transactions, error } = useLoaderData<typeof loader>();
-  const navigate = useNavigate();
 
   // Stats calculation for the Grid
   const totalPoints = transactions.reduce((acc: number, curr: any) => acc + (curr.PointChange || 0), 0);
   const positiveTrans = transactions.filter((t: any) => t.PointChange > 0).length;
+
+  const handleExportCSV = () => {
+    const rows = [
+      ["Timestamp", "Driver", "Amount", "Reason", "Admin ID"],
+      ...transactions.map((transaction: any) => [
+        transaction.TimeChanged ? new Date(transaction.TimeChanged).toLocaleString() : "",
+        `${transaction.FirstName ?? ""} ${transaction.LastName ?? ""}`.trim(),
+        transaction.PointChange ?? "",
+        transaction.ReasonForChange ?? "",
+        transaction.AdminUserID ?? "",
+      ]),
+    ];
+
+    const csvContent = rows
+      .map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `point-invoices-${Date.now()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
 
   const columns = [
     { 
@@ -71,25 +97,8 @@ export default function InvoicesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8">
-      <div className="max-w-7xl mx-auto">
-        
-        {/* Navigation Link - Matches Audit Style */}
-        <div className="mb-4 text-left">
-          <Link
-            to="/"
-            className="text-sm font-medium text-blue-600 hover:underline mb-2 block"
-          >
-            ← Home
-          </Link>
-          <Link 
-            to="/sponsor/dashboard" 
-            className="text-sm font-medium text-blue-600 hover:underline mb-2 block"
-          >
-            ← Return to Sponsor Dashboard
-          </Link>
-        </div>
-
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 p-8 dark:from-blue-950 dark:via-gray-950 dark:to-blue-900">
+      <div className="mx-auto max-w-7xl">
         {/* Header Section - Matches Audit Style */}
         <div className="flex justify-between items-end mb-8 text-left border-b pb-6 dark:border-gray-800">
           <div>
@@ -99,6 +108,9 @@ export default function InvoicesPage() {
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => window.print()}>
               Print Report
+            </Button>
+            <Button variant="secondary" onClick={handleExportCSV}>
+              Export to CSV
             </Button>
           </div>
         </div>

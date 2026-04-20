@@ -5,8 +5,24 @@ import { pool } from '../db.js';
 import {
   routeUserMatchesEffectiveSession,
 } from '../middleware/session-context.js';
+import { notifySponsorCompany } from '../services/notification-service.js';
+import {
+  normalizeNotificationPreferences,
+} from '../services/notification-service.js';
+import {
+  handleProfileImageUpload,
+  normalizeProfilePictureValue,
+} from '../utils/profile-image-upload.js';
 
 const router = express.Router();
+
+function normalizeBooleanPreferenceInput(value) {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return null;
+}
 
 
 /**
@@ -19,19 +35,34 @@ router.get('/profile/:id', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
     let licenseNumber = null;
+    let alertPoints = null;
+    let alertOrders = null;
     if (String(user.UserType).toLowerCase() === 'driver') {
       const [driverRows] = await pool.execute(
-        'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+        'SELECT LicenseNumber, AlertPoints, AlertOrders FROM DRIVERS WHERE UserID = ? LIMIT 1',
         [userId]
       );
       licenseNumber = driverRows[0]?.LicenseNumber ?? null;
+      alertPoints = driverRows[0]?.AlertPoints ?? null;
+      alertOrders = driverRows[0]?.AlertOrders ?? null;
     }
+
+    const notificationPreferences = normalizeNotificationPreferences(user.Permissions, {
+      ...(alertPoints !== null ? { alertPoints: Boolean(alertPoints) } : {}),
+      ...(alertOrders !== null ? { alertOrders: Boolean(alertOrders) } : {}),
+    });
 
     // Omit sensitive fields before returning
     const { PassHash, ...safeUser } = user;
     res.status(200).json({
       ...safeUser,
       LicenseNumber: licenseNumber,
+      AlertPoints: notificationPreferences.alertPoints,
+      AlertOrders: notificationPreferences.alertOrders,
+      AlertApplicationStatusChange: notificationPreferences.alertApplicationStatusChange,
+      AlertApplicationEntry: notificationPreferences.alertApplicationEntry,
+      AlertProfileChangesByAdmin: notificationPreferences.alertProfileChangesByAdmin,
+      NotificationPreferences: notificationPreferences,
     });
   } catch (error) {
     console.error('Profile Route Error:', error);
@@ -42,7 +73,7 @@ router.get('/profile/:id', async (req, res) => {
 /**
  * PATCH /api/user/profile/:id
  */
-router.patch('/profile/:id', async (req, res) => {
+router.patch('/profile/:id', handleProfileImageUpload, async (req, res) => {
   let connection;
   try {
     const userId = Number(req.params.id);
@@ -64,16 +95,38 @@ router.patch('/profile/:id', async (req, res) => {
     const middleName = middleNameRaw === '' ? null : middleNameRaw;
     const pronounsRaw = typeof req.body?.pronouns === 'string' ? req.body.pronouns.trim() : undefined;
     const pronouns = pronounsRaw === '' ? null : pronounsRaw;
-    const profilePictureRaw = typeof req.body?.profilePicture === 'string' ? req.body.profilePicture.trim() : undefined;
-    const profilePicture = profilePictureRaw === '' ? null : profilePictureRaw;
+    const profilePicture = normalizeProfilePictureValue(req.body?.profilePicture, req.file);
     const bioRaw = typeof req.body?.bio === 'string' ? req.body.bio.trim() : undefined;
     const bio = bioRaw === '' ? null : bioRaw;
     const licenseNumberRaw = typeof req.body?.licenseNumber === 'string' ? req.body.licenseNumber.trim() : undefined;
     const licenseNumber = licenseNumberRaw === '' ? null : licenseNumberRaw;
+    const alertPoints = normalizeBooleanPreferenceInput(req.body?.alertPoints);
+    const alertOrders = normalizeBooleanPreferenceInput(req.body?.alertOrders);
+    const alertApplicationStatusChange = normalizeBooleanPreferenceInput(req.body?.alertApplicationStatusChange);
+    const alertApplicationEntry = normalizeBooleanPreferenceInput(req.body?.alertApplicationEntry);
+    const alertProfileChangesByAdmin = normalizeBooleanPreferenceInput(req.body?.alertProfileChangesByAdmin);
 
     const updates = [];
     const values = [];
     const hasLicenseNumberUpdate = licenseNumber !== undefined;
+    const hasNotificationPreferenceUpdate =
+      alertPoints !== undefined ||
+      alertOrders !== undefined ||
+      alertApplicationStatusChange !== undefined ||
+      alertApplicationEntry !== undefined ||
+      alertProfileChangesByAdmin !== undefined;
+
+    if (
+      alertPoints === null ||
+      alertOrders === null ||
+      alertApplicationStatusChange === null ||
+      alertApplicationEntry === null ||
+      alertProfileChangesByAdmin === null
+    ) {
+      return res.status(400).json({
+        error: 'Notification preferences must be boolean values.',
+      });
+    }
 
     if (firstName !== undefined) {
       if (!firstName) {
@@ -132,7 +185,7 @@ router.patch('/profile/:id', async (req, res) => {
       values.push(bio);
     }
 
-    if (updates.length === 0 && !hasLicenseNumberUpdate) {
+    if (updates.length === 0 && !hasLicenseNumberUpdate && !hasNotificationPreferenceUpdate) {
       return res.status(400).json({ error: 'No valid profile fields provided for update.' });
     }
 
@@ -142,6 +195,21 @@ router.patch('/profile/:id', async (req, res) => {
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
+
+    const [userRows] = await connection.execute(
+      `SELECT UserID, UserType, Permissions
+       FROM USERS
+       WHERE UserID = ?
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (userRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const userType = String(userRows[0].UserType ?? '').toLowerCase();
 
     if (updates.length > 0) {
       const [updateResult] = await connection.execute(
@@ -167,9 +235,51 @@ router.patch('/profile/:id', async (req, res) => {
       }
     }
 
+    if (hasNotificationPreferenceUpdate) {
+      const nextPreferences = normalizeNotificationPreferences(userRows[0].Permissions, {
+        ...(alertPoints !== undefined ? { alertPoints } : {}),
+        ...(alertOrders !== undefined ? { alertOrders } : {}),
+        ...(alertApplicationStatusChange !== undefined ? { alertApplicationStatusChange } : {}),
+        ...(alertApplicationEntry !== undefined ? { alertApplicationEntry } : {}),
+        ...(alertProfileChangesByAdmin !== undefined ? { alertProfileChangesByAdmin } : {}),
+      });
+
+      await connection.execute(
+        'UPDATE USERS SET Permissions = ? WHERE UserID = ?',
+        [JSON.stringify(nextPreferences), userId]
+      );
+
+      if (userType === 'driver') {
+        const driverUpdates = [];
+        const driverValues = [];
+
+        if (alertPoints !== undefined) {
+          driverUpdates.push('AlertPoints = ?');
+          driverValues.push(alertPoints ? 1 : 0);
+        }
+
+        if (alertOrders !== undefined) {
+          driverUpdates.push('AlertOrders = ?');
+          driverValues.push(alertOrders ? 1 : 0);
+        }
+
+        if (driverUpdates.length > 0) {
+          const [driverUpdateResult] = await connection.execute(
+            `UPDATE DRIVERS SET ${driverUpdates.join(', ')} WHERE UserID = ?`,
+            [...driverValues, userId]
+          );
+
+          if (driverUpdateResult.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Driver profile not found for this user.' });
+          }
+        }
+      }
+    }
+
     const [rows] = await connection.execute(
       `SELECT u.UserID, u.Username, u.Email, u.Phone, u.UserType, u.FirstName, u.MiddleName, u.LastName, u.Pronouns,
-              u.ActiveStatus, u.ProfilePicture, u.Bio, d.LicenseNumber
+              u.ActiveStatus, u.ProfilePicture, u.Bio, u.Permissions, d.LicenseNumber, d.AlertPoints, d.AlertOrders
        FROM USERS u
        LEFT JOIN DRIVERS d ON d.UserID = u.UserID
        WHERE u.UserID = ?
@@ -177,9 +287,27 @@ router.patch('/profile/:id', async (req, res) => {
       [userId]
     );
 
+    const responseRow = rows[0];
+    const responseNotificationPreferences = normalizeNotificationPreferences(responseRow.Permissions, {
+      ...(responseRow.AlertPoints !== null && responseRow.AlertPoints !== undefined
+        ? { alertPoints: Boolean(responseRow.AlertPoints) }
+        : {}),
+      ...(responseRow.AlertOrders !== null && responseRow.AlertOrders !== undefined
+        ? { alertOrders: Boolean(responseRow.AlertOrders) }
+        : {}),
+    });
+
     await connection.commit();
 
-    return res.status(200).json(rows[0]);
+    return res.status(200).json({
+      ...responseRow,
+      AlertPoints: responseNotificationPreferences.alertPoints,
+      AlertOrders: responseNotificationPreferences.alertOrders,
+      AlertApplicationStatusChange: responseNotificationPreferences.alertApplicationStatusChange,
+      AlertApplicationEntry: responseNotificationPreferences.alertApplicationEntry,
+      AlertProfileChangesByAdmin: responseNotificationPreferences.alertProfileChangesByAdmin,
+      NotificationPreferences: responseNotificationPreferences,
+    });
   } catch (error) {
     if (connection) {
       await connection.rollback();
@@ -401,125 +529,10 @@ router.post('/register-driver', async (req, res) => {
   }
 });
 
-// TODO: confirm which review/comment endpoints are required for this sprint.
-// TODO: COMMENTS and REVIEW_DRAFTS tables are not in the current schema.
-
-// POST a review
-router.post('/post-review', async (req, res) => {
-  const { itemId, userId, rating, body } = req.body;
-
-  try {
-    const [result] = await pool.execute(
-      `INSERT INTO REVIEWS (ItemID, UserID, Rating, ReviewBody, IsVisible)
-       VALUES (?, ?, ?, ?, 1)`,
-      [itemId, userId, rating, body]
-    );
-
-    res.status(201).json({
-      message: "Review submitted successfully!",
-      reviewId: result.insertId
-    });
-  } catch (error) {
-    console.error("Database Error:", error);
-    res.status(500).json({ error: "Could not post review. Please try again." });
-  }
-});
-
-// GET to fetch all comments
-router.get('/review/:reviewId/comments', async (req, res) => {
-  const { reviewId } = req.params;
-  try {
-    const [rows] = await pool.execute(
-      `SELECT c.*, u.FirstName, u.LastName
-       FROM COMMENTS c
-       JOIN USERS u ON c.UserID = u.UserID
-       WHERE c.ReviewID = ?
-       ORDER BY c.CreatedAt ASC`,
-      [reviewId]
-    );
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST to comment or reply
-router.post('/comments', async (req, res) => {
-  const { reviewId, userId, parentCommentId, text } = req.body;
-  try {
-    await pool.execute(
-      `INSERT INTO COMMENTS (ReviewID, UserID, ParentCommentID, CommentText)
-       VALUES (?, ?, ?, ?)`,
-      [reviewId, userId, parentCommentId || null, text]
-    );
-    res.json({ message: "Comment posted!" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST to save/update a draft
-router.post('/drafts', async (req, res) => {
-  const { itemId, userId, rating, body } = req.body;
-  try {
-    await pool.execute(
-      `INSERT INTO REVIEW_DRAFTS (ItemID, UserID, Rating, ReviewBody)
-       VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE Rating = VALUES(Rating), ReviewBody = VALUES(ReviewBody)`,
-      [itemId, userId, rating, body]
-    );
-    res.json({ message: "Draft saved!" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// GET a review draft
-router.get('/drafts/:userId/:itemId', async (req, res) => {
-  const { userId, itemId } = req.params;
-  try {
-    const [rows] = await pool.execute(
-      `SELECT * FROM REVIEW_DRAFTS WHERE UserID = ? AND ItemID = ?`,
-      [userId, itemId]
-    );
-    res.json(rows[0] || null);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST the final draft and remove from drafts
-router.post('/reviews/finalize', async (req, res) => {
-  const { itemId, userId, rating, body } = req.body;
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // Insert into real reviews
-    await connection.execute(
-      `INSERT INTO REVIEWS (ItemID, UserID, Rating, ReviewBody) VALUES (?, ?, ?, ?)`,
-      [itemId, userId, rating, body]
-    );
-
-    // Delete the draft
-    await connection.execute(
-      `DELETE FROM REVIEW_DRAFTS WHERE UserID = ? AND ItemID = ?`,
-      [userId, itemId]
-    );
-
-    await connection.commit();
-    res.json({ message: "Review posted and draft removed!" });
-  } catch (error) {
-    await connection.rollback();
-    res.status(500).json({ error: error.message });
-  } finally {
-    connection.release();
-  }
-});
-
 // Drivers create application
 router.post('/submit-application', async (req, res) => {
   const { driverId, sponsorCompanyId, explanation } = req.body;
+  let connection;
 
   try {
     const rawDriverId = String(driverId ?? '').trim();
@@ -530,40 +543,49 @@ router.post('/submit-application', async (req, res) => {
       return res.status(400).json({ error: 'driverId, sponsorCompanyId, and explanation are required.' });
     }
 
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
     // DRIVER_APPLICATIONS.DriverID should store DRIVERS.LicenseNumber.
     let licenseNumber = rawDriverId;
+    let resolvedDriverUserId = null;
     const numericDriverId = Number(rawDriverId);
 
     if (Number.isInteger(numericDriverId)) {
-      const [driverRows] = await pool.execute(
-        'SELECT LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
+      const [driverRows] = await connection.execute(
+        'SELECT UserID, LicenseNumber FROM DRIVERS WHERE UserID = ? LIMIT 1',
         [numericDriverId]
       );
 
       if (driverRows.length > 0) {
+        resolvedDriverUserId = Number(driverRows[0].UserID);
         licenseNumber = driverRows[0].LicenseNumber;
       }
     }
 
-    const [driverByLicenseRows] = await pool.execute(
-      'SELECT LicenseNumber FROM DRIVERS WHERE LicenseNumber = ? LIMIT 1',
+    const [driverByLicenseRows] = await connection.execute(
+      'SELECT UserID, LicenseNumber FROM DRIVERS WHERE LicenseNumber = ? LIMIT 1',
       [licenseNumber]
     );
 
     if (driverByLicenseRows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Driver not found. Could not resolve driver license number.' });
     }
 
-    const [sponsorRows] = await pool.execute(
+    resolvedDriverUserId = Number(driverByLicenseRows[0].UserID);
+
+    const [sponsorRows] = await connection.execute(
       'SELECT SponsorCompanyID FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ? LIMIT 1',
       [rawSponsorCompanyId]
     );
 
     if (sponsorRows.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Sponsor company not found.' });
     }
 
-    const [existingPendingRows] = await pool.execute(
+    const [existingPendingRows] = await connection.execute(
       `SELECT ApplicationID
        FROM DRIVER_APPLICATIONS
        WHERE DriverID = ? AND SponsorCompanyID = ? AND ApplicationStatus = 'pending'
@@ -572,26 +594,52 @@ router.post('/submit-application', async (req, res) => {
     );
 
     if (existingPendingRows.length > 0) {
+      await connection.rollback();
       return res.status(409).json({ error: 'You already have a pending application for this sponsor.' });
     }
 
     // ApplicationStatus defaults to 'pending' based on your ENUM
-    const [result] = await pool.execute(
+    const [result] = await connection.execute(
       `INSERT INTO DRIVER_APPLICATIONS 
        (DriverID, SponsorCompanyID, ApplicationStatus, DecisionExplanation, TimeSubmitted)
        VALUES (?, ?, 'pending', ?, NOW())`,
       [licenseNumber, rawSponsorCompanyId, rawExplanation]
     );
 
+    const applicationId = Number(result.insertId);
+
+    await notifySponsorCompany(connection, {
+      sponsorCompanyId: rawSponsorCompanyId,
+      actorUserId: resolvedDriverUserId,
+      content: `New driver application submitted (#${applicationId}).`,
+      category: 'driver_application_submitted',
+      preference: 'application_entry',
+      metadata: {
+        applicationId,
+        sponsorCompanyId: rawSponsorCompanyId,
+        driverId: licenseNumber,
+        driverUserId: resolvedDriverUserId,
+      },
+    });
+
+    await connection.commit();
+
     res.status(201).json({ 
       message: "Application submitted successfully!", 
-      applicationId: result.insertId,
+      applicationId,
       driverId: licenseNumber,
       sponsorCompanyId: rawSponsorCompanyId,
     });
   } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
     console.error("Submission Error:", error);
     res.status(500).json({ error: "Could not submit application. You may already have a pending request." });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
