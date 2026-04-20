@@ -53,6 +53,16 @@ async function cleanupTestData() {
     
     // Delete drivers and sponsors
     for (const userId of createdUserIds) {
+      try {
+        await connection.query(
+          'DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE DriverID IN (SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?)',
+          [userId]
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
       await connection.query('DELETE FROM DRIVERS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM SPONSORS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM USERS WHERE UserID = ?', [userId]);
@@ -61,6 +71,13 @@ async function cleanupTestData() {
     
     // Delete sponsor companies
     for (const sponsorId of createdSponsorIds) {
+      try {
+        await connection.query('DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE SponsorCompanyID = ?', [sponsorId]);
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
       await connection.query('DELETE FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?', [sponsorId]);
       console.log(`Deleted sponsor company ${sponsorId}`);
     }

@@ -81,6 +81,16 @@ async function cleanupUsers(userIds) {
       }
 
       await connection.query('DELETE FROM EVENTS WHERE UserID = ?', [userId]);
+      try {
+        await connection.query(
+          'DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE DriverID IN (SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?)',
+          [userId]
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
       await connection.query('DELETE FROM DRIVERS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM SPONSORS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM ADMINS WHERE UserID = ?', [userId]);
@@ -97,10 +107,27 @@ async function cleanupCompanies(companyIds, companyNames) {
   const connection = await pool.getConnection();
   try {
     for (const companyId of companyIds) {
+      try {
+        await connection.query('DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE SponsorCompanyID = ?', [companyId]);
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
       await connection.query('DELETE FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?', [companyId]);
     }
 
     for (const companyName of companyNames) {
+      try {
+        await connection.query(
+          'DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE SponsorCompanyID IN (SELECT SponsorCompanyID FROM SPONSOR_COMPANIES WHERE CompanyName = ?)',
+          [companyName]
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
       await connection.query('DELETE FROM SPONSOR_COMPANIES WHERE CompanyName = ?', [companyName]);
     }
   } catch (error) {

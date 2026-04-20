@@ -72,6 +72,14 @@ export async function cleanupSponsorCompanies(sponsorIds) {
   
   try {
     for (const id of sponsorIds) {
+      try {
+        await connection.query('DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE SponsorCompanyID = ?', [id]);
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
+
       await connection.query('DELETE FROM SPONSOR_COMPANIES WHERE SponsorCompanyID = ?', [id]);
       console.log(`Deleted sponsor company ${id}`);
     }

@@ -47,6 +47,16 @@ async function cleanupUsers(userIds) {
   try {
     for (const userId of userIds) {
       await connection.query('DELETE FROM EVENTS WHERE UserID = ?', [userId]);
+      try {
+        await connection.query(
+          'DELETE FROM DRIVER_COMPANY_ENROLLMENT WHERE DriverID IN (SELECT LicenseNumber FROM DRIVERS WHERE UserID = ?)',
+          [userId]
+        );
+      } catch (error) {
+        if (error?.code !== 'ER_NO_SUCH_TABLE' && error?.code !== 'ER_BAD_FIELD_ERROR') {
+          throw error;
+        }
+      }
       await connection.query('DELETE FROM DRIVERS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM SPONSORS WHERE UserID = ?', [userId]);
       await connection.query('DELETE FROM USERS WHERE UserID = ?', [userId]);
